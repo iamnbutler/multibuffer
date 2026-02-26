@@ -3,21 +3,21 @@
  */
 
 import {
-  Bias,
-  type BufferId,
-  type ExcerptId,
-  type BufferRow,
-  type MultiBufferRow,
-  type BufferOffset,
-  type MultiBufferOffset,
-  type BufferPoint,
-  type MultiBufferPoint,
-  type BufferRange,
-  type MultiBufferRange,
-  type ExcerptRange,
-  type TextSummary,
   type Anchor,
+  Bias,
   type BufferAnchor,
+  type BufferId,
+  type BufferOffset,
+  type BufferPoint,
+  type BufferRange,
+  type BufferRow,
+  type ExcerptId,
+  type ExcerptRange,
+  type MultiBufferOffset,
+  type MultiBufferPoint,
+  type MultiBufferRange,
+  type MultiBufferRow,
+  type TextSummary,
 } from "../src/multibuffer/types.ts";
 
 // =============================================================================
@@ -28,39 +28,48 @@ let bufferIdCounter = 0;
 let excerptIdCounter = 0;
 
 export function createBufferId(): BufferId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return `buffer-${++bufferIdCounter}` as BufferId;
 }
 
 export function createExcerptId(): ExcerptId {
   const id = excerptIdCounter++;
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return { index: id, generation: 0 } as unknown as ExcerptId;
 }
 
 export function row(n: number): BufferRow {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return n as BufferRow;
 }
 
 export function mbRow(n: number): MultiBufferRow {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return n as MultiBufferRow;
 }
 
 export function offset(n: number): BufferOffset {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return n as BufferOffset;
 }
 
 export function mbOffset(n: number): MultiBufferOffset {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return n as MultiBufferOffset;
 }
 
 export function excerptId(index: number, generation: number = 0): ExcerptId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return { index, generation } as unknown as ExcerptId;
 }
 
 export function point(row: number, column: number): BufferPoint {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return { row: row as BufferRow, column };
 }
 
 export function mbPoint(row: number, column: number): MultiBufferPoint {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return { row: row as MultiBufferRow, column };
 }
 
@@ -169,7 +178,7 @@ export function generateCode(lineCount: number): string[] {
   ];
   return Array.from(
     { length: lineCount },
-    (_, i) => templates[i % templates.length]!
+    (_, i) => templates[i % templates.length] ?? ""
   );
 }
 
@@ -257,39 +266,50 @@ export function benchmark(
 
 // =============================================================================
 // Assertion Helpers
+//
+// Branded types (BufferRow, MultiBufferRow, etc.) are numbers at runtime but
+// TypeScript won't let you write expect(brandedValue).toBe(42) because the
+// .toBe() overload expects the branded type, not plain number.
+//
+// These helpers encapsulate the cast so test call sites stay clean.
 // =============================================================================
 
-/**
- * Assert that two points are equal (handles branded types).
- */
-export function expectPointEqual(
-  actual: BufferPoint | MultiBufferPoint,
-  expected: { row: number; column: number }
-): void {
-  if (
-    (actual.row as number) !== expected.row ||
-    actual.column !== expected.column
-  ) {
-    throw new Error(
-      `Expected point (${expected.row}, ${expected.column}) but got (${actual.row}, ${actual.column})`
-    );
-  }
-}
+import { expect } from "bun:test";
 
 /**
- * Assert that a value is within a range (inclusive).
+ * Unwrap any branded numeric type for assertions.
+ * All our branded types (BufferRow, BufferOffset, etc.) are number & { __brand }.
+ * This strips the brand so expect().toBe() works with plain numbers.
  */
-export function expectInRange(
-  value: number,
-  min: number,
-  max: number,
-  message?: string
+export function num(
+  value: BufferRow | MultiBufferRow | BufferOffset | MultiBufferOffset | number,
+): number {
+  // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded numeric type
+  return value as number;
+}
+
+/** Unwrap a branded string type for assertions. */
+export function str(value: BufferId | string): string {
+  // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded string type
+  return value as string;
+}
+
+/** Assert a point equals {row, column}. */
+export function expectPoint(
+  actual: BufferPoint | MultiBufferPoint,
+  expectedRow: number,
+  expectedCol: number,
 ): void {
-  if (value < min || value > max) {
-    throw new Error(
-      message ?? `Expected ${value} to be in range [${min}, ${max}]`
-    );
-  }
+  expect(num(actual.row)).toBe(expectedRow);
+  expect(actual.column).toBe(expectedCol);
+}
+
+/** Assert an offset equals a number. */
+export function expectOffset(
+  actual: BufferOffset | MultiBufferOffset,
+  expected: number,
+): void {
+  expect(num(actual)).toBe(expected);
 }
 
 // =============================================================================

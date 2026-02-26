@@ -150,6 +150,8 @@ export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<void> {
 export function measureMemory<T>(fn: () => T): { result: T; heapUsedKb: number } {
   // Force GC if available
   if (typeof Bun !== "undefined" && "gc" in Bun) {
+    // biome-ignore lint/suspicious/noExplicitAny: expect: Bun.gc() has no type declaration
+    // biome-ignore lint/plugin/no-type-assertion: expect: Bun.gc() has no type declaration
     (Bun as any).gc();
   }
 
