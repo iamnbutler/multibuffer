@@ -38,8 +38,8 @@ describe("Anchor Creation", () => {
   test("anchor has correct structure", () => {
     const a = anchor(5, 100, Bias.Left);
 
-    expect((a.excerptId as unknown as { index: number }).index).toBe(5);
-    expect((a.excerptId as unknown as { generation: number }).generation).toBe(0);
+    expect(a.excerptId.index).toBe(5);
+    expect(a.excerptId.generation).toBe(0);
     expect(a.textAnchor.offset as number).toBe(100);
     expect(a.textAnchor.bias).toBe(Bias.Left);
   });

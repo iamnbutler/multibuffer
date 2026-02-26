@@ -122,12 +122,8 @@ describe("ExcerptInfo", () => {
     const id2 = createExcerptId();
     const id3 = createExcerptId();
 
-    const i1 = (id1 as unknown as { index: number }).index;
-    const i2 = (id2 as unknown as { index: number }).index;
-    const i3 = (id3 as unknown as { index: number }).index;
-
-    expect(i1 < i2).toBe(true);
-    expect(i2 < i3).toBe(true);
+    expect(id1.index < id2.index).toBe(true);
+    expect(id2.index < id3.index).toBe(true);
   });
 });
 

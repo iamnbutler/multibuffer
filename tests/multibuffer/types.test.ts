@@ -43,10 +43,7 @@ describe("Branded Types", () => {
     const id1 = createExcerptId();
     const id2 = createExcerptId();
     expect(id1).not.toEqual(id2);
-    // Each creation gets a unique index
-    expect((id1 as unknown as { index: number }).index).not.toBe(
-      (id2 as unknown as { index: number }).index,
-    );
+    expect(id1.index).not.toBe(id2.index);
   });
 
   test("BufferRow preserves numeric value", () => {
@@ -71,8 +68,8 @@ describe("Branded Types", () => {
 
   test("ExcerptId from index preserves value", () => {
     const id = excerptId(5);
-    expect((id as unknown as { index: number }).index).toBe(5);
-    expect((id as unknown as { generation: number }).generation).toBe(0);
+    expect(id.index).toBe(5);
+    expect(id.generation).toBe(0);
   });
 });
 
@@ -168,7 +165,7 @@ describe("Anchor Types", () => {
 
   test("anchor combines excerpt and buffer anchor", () => {
     const a = anchor(3, 200, Bias.Left);
-    expect((a.excerptId as unknown as { index: number }).index).toBe(3);
+    expect(a.excerptId.index).toBe(3);
     expect(a.textAnchor.offset as number).toBe(200);
     expect(a.textAnchor.bias).toBe(Bias.Left);
   });
@@ -237,6 +234,6 @@ describe("Counter Reset", () => {
     createExcerptId();
     resetCounters();
     const id = createExcerptId();
-    expect((id as unknown as { index: number }).index).toBe(0);
+    expect(id.index).toBe(0);
   });
 });
