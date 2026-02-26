@@ -34,7 +34,7 @@ export function createBufferId(): BufferId {
 
 export function createExcerptId(): ExcerptId {
   const id = excerptIdCounter++;
-  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+  // biome-ignore lint/plugin/no-type-assertion: expect: ExcerptId is an opaque branded type backed by SlotKey — double cast through unknown needed because the object literal shape doesn't directly satisfy the brand
   return { index: id, generation: 0 } as unknown as ExcerptId;
 }
 
@@ -59,7 +59,7 @@ export function mbOffset(n: number): MultiBufferOffset {
 }
 
 export function excerptId(index: number, generation: number = 0): ExcerptId {
-  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+  // biome-ignore lint/plugin/no-type-assertion: expect: ExcerptId is an opaque branded type backed by SlotKey — double cast through unknown needed because the object literal shape doesn't directly satisfy the brand
   return { index, generation } as unknown as ExcerptId;
 }
 
