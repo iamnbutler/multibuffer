@@ -9,8 +9,8 @@
  * - 100 excerpts: <10ms initialization
  */
 
-import { runBenchmarks, type BenchmarkSuite } from "./harness.ts";
 import { bufferBenchmarks } from "./buffer.bench.ts";
+import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { viewportBenchmarks } from "./viewport.bench.ts";
 

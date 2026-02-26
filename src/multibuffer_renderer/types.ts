@@ -7,7 +7,7 @@
  * - Viewport-based: only render visible content
  */
 
-import type { MultiBufferRow, MultiBufferRange, Selection } from "../multibuffer/types.ts";
+import type { MultiBufferRange, MultiBufferRow, Selection } from "../multibuffer/types.ts";
 
 // =============================================================================
 // Measurement Types

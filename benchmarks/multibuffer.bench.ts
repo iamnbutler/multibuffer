@@ -13,7 +13,7 @@ import type { BenchmarkSuite } from "./harness.ts";
 // TODO: Import actual implementation once created
 // import { createMultiBuffer, createBuffer } from "../src/multibuffer/index.ts";
 
-function generateText(lines: number): string {
+function _generateText(lines: number): string {
   return Array.from(
     { length: lines },
     (_, i) => `Line ${i + 1}: Some text content here`

@@ -5,7 +5,6 @@
  */
 
 import type { BenchmarkSuite } from "./harness.ts";
-import type { MultiBufferRow, Measurements, Viewport } from "../src/index.ts";
 
 /**
  * Pure function: calculate visible row range from scroll position.

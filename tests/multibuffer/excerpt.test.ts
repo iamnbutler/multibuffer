@@ -10,24 +10,22 @@
  * - Excerpt IDs are monotonically increasing, never reused
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
-import {
-  createBufferId,
-  createExcerptId,
-  row,
-  mbRow,
-  point,
-  range,
-  excerptRange,
-  excerptId,
-  resetCounters,
-  Bias,
-} from "../helpers.ts";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type {
   ExcerptInfo,
   ExcerptRange,
-  Excerpt,
 } from "../../src/multibuffer/types.ts";
+import {
+  createBufferId,
+  createExcerptId,
+  excerptId,
+  excerptRange,
+  expectPoint,
+  mbRow,
+  num,
+  range,
+  resetCounters,
+} from "../helpers.ts";
 
 beforeEach(() => {
   resetCounters();
@@ -45,12 +43,8 @@ describe("ExcerptRange", () => {
     };
 
     // Primary should be within context
-    expect(
-      (er.primary.start.row as number) >= (er.context.start.row as number),
-    ).toBe(true);
-    expect(
-      (er.primary.end.row as number) <= (er.context.end.row as number),
-    ).toBe(true);
+    expect(num(er.primary.start.row) >= num(er.context.start.row)).toBe(true);
+    expect(num(er.primary.end.row) <= num(er.context.end.row)).toBe(true);
   });
 
   test("context and primary can be equal", () => {
@@ -64,10 +58,10 @@ describe("ExcerptRange", () => {
 
   test("excerptRange helper creates valid ranges", () => {
     const er = excerptRange(5, 15, 8, 12);
-    expect(er.context.start.row as number).toBe(5);
-    expect(er.context.end.row as number).toBe(15);
-    expect(er.primary.start.row as number).toBe(8);
-    expect(er.primary.end.row as number).toBe(12);
+    expectPoint(er.context.start, 5, 0);
+    expectPoint(er.context.end, 15, 0);
+    expectPoint(er.primary.start, 8, 0);
+    expectPoint(er.primary.end, 12, 0);
   });
 
   test("excerptRange without primary uses context", () => {
@@ -91,7 +85,7 @@ describe("ExcerptInfo", () => {
       hasTrailingNewline: false,
     };
 
-    const lineCount = (info.endRow as number) - (info.startRow as number);
+    const lineCount = num(info.endRow) - num(info.startRow);
     expect(lineCount).toBe(10);
   });
 
@@ -109,12 +103,12 @@ describe("ExcerptInfo", () => {
       id: excerptId(2),
       bufferId: createBufferId(),
       range: excerptRange(0, 10),
-      startRow: mbRow(5), // Starts where excerpt1 ends
+      startRow: mbRow(5),
       endRow: mbRow(15),
       hasTrailingNewline: false,
     };
 
-    expect(excerpt2.startRow as number).toBe(excerpt1.endRow as number);
+    expect(num(excerpt2.startRow)).toBe(num(excerpt1.endRow));
   });
 
   test("excerpt IDs are unique and have increasing indices", () => {
@@ -144,7 +138,7 @@ describe("Empty Excerpt Edge Cases", () => {
       hasTrailingNewline: false,
     };
 
-    const lineCount = (info.endRow as number) - (info.startRow as number);
+    const lineCount = num(info.endRow) - num(info.startRow);
     expect(lineCount).toBe(0);
   });
 
@@ -184,9 +178,7 @@ describe("Trailing Newline Handling", () => {
       hasTrailingNewline: true,
     };
 
-    expect(
-      (withNewline.endRow as number) - (withoutNewline.endRow as number),
-    ).toBe(1);
+    expect(num(withNewline.endRow) - num(withoutNewline.endRow)).toBe(1);
   });
 
   test.todo("position conversion accounts for trailing newline", () => {

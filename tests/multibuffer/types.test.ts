@@ -2,25 +2,29 @@
  * Type system tests - verify branded types and type constructors work correctly.
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
+  anchor,
+  Bias,
+  bufferAnchor,
   createBufferId,
   createExcerptId,
-  row,
-  mbRow,
-  offset,
-  mbOffset,
   excerptId,
-  point,
-  mbPoint,
-  range,
-  mbRange,
   excerptRange,
-  bufferAnchor,
-  anchor,
-  textSummary,
+  expectOffset,
+  expectPoint,
+  mbOffset,
+  mbPoint,
+  mbRange,
+  mbRow,
+  num,
+  offset,
+  point,
+  range,
   resetCounters,
-  Bias,
+  row,
+  str,
+  textSummary,
 } from "../helpers.ts";
 
 beforeEach(() => {
@@ -47,23 +51,19 @@ describe("Branded Types", () => {
   });
 
   test("BufferRow preserves numeric value", () => {
-    const r = row(42);
-    expect(r as number).toBe(42);
+    expect(num(row(42))).toBe(42);
   });
 
   test("MultiBufferRow preserves numeric value", () => {
-    const r = mbRow(100);
-    expect(r as number).toBe(100);
+    expect(num(mbRow(100))).toBe(100);
   });
 
   test("BufferOffset preserves numeric value", () => {
-    const o = offset(256);
-    expect(o as number).toBe(256);
+    expect(num(offset(256))).toBe(256);
   });
 
   test("MultiBufferOffset preserves numeric value", () => {
-    const o = mbOffset(1024);
-    expect(o as number).toBe(1024);
+    expect(num(mbOffset(1024))).toBe(1024);
   });
 
   test("ExcerptId from index preserves value", () => {
@@ -79,31 +79,23 @@ describe("Branded Types", () => {
 
 describe("Position Types", () => {
   test("point creates valid BufferPoint", () => {
-    const p = point(10, 5);
-    expect(p.row as number).toBe(10);
-    expect(p.column).toBe(5);
+    expectPoint(point(10, 5), 10, 5);
   });
 
   test("mbPoint creates valid MultiBufferPoint", () => {
-    const p = mbPoint(20, 15);
-    expect(p.row as number).toBe(20);
-    expect(p.column).toBe(15);
+    expectPoint(mbPoint(20, 15), 20, 15);
   });
 
   test("range creates valid BufferRange", () => {
     const r = range(0, 0, 10, 20);
-    expect(r.start.row as number).toBe(0);
-    expect(r.start.column).toBe(0);
-    expect(r.end.row as number).toBe(10);
-    expect(r.end.column).toBe(20);
+    expectPoint(r.start, 0, 0);
+    expectPoint(r.end, 10, 20);
   });
 
   test("mbRange creates valid MultiBufferRange", () => {
     const r = mbRange(5, 3, 15, 8);
-    expect(r.start.row as number).toBe(5);
-    expect(r.start.column).toBe(3);
-    expect(r.end.row as number).toBe(15);
-    expect(r.end.column).toBe(8);
+    expectPoint(r.start, 5, 3);
+    expectPoint(r.end, 15, 8);
   });
 });
 
@@ -114,17 +106,17 @@ describe("Position Types", () => {
 describe("Excerpt Range Types", () => {
   test("excerptRange with explicit primary", () => {
     const er = excerptRange(5, 15, 8, 12);
-    expect(er.context.start.row as number).toBe(5);
-    expect(er.context.end.row as number).toBe(15);
-    expect(er.primary.start.row as number).toBe(8);
-    expect(er.primary.end.row as number).toBe(12);
+    expectPoint(er.context.start, 5, 0);
+    expectPoint(er.context.end, 15, 0);
+    expectPoint(er.primary.start, 8, 0);
+    expectPoint(er.primary.end, 12, 0);
   });
 
   test("excerptRange without primary uses context", () => {
     const er = excerptRange(10, 20);
     expect(er.context).toEqual(er.primary);
-    expect(er.context.start.row as number).toBe(10);
-    expect(er.context.end.row as number).toBe(20);
+    expectPoint(er.context.start, 10, 0);
+    expectPoint(er.context.end, 20, 0);
   });
 });
 
@@ -153,20 +145,20 @@ describe("Bias Type", () => {
 describe("Anchor Types", () => {
   test("bufferAnchor with default bias", () => {
     const a = bufferAnchor(100);
-    expect(a.offset as number).toBe(100);
-    expect(a.bias).toBe(Bias.Right); // Default
+    expectOffset(a.offset, 100);
+    expect(a.bias).toBe(Bias.Right);
   });
 
   test("bufferAnchor with explicit bias", () => {
     const a = bufferAnchor(50, Bias.Left);
-    expect(a.offset as number).toBe(50);
+    expectOffset(a.offset, 50);
     expect(a.bias).toBe(Bias.Left);
   });
 
   test("anchor combines excerpt and buffer anchor", () => {
     const a = anchor(3, 200, Bias.Left);
     expect(a.excerptId.index).toBe(3);
-    expect(a.textAnchor.offset as number).toBe(200);
+    expectOffset(a.textAnchor.offset, 200);
     expect(a.textAnchor.bias).toBe(Bias.Left);
   });
 
@@ -198,7 +190,7 @@ describe("Text Summary", () => {
 
   test("textSummary for empty string", () => {
     const summary = textSummary("");
-    expect(summary.lines).toBe(1); // Empty string has one empty line
+    expect(summary.lines).toBe(1);
     expect(summary.bytes).toBe(0);
     expect(summary.lastLineLength).toBe(0);
   });
@@ -206,13 +198,13 @@ describe("Text Summary", () => {
   test("textSummary for trailing newline", () => {
     const summary = textSummary("Hello\n");
     expect(summary.lines).toBe(2);
-    expect(summary.lastLineLength).toBe(0); // Empty last line
+    expect(summary.lastLineLength).toBe(0);
   });
 
   test("textSummary for unicode content", () => {
     const summary = textSummary("Hello 世界");
-    expect(summary.chars).toBe(8); // "Hello " (6) + "世界" (2) = 8 chars
-    expect(summary.bytes).toBeGreaterThan(8); // UTF-8 bytes > char count for non-ASCII
+    expect(summary.chars).toBe(8);
+    expect(summary.bytes).toBeGreaterThan(8);
   });
 });
 
@@ -226,7 +218,7 @@ describe("Counter Reset", () => {
     createBufferId();
     resetCounters();
     const id = createBufferId();
-    expect(id as string).toBe("buffer-1");
+    expect(str(id)).toBe("buffer-1");
   });
 
   test("resetCounters resets excerpt ID counter", () => {

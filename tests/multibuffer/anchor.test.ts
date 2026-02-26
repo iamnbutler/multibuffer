@@ -13,18 +13,14 @@
  * - Resolution follows the chain to current valid position
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
-  createBufferId,
-  excerptId,
-  offset,
-  mbPoint,
   anchor,
-  bufferAnchor,
-  resetCounters,
   Bias,
+  bufferAnchor,
+  expectOffset,
+  resetCounters,
 } from "../helpers.ts";
-import type { Anchor, BufferAnchor } from "../../src/multibuffer/types.ts";
 
 beforeEach(() => {
   resetCounters();
@@ -40,14 +36,14 @@ describe("Anchor Creation", () => {
 
     expect(a.excerptId.index).toBe(5);
     expect(a.excerptId.generation).toBe(0);
-    expect(a.textAnchor.offset as number).toBe(100);
+    expectOffset(a.textAnchor.offset, 100);
     expect(a.textAnchor.bias).toBe(Bias.Left);
   });
 
   test("bufferAnchor has correct structure", () => {
     const ba = bufferAnchor(50, Bias.Right);
 
-    expect(ba.offset as number).toBe(50);
+    expectOffset(ba.offset, 50);
     expect(ba.bias).toBe(Bias.Right);
   });
 

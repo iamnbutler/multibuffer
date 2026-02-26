@@ -3,8 +3,8 @@
  * with stale key detection.
  */
 
-import { describe, test, expect } from "bun:test";
-import { SlotMap, keysEqual, keysCompare } from "../../src/multibuffer/slot_map.ts";
+import { describe, expect, test } from "bun:test";
+import { keysCompare, keysEqual, SlotMap } from "../../src/multibuffer/slot_map.ts";
 
 describe("SlotMap - Insert & Get", () => {
   test("insert returns a key, get retrieves the value", () => {
@@ -165,7 +165,7 @@ describe("SlotMap - Has", () => {
 describe("SlotMap - Iteration", () => {
   test("entries iterates live pairs", () => {
     const map = new SlotMap<string>();
-    const k1 = map.insert("a");
+    const _k1 = map.insert("a");
     const k2 = map.insert("b");
     map.insert("c");
     map.remove(k2);

@@ -11,30 +11,10 @@
  * - Snapshot pattern for immutable concurrent reads
  */
 
-import { describe, test, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, test } from "bun:test";
 import {
-  createBufferId,
-  row,
-  mbRow,
-  point,
-  mbPoint,
-  excerptRange,
-  excerptId,
-  anchor,
-  generateLines,
-  generateText,
   resetCounters,
-  time,
-  benchmark,
-  Bias,
 } from "../helpers.ts";
-import type {
-  MultiBuffer,
-  MultiBufferSnapshot,
-  ExcerptRange,
-  MultiBufferRow,
-  Anchor,
-} from "../../src/multibuffer/types.ts";
 
 // TODO: Import actual implementation once created
 // import { createMultiBuffer, createBuffer } from "../../src/multibuffer/index.ts";
