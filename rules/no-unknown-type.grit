@@ -1,0 +1,9 @@
+language js
+
+`$x: unknown` where {
+  register_diagnostic(
+    span = $x,
+    message = "The `unknown` type is not allowed. Use a specific type. If unavoidable, add a `biome-ignore` comment with an `expect:` explanation.",
+    severity = "error"
+  )
+}

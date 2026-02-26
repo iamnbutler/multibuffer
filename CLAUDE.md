@@ -40,6 +40,18 @@ bun test          # Run tests
 bun test --watch  # Watch mode
 bun run bench     # Run benchmarks
 bun run typecheck # Type checking
+bun run lint      # Lint (Biome + GritQL plugins)
+```
+
+## Type Safety
+
+`any`, `unknown`, and type assertions (`as`) are banned by default via Biome.
+
+When unavoidable, add a `biome-ignore` comment with an `expect:` explanation (similar to Rust's `// SAFETY:` convention):
+
+```ts
+// biome-ignore lint/suspicious/noExplicitAny: expect: Bun.gc() has no type declaration
+// biome-ignore lint/plugin/no-type-assertion: expect: branded type construction requires cast
 ```
 
 ## Task Tracking

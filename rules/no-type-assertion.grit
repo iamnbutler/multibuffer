@@ -1,0 +1,10 @@
+language js
+
+`$expr as $type` where {
+  ! $type <: "const",
+  register_diagnostic(
+    span = $expr,
+    message = "Type assertions (`as`) are not allowed. Use type guards or proper typing. If unavoidable, add a `biome-ignore` comment with an `expect:` explanation.",
+    severity = "error"
+  )
+}
