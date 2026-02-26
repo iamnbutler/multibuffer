@@ -32,7 +32,8 @@ export function createBufferId(): BufferId {
 }
 
 export function createExcerptId(): ExcerptId {
-  return ++excerptIdCounter as ExcerptId;
+  const id = excerptIdCounter++;
+  return { index: id, generation: 0 } as unknown as ExcerptId;
 }
 
 export function row(n: number): BufferRow {
@@ -51,8 +52,8 @@ export function mbOffset(n: number): MultiBufferOffset {
   return n as MultiBufferOffset;
 }
 
-export function excerptId(n: number): ExcerptId {
-  return n as ExcerptId;
+export function excerptId(index: number, generation: number = 0): ExcerptId {
+  return { index, generation } as unknown as ExcerptId;
 }
 
 export function point(row: number, column: number): BufferPoint {
@@ -106,12 +107,13 @@ export function bufferAnchor(off: number, bias: Bias = Bias.Right): BufferAnchor
 }
 
 export function anchor(
-  excId: number,
+  excIndex: number,
   off: number,
-  bias: Bias = Bias.Right
+  bias: Bias = Bias.Right,
+  generation: number = 0,
 ): Anchor {
   return {
-    excerptId: excerptId(excId),
+    excerptId: excerptId(excIndex, generation),
     textAnchor: bufferAnchor(off, bias),
   };
 }

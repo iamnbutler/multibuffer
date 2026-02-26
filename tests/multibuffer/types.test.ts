@@ -39,11 +39,14 @@ describe("Branded Types", () => {
     expect(typeof id1).toBe("string");
   });
 
-  test("ExcerptId creates unique numeric identifiers", () => {
+  test("ExcerptId creates unique identifiers with generational index", () => {
     const id1 = createExcerptId();
     const id2 = createExcerptId();
-    expect(id1).not.toBe(id2);
-    expect((id1 as number) < (id2 as number)).toBe(true); // Monotonically increasing
+    expect(id1).not.toEqual(id2);
+    // Each creation gets a unique index
+    expect((id1 as unknown as { index: number }).index).not.toBe(
+      (id2 as unknown as { index: number }).index,
+    );
   });
 
   test("BufferRow preserves numeric value", () => {
@@ -66,9 +69,10 @@ describe("Branded Types", () => {
     expect(o as number).toBe(1024);
   });
 
-  test("ExcerptId from number preserves value", () => {
+  test("ExcerptId from index preserves value", () => {
     const id = excerptId(5);
-    expect(id as number).toBe(5);
+    expect((id as unknown as { index: number }).index).toBe(5);
+    expect((id as unknown as { generation: number }).generation).toBe(0);
   });
 });
 
@@ -164,7 +168,7 @@ describe("Anchor Types", () => {
 
   test("anchor combines excerpt and buffer anchor", () => {
     const a = anchor(3, 200, Bias.Left);
-    expect(a.excerptId as number).toBe(3);
+    expect((a.excerptId as unknown as { index: number }).index).toBe(3);
     expect(a.textAnchor.offset as number).toBe(200);
     expect(a.textAnchor.bias).toBe(Bias.Left);
   });
@@ -233,6 +237,6 @@ describe("Counter Reset", () => {
     createExcerptId();
     resetCounters();
     const id = createExcerptId();
-    expect(id as number).toBe(1);
+    expect((id as unknown as { index: number }).index).toBe(0);
   });
 });

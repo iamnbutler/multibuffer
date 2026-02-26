@@ -7,6 +7,8 @@
  * - Excerpts are views into buffers, not copies
  */
 
+import type { SlotKey } from "./slot_map.ts";
+
 // =============================================================================
 // Primitive Types
 // =============================================================================
@@ -16,11 +18,9 @@ export type BufferId = string & { readonly __brand: "BufferId" };
 
 /**
  * Unique identifier for an excerpt.
- * CRITICAL: IDs are monotonically increasing and NEVER reused.
- * This is required for anchor stability - anchors reference excerpt IDs
- * and the replaced_excerpts map tracks where old IDs point.
+ * Generational index: stale IDs are detected in O(1) via generation mismatch.
  */
-export type ExcerptId = number & { readonly __brand: "ExcerptId" };
+export type ExcerptId = SlotKey & { readonly __brand: "ExcerptId" };
 
 /** Zero-based line number within a buffer */
 export type BufferRow = number & { readonly __brand: "BufferRow" };
@@ -333,10 +333,7 @@ export interface MultiBufferSnapshot {
   /** Get lines for a row range [startRow, endRow) */
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
 
-  /**
-   * Resolve an anchor to its current position.
-   * Follows replaced_excerpts chain if the original excerpt was replaced.
-   */
+  /** Resolve an anchor to its current position, or undefined if stale. */
   resolveAnchor(anchor: Anchor): MultiBufferPoint | undefined;
 
   /**
@@ -435,25 +432,12 @@ export interface MultiBuffer {
 
 /**
  * Internal state for MultiBuffer implementation.
- * Tracks replaced excerpts for anchor resolution.
  */
 export interface MultiBufferState {
-  /** Internal excerpt list with full data */
-  excerpts: Excerpt[];
+  /** Excerpt IDs in display order */
+  excerptOrder: ExcerptId[];
 
-  /**
-   * Maps old excerpt IDs to their replacements.
-   * Used for anchor survival when excerpts are replaced.
-   *
-   * Resolution follows the chain:
-   * while (replacedExcerpts.has(id)) { id = replacedExcerpts.get(id)! }
-   */
-  replacedExcerpts: Map<ExcerptId, ExcerptId>;
-
-  /** Next excerpt ID to assign (monotonically increasing) */
-  nextExcerptId: number;
-
-  /** Singleton optimization flag */
+  /** True when exactly one buffer and one excerpt */
   singleton: boolean;
 }
 
@@ -470,4 +454,3 @@ export type AsBufferRow = (n: number) => BufferRow;
 export type AsMultiBufferRow = (n: number) => MultiBufferRow;
 export type AsBufferOffset = (n: number) => BufferOffset;
 export type AsMultiBufferOffset = (n: number) => MultiBufferOffset;
-export type AsExcerptId = (n: number) => ExcerptId;

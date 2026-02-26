@@ -117,13 +117,17 @@ describe("ExcerptInfo", () => {
     expect(excerpt2.startRow as number).toBe(excerpt1.endRow as number);
   });
 
-  test("excerpt IDs are unique and increasing", () => {
+  test("excerpt IDs are unique and have increasing indices", () => {
     const id1 = createExcerptId();
     const id2 = createExcerptId();
     const id3 = createExcerptId();
 
-    expect((id1 as number) < (id2 as number)).toBe(true);
-    expect((id2 as number) < (id3 as number)).toBe(true);
+    const i1 = (id1 as unknown as { index: number }).index;
+    const i2 = (id2 as unknown as { index: number }).index;
+    const i3 = (id3 as unknown as { index: number }).index;
+
+    expect(i1 < i2).toBe(true);
+    expect(i2 < i3).toBe(true);
   });
 });
 
