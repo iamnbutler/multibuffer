@@ -41,6 +41,10 @@ export class SlotMap<V> {
     return this._size;
   }
 
+  private slotAt(index: number): Slot<V> | undefined {
+    return this.slots[index];
+  }
+
   /**
    * Insert a value and return its key.
    */
@@ -48,12 +52,17 @@ export class SlotMap<V> {
     let index: number;
     let generation: number;
 
-    if (this.freeList.length > 0) {
-      index = this.freeList.pop()!;
-      const slot = this.slots[index]!;
-      slot.value = value;
-      slot.occupied = true;
-      generation = slot.generation;
+    const freeIndex = this.freeList.pop();
+    if (freeIndex !== undefined) {
+      index = freeIndex;
+      const slot = this.slotAt(index);
+      if (slot) {
+        slot.value = value;
+        slot.occupied = true;
+        generation = slot.generation;
+      } else {
+        generation = 0;
+      }
     } else {
       index = this.slots.length;
       generation = 0;
@@ -68,8 +77,8 @@ export class SlotMap<V> {
    * Get the value for a key, or undefined if the key is stale/invalid.
    */
   get(key: SlotKey): V | undefined {
-    const slot = this.slots[key.index];
-    if (slot && slot.occupied && slot.generation === key.generation) {
+    const slot = this.slotAt(key.index);
+    if (slot?.occupied && slot.generation === key.generation) {
       return slot.value;
     }
     return undefined;
@@ -79,8 +88,8 @@ export class SlotMap<V> {
    * Check if a key is still valid (points to a live value).
    */
   has(key: SlotKey): boolean {
-    const slot = this.slots[key.index];
-    return slot !== undefined && slot.occupied && slot.generation === key.generation;
+    const slot = this.slotAt(key.index);
+    return slot?.occupied === true && slot.generation === key.generation;
   }
 
   /**
@@ -88,8 +97,8 @@ export class SlotMap<V> {
    * The slot is freed for reuse with an incremented generation.
    */
   remove(key: SlotKey): V | undefined {
-    const slot = this.slots[key.index];
-    if (!slot || !slot.occupied || slot.generation !== key.generation) {
+    const slot = this.slotAt(key.index);
+    if (!slot?.occupied || slot.generation !== key.generation) {
       return undefined;
     }
 
@@ -107,8 +116,8 @@ export class SlotMap<V> {
    */
   *entries(): IterableIterator<[SlotKey, V]> {
     for (let i = 0; i < this.slots.length; i++) {
-      const slot = this.slots[i]!;
-      if (slot.occupied && slot.value !== undefined) {
+      const slot = this.slotAt(i);
+      if (slot?.occupied && slot.value !== undefined) {
         yield [{ index: i, generation: slot.generation }, slot.value];
       }
     }
@@ -130,8 +139,8 @@ export class SlotMap<V> {
    */
   *keys(): IterableIterator<SlotKey> {
     for (let i = 0; i < this.slots.length; i++) {
-      const slot = this.slots[i]!;
-      if (slot.occupied) {
+      const slot = this.slotAt(i);
+      if (slot?.occupied) {
         yield { index: i, generation: slot.generation };
       }
     }
@@ -142,8 +151,8 @@ export class SlotMap<V> {
    */
   clear(): void {
     for (let i = 0; i < this.slots.length; i++) {
-      const slot = this.slots[i]!;
-      if (slot.occupied) {
+      const slot = this.slotAt(i);
+      if (slot?.occupied) {
         slot.value = undefined;
         slot.occupied = false;
         slot.generation++;
