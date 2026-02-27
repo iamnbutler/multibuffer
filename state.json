@@ -1,13 +1,13 @@
 {
-  "last_run": "2026-02-27T00:00:00Z",
-  "last_run_id": "22494218427",
+  "last_run": "2026-02-27T16:29:00Z",
+  "last_run_id": "22494486270",
   "backlog_cursor": {
-    "issues": 9,
-    "note": "All issues through #9 have been commented on and labelled. Issue #7 is the Repo Assist 'proxy PR' issue (CI workflow patch failed to push as a real PR — second attempt also resulted in patch artifact only)."
+    "issues": 10,
+    "note": "All issues through #10 have been seen. Issues #7 and #10 are proxy PR issues (patch artifacts); #8 is the monthly summary. Issues #3-#6 and #9 have Repo Assist comments."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-02-27",
-    "task_2_fix_issues": null,
+    "task_2_fix_issues": "2026-02-27",
     "task_3_improvements": "2026-02-27",
     "task_4_deps": null,
     "task_5_maintain_prs": "2026-02-27",
@@ -30,12 +30,28 @@
   },
   "prs_created": [
     {
-      "pr_number": "TBD (patch artifact in run 22494218427)",
+      "pr_number": "patch-artifact-run-22493814428",
       "branch": "repo-assist/improve-ci-setup",
       "issue": 5,
       "description": "CI workflow: typecheck, lint, tests",
       "created": "2026-02-27",
-      "status": "patch-only - push failed both attempts"
+      "status": "patch-only - push failed"
+    },
+    {
+      "pr_number": "patch-artifact-run-22494218427",
+      "branch": "repo-assist/improve-ci-setup",
+      "issue": 5,
+      "description": "CI workflow: typecheck, lint, tests (retry 2)",
+      "created": "2026-02-27",
+      "status": "patch-only - push failed"
+    },
+    {
+      "pr_number": "patch-artifact-run-22494486270",
+      "branch": "repo-assist/fix-issue-5-ci-workflow",
+      "issue": 5,
+      "description": "CI workflow: typecheck, lint, tests (retry 3 - new branch name)",
+      "created": "2026-02-27",
+      "status": "patch-only - sandbox cannot push to GitHub; direct push not available"
     }
   ],
   "issues_created": [
@@ -49,7 +65,13 @@
       "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
       "number": 7,
       "created": "2026-02-27",
-      "description": "Proxy issue for CI PR (push failed) - can be closed once patch is applied by maintainer"
+      "description": "Proxy issue for CI PR (run 22493814428) - can be closed by maintainer"
+    },
+    {
+      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
+      "number": 10,
+      "created": "2026-02-27",
+      "description": "Proxy issue for CI PR (run 22494218427) - duplicate, can be closed by maintainer"
     }
   ],
   "labels_applied": {
@@ -60,11 +82,13 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 2: Commented on new issues #6 (demo fixture switcher) and #9 (spool CI integration). Retried CI PR push - still patch-only. Issue #7 is the proxy issue for the CI PR. Tasks 4 (deps), 6 (stale PR nudges), 8 (release), 9 (welcomes) not yet run - schedule for next runs.",
+  "notes": "Run 3: CI workflow push has now failed 3 times. The sandbox environment cannot push to GitHub - direct git push is blocked. The patch artifact is available from run 22494486270. Maintainer must apply manually. Do NOT retry CI PR push in future runs - it will fail again. Instead, focus on other tasks (deps, forward progress on issues #3/#4/#6/#9, task_6 stale PR nudges, task_8 release, task_9 welcomes, task_10 forward). Tasks 4 (deps), 6 (stale PR nudges), 8 (release), 9 (welcomes), 10 (forward) still not run - schedule for next runs.",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
   },
   "deps_last_checked": null,
-  "open_issues_without_ra_comment": []
+  "open_issues_without_ra_comment": [],
+  "ci_pr_push_blocked": true,
+  "ci_pr_patch_latest_run": "22494486270"
 }
