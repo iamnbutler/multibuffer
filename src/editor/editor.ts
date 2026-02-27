@@ -31,6 +31,13 @@ export class Editor {
   private _cursor: MultiBufferPoint;
   private _selection: Selection | undefined;
   private _onChange: (() => void) | null = null;
+  /**
+   * Remembered column for vertical navigation.
+   * Set when vertical movement begins; cleared by horizontal movement or edits.
+   * Allows the cursor to return to its original column after passing through
+   * shorter lines (e.g. col 10 → col 3 on short line → col 10 on next long line).
+   */
+  private _goalColumn: number | undefined = undefined;
 
   constructor(multiBuffer: MultiBuffer) {
     this.multiBuffer = multiBuffer;
@@ -64,6 +71,7 @@ export class Editor {
 
   /** Set cursor to a specific point (e.g. from mouse click). */
   setCursor(point: MultiBufferPoint): void {
+    this._goalColumn = undefined;
     this._cursor = point;
     this._selection = selectionAtPoint(this.multiBuffer, point);
     this._onChange?.();
@@ -71,6 +79,7 @@ export class Editor {
 
   /** Extend selection from current anchor to a new point (for mouse drag). */
   extendSelectionTo(point: MultiBufferPoint): void {
+    this._goalColumn = undefined;
     if (!this._selection) {
       this.setCursor(point);
       return;
@@ -110,6 +119,7 @@ export class Editor {
 
   /** Select the word at a point (for double-click). */
   selectWordAt(point: MultiBufferPoint): void {
+    this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
@@ -155,6 +165,7 @@ export class Editor {
 
   /** Select the entire line at a point (for triple-click). */
   selectLineAt(point: MultiBufferPoint): void {
+    this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
@@ -228,6 +239,7 @@ export class Editor {
   }
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
+    this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
       // Replace selection with text
       const range = resolveAnchorRange(snap, this._selection.range);
@@ -253,6 +265,7 @@ export class Editor {
   }
 
   private _deleteBackward(snap: MultiBufferSnapshot, granularity: import("./types.ts").Granularity): void {
+    this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
       // Delete selection
       const range = resolveAnchorRange(snap, this._selection.range);
@@ -275,6 +288,7 @@ export class Editor {
   }
 
   private _deleteForward(snap: MultiBufferSnapshot, granularity: import("./types.ts").Granularity): void {
+    this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
@@ -305,6 +319,7 @@ export class Editor {
       if (direction === "left" || direction === "up") {
         const start = snap.resolveAnchor(this._selection.range.start);
         if (start) {
+          this._goalColumn = undefined;
           this._cursor = start;
           this._selection = selectionAtPoint(this.multiBuffer, start);
           return;
@@ -312,6 +327,7 @@ export class Editor {
       } else {
         const end = snap.resolveAnchor(this._selection.range.end);
         if (end) {
+          this._goalColumn = undefined;
           this._cursor = end;
           this._selection = selectionAtPoint(this.multiBuffer, end);
           return;
@@ -320,7 +336,22 @@ export class Editor {
     }
 
     const cursor = this.cursor;
-    const newCursor = moveCursor(snap, cursor, direction, granularity);
+    let newCursor: MultiBufferPoint;
+
+    if (direction === "up" || direction === "down") {
+      // Save the goal column on the first vertical move, then use it to
+      // maintain the intended column across lines of varying lengths.
+      if (this._goalColumn === undefined) {
+        this._goalColumn = cursor.column;
+      }
+      const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: this._goalColumn ?? cursor.column };
+      newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
+    } else {
+      // Horizontal move — discard the goal column
+      this._goalColumn = undefined;
+      newCursor = moveCursor(snap, cursor, direction, granularity);
+    }
+
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
@@ -331,19 +362,69 @@ export class Editor {
     granularity: import("./types.ts").Granularity,
   ): void {
     if (!this._selection) return;
-    const extended = extendSelection(
-      snap,
-      this.multiBuffer,
-      this._selection,
-      direction,
-      granularity,
-    );
-    if (extended) {
-      this._selection = extended;
+
+    if (direction === "up" || direction === "down") {
+      // Resolve the current head position
+      const headAnchor =
+        this._selection.head === "end"
+          ? this._selection.range.end
+          : this._selection.range.start;
+      const headPoint = snap.resolveAnchor(headAnchor);
+      if (!headPoint) return;
+
+      // Save goal column on the first vertical extend
+      if (this._goalColumn === undefined) {
+        this._goalColumn = headPoint.column;
+      }
+
+      // Move the head using goal column as the intended column
+      const effectiveHead: MultiBufferPoint = { row: headPoint.row, column: this._goalColumn ?? headPoint.column };
+      const newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
+      const newHeadAnchor = this.multiBuffer.createAnchor(newHeadPoint, Bias.Right);
+      if (!newHeadAnchor) return;
+
+      // Keep the anchor end fixed and re-determine ordering
+      const anchorEnd =
+        this._selection.head === "end"
+          ? this._selection.range.start
+          : this._selection.range.end;
+      const anchorPoint = snap.resolveAnchor(anchorEnd);
+      if (!anchorPoint) return;
+
+      if (
+        newHeadPoint.row < anchorPoint.row ||
+        (newHeadPoint.row === anchorPoint.row &&
+          newHeadPoint.column <= anchorPoint.column)
+      ) {
+        this._selection = createSelection(
+          createAnchorRange(newHeadAnchor, anchorEnd),
+          "start",
+        );
+      } else {
+        this._selection = createSelection(
+          createAnchorRange(anchorEnd, newHeadAnchor),
+          "end",
+        );
+      }
+      this._cursor = newHeadPoint;
+    } else {
+      // Horizontal extend resets goal column
+      this._goalColumn = undefined;
+      const extended = extendSelection(
+        snap,
+        this.multiBuffer,
+        this._selection,
+        direction,
+        granularity,
+      );
+      if (extended) {
+        this._selection = extended;
+      }
     }
   }
 
   private _selectAll(snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
     const sel = selectAll(snap, this.multiBuffer);
     if (sel) {
       this._selection = sel;
@@ -351,6 +432,7 @@ export class Editor {
   }
 
   private _collapseSelection(snap: MultiBufferSnapshot, to: "start" | "end"): void {
+    this._goalColumn = undefined;
     if (!this._selection) return;
     const collapsed = collapseSelection(snap, this.multiBuffer, this._selection, to);
     if (collapsed) {
@@ -363,6 +445,7 @@ export class Editor {
   }
 
   private _deleteLine(snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
     const cursor = this.cursor;
     const row = cursor.row;
     const lineCount = snap.lineCount;

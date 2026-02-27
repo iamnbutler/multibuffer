@@ -935,3 +935,64 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "page" });
   });
 });
+
+// ─── Goal Column ──────────────────────────────────────────────────
+
+describe("Editor - Goal Column", () => {
+  test("goal column preserved across short line when moving down", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB" length
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 4); // restored to goal column 4
+  });
+
+  test("goal column resets on horizontal move", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped
+    editor.dispatch({ type: "moveCursor", direction: "left", granularity: "character" });
+    expectPoint(editor.cursor, 1, 1); // horizontal move, goal column reset
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 1); // col 1, not the old goal col 4
+  });
+
+  test("goal column resets on text insertion", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB"
+    editor.dispatch({ type: "insertText", text: "X" }); // inserts at (1,2) → cursor at (1,3), resets goal
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 3); // col 3, not old goal col 4
+  });
+
+  test("goal column preserved moving up through short line", () => {
+    const { editor } = setup("CCCCC\nBB\nAAAAA");
+    editor.setCursor(mbPoint(2, 4));
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB"
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 0, 4); // restored to goal column 4
+  });
+
+  test("extend selection preserves goal column vertically", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    // head moves to (1, 2) — clamped
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    // head should be at (2, 4) — goal column restored
+    const snap = editor.multiBuffer.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+    const end = snap.resolveAnchor(sel.range.end);
+    expect(end).toBeDefined();
+    if (!end) return;
+    expect(num(end.row)).toBe(2);
+    expect(end.column).toBe(4);
+  });
+});
