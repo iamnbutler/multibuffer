@@ -31,9 +31,6 @@ beforeEach(() => {
   resetCounters();
 });
 
-// =============================================================================
-// Buffer Creation
-// =============================================================================
 
 describe("Buffer Creation", () => {
   test("creates buffer from empty string", () => {
@@ -103,9 +100,6 @@ describe("Buffer Creation", () => {
   });
 });
 
-// =============================================================================
-// Buffer Snapshot Immutability
-// =============================================================================
 
 describe("Buffer Snapshot", () => {
   test("snapshot is immutable after edits", () => {
@@ -162,9 +156,6 @@ describe("Buffer Snapshot", () => {
   });
 });
 
-// =============================================================================
-// Buffer Editing - Insert
-// =============================================================================
 
 describe("Buffer Editing - Insert", () => {
   test("insert at beginning", () => {
@@ -213,9 +204,6 @@ describe("Buffer Editing - Insert", () => {
   });
 });
 
-// =============================================================================
-// Buffer Editing - Delete
-// =============================================================================
 
 describe("Buffer Editing - Delete", () => {
   test("delete from beginning", () => {
@@ -258,9 +246,6 @@ describe("Buffer Editing - Delete", () => {
   });
 });
 
-// =============================================================================
-// Buffer Editing - Replace
-// =============================================================================
 
 describe("Buffer Editing - Replace", () => {
   test("replace with same length", () => {
@@ -294,9 +279,6 @@ describe("Buffer Editing - Replace", () => {
   });
 });
 
-// =============================================================================
-// Position Conversion
-// =============================================================================
 
 describe("Buffer Position Conversion", () => {
   test("pointToOffset for first line", () => {
@@ -353,9 +335,6 @@ describe("Buffer Position Conversion", () => {
   });
 });
 
-// =============================================================================
-// Clipping with Bias
-// =============================================================================
 
 describe("Buffer Clipping with Bias", () => {
   test("clipPoint clamps column to line length", () => {
@@ -395,9 +374,6 @@ describe("Buffer Clipping with Bias", () => {
   });
 });
 
-// =============================================================================
-// Performance Tests
-// =============================================================================
 
 describe("Buffer Performance", () => {
   test("creates 10k line buffer in <10ms", () => {

@@ -37,9 +37,6 @@ beforeEach(() => {
   resetCounters();
 });
 
-// =============================================================================
-// ExcerptRange Validation
-// =============================================================================
 
 describe("ExcerptRange", () => {
   test("context contains primary range", () => {
@@ -76,9 +73,6 @@ describe("ExcerptRange", () => {
   });
 });
 
-// =============================================================================
-// ExcerptInfo
-// =============================================================================
 
 describe("ExcerptInfo", () => {
   test("calculates line count from range", () => {
@@ -127,9 +121,6 @@ describe("ExcerptInfo", () => {
   });
 });
 
-// =============================================================================
-// Empty Excerpt Edge Cases (GOTCHA from research)
-// =============================================================================
 
 describe("Empty Excerpt Edge Cases", () => {
   test("empty excerpt has zero line count", () => {
@@ -158,9 +149,6 @@ describe("Empty Excerpt Edge Cases", () => {
   });
 });
 
-// =============================================================================
-// Trailing Newline Handling (GOTCHA from research)
-// =============================================================================
 
 describe("Trailing Newline Handling", () => {
   test("hasTrailingNewline flag affects line count", () => {
@@ -193,9 +181,6 @@ describe("Trailing Newline Handling", () => {
   });
 });
 
-// =============================================================================
-// Excerpt Creation (requires implementation)
-// =============================================================================
 
 describe("Excerpt Creation", () => {
   test("creates excerpt from buffer range", () => {
@@ -289,9 +274,6 @@ describe("Excerpt Creation", () => {
   });
 });
 
-// =============================================================================
-// Excerpt Range Merging
-// =============================================================================
 
 describe("Excerpt Range Merging", () => {
   test.todo("adjacent ranges merge", () => {
@@ -311,9 +293,6 @@ describe("Excerpt Range Merging", () => {
   });
 });
 
-// =============================================================================
-// Excerpt Expansion
-// =============================================================================
 
 describe("Excerpt Expansion", () => {
   test.todo("expand adds context lines before", () => {
@@ -333,9 +312,6 @@ describe("Excerpt Expansion", () => {
   });
 });
 
-// =============================================================================
-// Excerpt ID Monotonicity (GOTCHA from research)
-// =============================================================================
 
 describe("Excerpt ID Monotonicity", () => {
   test.todo("IDs never decrease", () => {
@@ -353,9 +329,6 @@ describe("Excerpt ID Monotonicity", () => {
   });
 });
 
-// =============================================================================
-// Anchor Stability Within Excerpts
-// =============================================================================
 
 describe("Excerpt Anchor Stability", () => {
   test.todo("anchor in excerpt survives buffer edit before excerpt", () => {
@@ -387,9 +360,6 @@ describe("Excerpt Anchor Stability", () => {
   });
 });
 
-// =============================================================================
-// Excerpt Replacement
-// =============================================================================
 
 describe("Excerpt Replacement", () => {
   test("replaced excerpt tracked in map", () => {

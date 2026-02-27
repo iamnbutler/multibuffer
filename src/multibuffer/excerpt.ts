@@ -15,10 +15,6 @@ import type {
   TextSummary,
 } from "./types.ts";
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
 /** UTF-8 byte length without allocating a Uint8Array. */
 function utf8ByteLength(str: string): number {
   let bytes = 0;
@@ -77,10 +73,6 @@ export function excerptLineCount(excerpt: Excerpt): number {
     excerpt.range.context.end.row - excerpt.range.context.start.row;
   return rangeLines + (excerpt.hasTrailingNewline ? 1 : 0);
 }
-
-// =============================================================================
-// Factory
-// =============================================================================
 
 /**
  * Create an excerpt from a buffer snapshot and a range.

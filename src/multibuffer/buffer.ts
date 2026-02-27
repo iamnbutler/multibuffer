@@ -17,10 +17,6 @@ import type {
   TextSummary,
 } from "./types.ts";
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
 /**
  * Compute the cumulative byte offset of each line's start.
  * lineStarts[i] = sum of (lines[0..i-1].length + 1) for the newlines.
@@ -77,10 +73,6 @@ function computeTextSummary(lines: readonly string[]): TextSummary {
     chars: totalChars,
   };
 }
-
-// =============================================================================
-// BufferSnapshot
-// =============================================================================
 
 class BufferSnapshotImpl implements BufferSnapshot {
   readonly id: BufferId;
@@ -179,10 +171,6 @@ class BufferSnapshotImpl implements BufferSnapshot {
   }
 }
 
-// =============================================================================
-// Buffer
-// =============================================================================
-
 class BufferImpl implements Buffer {
   readonly id: BufferId;
   private _lines: string[];
@@ -268,10 +256,6 @@ class BufferImpl implements Buffer {
     this._textLength = text.length;
   }
 }
-
-// =============================================================================
-// Factory
-// =============================================================================
 
 export function createBuffer(id: BufferId, text: string): Buffer {
   return new BufferImpl(id, text);

@@ -25,10 +25,6 @@ import type {
   MultiBufferSnapshot,
 } from "./types.ts";
 
-// =============================================================================
-// Snapshot
-// =============================================================================
-
 class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
@@ -329,10 +325,6 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   }
 }
 
-// =============================================================================
-// MultiBuffer
-// =============================================================================
-
 class MultiBufferImpl implements MultiBuffer {
   private _excerpts = new SlotMap<Excerpt>();
   private _order: ExcerptId[] = [];
@@ -526,10 +518,6 @@ class MultiBufferImpl implements MultiBuffer {
     this._cachedLineCount = currentRow;
   }
 }
-
-// =============================================================================
-// Factory
-// =============================================================================
 
 export function createMultiBuffer(): MultiBuffer {
   return new MultiBufferImpl();

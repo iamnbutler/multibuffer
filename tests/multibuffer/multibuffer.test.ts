@@ -33,9 +33,6 @@ beforeEach(() => {
   resetCounters();
 });
 
-// =============================================================================
-// MultiBuffer Creation
-// =============================================================================
 
 describe("MultiBuffer Creation", () => {
   test("creates empty multibuffer", () => {
@@ -83,9 +80,6 @@ describe("MultiBuffer Creation", () => {
   });
 });
 
-// =============================================================================
-// Multiple Excerpts
-// =============================================================================
 
 describe("MultiBuffer - Multiple Excerpts", () => {
   test("line count is sum of excerpt line counts", () => {
@@ -164,9 +158,6 @@ describe("MultiBuffer - Multiple Excerpts", () => {
   });
 });
 
-// =============================================================================
-// Row Navigation (Binary Search)
-// =============================================================================
 
 describe("MultiBuffer - Row Navigation", () => {
   test("excerptAt returns correct excerpt for row", () => {
@@ -230,9 +221,6 @@ describe("MultiBuffer - Row Navigation", () => {
   });
 });
 
-// =============================================================================
-// Position Conversion (3-Layer Model)
-// =============================================================================
 
 describe("MultiBuffer - Position Conversion", () => {
   test("toBufferPoint converts multibuffer position to buffer position", () => {
@@ -321,9 +309,6 @@ describe("MultiBuffer - Position Conversion", () => {
   });
 });
 
-// =============================================================================
-// Line Access Across Excerpts
-// =============================================================================
 
 describe("MultiBuffer - Line Access", () => {
   test("lines() returns lines from single excerpt", () => {
@@ -381,9 +366,6 @@ describe("MultiBuffer - Line Access", () => {
   });
 });
 
-// =============================================================================
-// Clipping with Bias
-// =============================================================================
 
 describe("MultiBuffer - Clipping", () => {
   test("clipPoint clamps to valid multibuffer position", () => {
@@ -414,9 +396,6 @@ describe("MultiBuffer - Clipping", () => {
   });
 });
 
-// =============================================================================
-// Anchor Operations
-// =============================================================================
 
 describe("MultiBuffer - Anchors", () => {
   test.todo("createAnchor returns anchor for valid position", () => {});
@@ -427,9 +406,6 @@ describe("MultiBuffer - Anchors", () => {
   test.todo("resolveAnchor follows replaced_excerpts chain", () => {});
 });
 
-// =============================================================================
-// Anchor Survival Through Edits
-// =============================================================================
 
 describe("MultiBuffer - Anchor Survival", () => {
   test.todo("anchor survives insert before anchor", () => {});
@@ -440,9 +416,6 @@ describe("MultiBuffer - Anchor Survival", () => {
   test.todo("anchor at deleted position resolves to boundary", () => {});
 });
 
-// =============================================================================
-// Anchor Survival Through Excerpt Replacement
-// =============================================================================
 
 describe("MultiBuffer - Anchor Survival Through Replacement", () => {
   test.todo("anchor survives excerpt replacement", () => {});
@@ -450,9 +423,6 @@ describe("MultiBuffer - Anchor Survival Through Replacement", () => {
   test.todo("anchor degrades when excerpt removed without replacement", () => {});
 });
 
-// =============================================================================
-// Excerpt Boundaries
-// =============================================================================
 
 describe("MultiBuffer - Excerpt Boundaries", () => {
   test("excerptBoundaries returns boundaries in viewport", () => {
@@ -513,9 +483,6 @@ describe("MultiBuffer - Excerpt Boundaries", () => {
   });
 });
 
-// =============================================================================
-// Snapshot Immutability
-// =============================================================================
 
 describe("MultiBuffer - Snapshot", () => {
   test("snapshot is immutable after mutations", () => {
@@ -553,9 +520,6 @@ describe("MultiBuffer - Snapshot", () => {
   test.todo("anchors work with old snapshots", () => {});
 });
 
-// =============================================================================
-// Batch Operations
-// =============================================================================
 
 describe("MultiBuffer - Batch Operations", () => {
   test("setExcerptsForBuffer replaces all excerpts for buffer", () => {
@@ -648,9 +612,6 @@ describe("MultiBuffer - Batch Operations", () => {
   });
 });
 
-// =============================================================================
-// Edge Cases
-// =============================================================================
 
 describe("MultiBuffer - Edge Cases", () => {
   test("empty multibuffer operations", () => {
@@ -711,9 +672,6 @@ describe("MultiBuffer - Edge Cases", () => {
   });
 });
 
-// =============================================================================
-// Performance
-// =============================================================================
 
 describe("MultiBuffer - Performance", () => {
   test("adding 100 excerpts completes in <10ms", () => {

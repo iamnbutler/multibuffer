@@ -20,9 +20,6 @@ import {
   type TextSummary,
 } from "../src/multibuffer/types.ts";
 
-// =============================================================================
-// Type Constructors (for tests only)
-// =============================================================================
 
 let bufferIdCounter = 0;
 let excerptIdCounter = 0;
@@ -127,9 +124,6 @@ export function anchor(
   };
 }
 
-// =============================================================================
-// Text Summary Helpers
-// =============================================================================
 
 export function textSummary(text: string): TextSummary {
   const lines = text.split("\n");
@@ -142,9 +136,6 @@ export function textSummary(text: string): TextSummary {
   };
 }
 
-// =============================================================================
-// Test Data Generators
-// =============================================================================
 
 /**
  * Generate lines of text for testing.
@@ -203,9 +194,6 @@ export function generateEdgeCaseText(): {
   };
 }
 
-// =============================================================================
-// Timing Utilities
-// =============================================================================
 
 /**
  * Measure execution time of a function.
@@ -264,15 +252,6 @@ export function benchmark(
   };
 }
 
-// =============================================================================
-// Assertion Helpers
-//
-// Branded types (BufferRow, MultiBufferRow, etc.) are numbers at runtime but
-// TypeScript won't let you write expect(brandedValue).toBe(42) because the
-// .toBe() overload expects the branded type, not plain number.
-//
-// These helpers encapsulate the cast so test call sites stay clean.
-// =============================================================================
 
 import { expect } from "bun:test";
 
@@ -312,9 +291,6 @@ export function expectOffset(
   expect(num(actual)).toBe(expected);
 }
 
-// =============================================================================
-// Reset (for test isolation)
-// =============================================================================
 
 export function resetCounters(): void {
   bufferIdCounter = 0;

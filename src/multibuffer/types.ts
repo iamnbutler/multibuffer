@@ -9,10 +9,6 @@
 
 import type { SlotKey } from "./slot_map.ts";
 
-// =============================================================================
-// Primitive Types
-// =============================================================================
-
 /** Unique identifier for a buffer */
 export type BufferId = string & { readonly __brand: "BufferId" };
 
@@ -36,10 +32,6 @@ export type MultiBufferOffset = number & {
   readonly __brand: "MultiBufferOffset";
 };
 
-// =============================================================================
-// Bias Type
-// =============================================================================
-
 /**
  * Bias determines behavior at position boundaries.
  *
@@ -61,10 +53,6 @@ export const Bias = {
 
 export type Bias = (typeof Bias)[keyof typeof Bias];
 
-// =============================================================================
-// Position Types
-// =============================================================================
-
 /** A position within a buffer (row + column) */
 export interface BufferPoint {
   readonly row: BufferRow;
@@ -76,10 +64,6 @@ export interface MultiBufferPoint {
   readonly row: MultiBufferRow;
   readonly column: number;
 }
-
-// =============================================================================
-// Text Summary Types
-// =============================================================================
 
 /**
  * Aggregated metrics for a span of text.
@@ -98,10 +82,6 @@ export interface TextSummary {
   /** Total character count (may differ from bytes for unicode) */
   readonly chars: number;
 }
-
-// =============================================================================
-// Anchor Types
-// =============================================================================
 
 /**
  * A buffer-level anchor - stable position within a single buffer.
@@ -135,10 +115,6 @@ export interface Anchor {
   readonly textAnchor: BufferAnchor;
 }
 
-// =============================================================================
-// Range Types
-// =============================================================================
-
 /** A range within a buffer */
 export interface BufferRange {
   readonly start: BufferPoint;
@@ -157,10 +133,6 @@ export interface AnchorRange {
   readonly end: Anchor;
 }
 
-// =============================================================================
-// Selection Types
-// =============================================================================
-
 /**
  * A selection is an anchor range with a "head" indicating cursor position.
  * The head can be at either end of the range depending on selection direction.
@@ -170,10 +142,6 @@ export interface Selection {
   /** Which end of the range the cursor is at */
   readonly head: "start" | "end";
 }
-
-// =============================================================================
-// Excerpt Types
-// =============================================================================
 
 /**
  * Range specification for creating an excerpt.
@@ -234,10 +202,6 @@ export interface ExcerptBoundary {
   /** Next excerpt */
   readonly next: ExcerptInfo;
 }
-
-// =============================================================================
-// Buffer Types
-// =============================================================================
 
 /**
  * Immutable snapshot of a buffer's state at a point in time.
@@ -311,10 +275,6 @@ export interface Buffer {
   /** Return all edits since the given version */
   editsSince(version: number): readonly EditEntry[];
 }
-
-// =============================================================================
-// MultiBuffer Types
-// =============================================================================
 
 /**
  * Immutable snapshot of multibuffer state.
@@ -437,10 +397,6 @@ export interface MultiBuffer {
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
 }
 
-// =============================================================================
-// Edit Tracking Types
-// =============================================================================
-
 /**
  * A single buffer edit, recorded for anchor offset adjustment.
  * All offsets are in pre-edit buffer coordinates.
@@ -454,10 +410,6 @@ export interface EditEntry {
   readonly insertedLength: number;
 }
 
-// =============================================================================
-// Internal State Types (for implementation)
-// =============================================================================
-
 /**
  * Internal state for MultiBuffer implementation.
  */
@@ -468,10 +420,6 @@ export interface MultiBufferState {
   /** True when exactly one buffer and one excerpt */
   singleton: boolean;
 }
-
-// =============================================================================
-// Factory Functions (type definitions only)
-// =============================================================================
 
 export type CreateBufferId = () => BufferId;
 export type CreateBuffer = (id: BufferId, text: string) => Buffer;

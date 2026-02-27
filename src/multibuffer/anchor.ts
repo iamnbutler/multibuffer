@@ -14,10 +14,6 @@ import type {
 } from "./types.ts";
 import { Bias } from "./types.ts";
 
-// =============================================================================
-// Offset Adjustment
-// =============================================================================
-
 /**
  * Adjust a buffer offset through a single edit.
  *
@@ -64,10 +60,6 @@ export function adjustOffset(
   return current;
 }
 
-// =============================================================================
-// Anchor Comparison
-// =============================================================================
-
 export function anchorsEqual(a: Anchor, b: Anchor): boolean {
   return (
     a.excerptId.index === b.excerptId.index &&
@@ -92,10 +84,6 @@ export function compareAnchors(a: Anchor, b: Anchor): number {
   return a.textAnchor.bias - b.textAnchor.bias;
 }
 
-// =============================================================================
-// AnchorRange and Selection Factories
-// =============================================================================
-
 export function createAnchorRange(start: Anchor, end: Anchor): AnchorRange {
   return { start, end };
 }
@@ -113,10 +101,6 @@ export function reverseSelection(selection: Selection): Selection {
     head: selection.head === "start" ? "end" : "start",
   };
 }
-
-// =============================================================================
-// AnchorRange Resolution
-// =============================================================================
 
 export function resolveAnchorRange(
   snapshot: MultiBufferSnapshot,

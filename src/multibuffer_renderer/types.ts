@@ -9,10 +9,6 @@
 
 import type { MultiBufferRange, MultiBufferRow, Selection } from "../multibuffer/types.ts";
 
-// =============================================================================
-// Measurement Types
-// =============================================================================
-
 /**
  * Fixed measurements for rendering.
  * All lines have identical height for O(1) calculations.
@@ -25,10 +21,6 @@ export interface Measurements {
   /** Padding at the start of each line (for line numbers, etc.) */
   readonly gutterWidth: number;
 }
-
-// =============================================================================
-// Viewport Types
-// =============================================================================
 
 /**
  * The visible portion of the multibuffer.
@@ -56,10 +48,6 @@ export interface ScrollTarget {
   readonly strategy: "top" | "center" | "bottom" | "nearest";
 }
 
-// =============================================================================
-// Decoration Types
-// =============================================================================
-
 /**
  * A visual decoration applied to a range of text.
  */
@@ -78,10 +66,6 @@ export interface DecorationStyle {
   readonly textDecoration: "none" | "underline" | "line-through";
 }
 
-// =============================================================================
-// Excerpt Header Types
-// =============================================================================
-
 /**
  * Information needed to render an excerpt header/boundary.
  */
@@ -93,10 +77,6 @@ export interface ExcerptHeader {
   /** Optional additional info (line range, etc.) */
   readonly label?: string;
 }
-
-// =============================================================================
-// Render State
-// =============================================================================
 
 /**
  * Complete state needed for a render pass.
@@ -113,10 +93,6 @@ export interface RenderState {
   /** Whether the editor has focus */
   readonly focused: boolean;
 }
-
-// =============================================================================
-// Renderer Interface
-// =============================================================================
 
 /**
  * Interface that rendering implementations must satisfy.
@@ -144,9 +120,5 @@ export interface Renderer {
   /** Convert pixel coordinates to multibuffer position */
   hitTest(x: number, y: number): { row: MultiBufferRow; column: number } | undefined;
 }
-
-// =============================================================================
-// Renderer Factory
-// =============================================================================
 
 export type CreateRenderer = (measurements: Measurements) => Renderer;

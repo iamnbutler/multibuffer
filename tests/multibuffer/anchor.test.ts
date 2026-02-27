@@ -37,9 +37,6 @@ beforeEach(() => {
   resetCounters();
 });
 
-// =============================================================================
-// Offset Adjustment (pure function)
-// =============================================================================
 
 describe("adjustOffset", () => {
   function edit(off: number, deletedLength: number, insertedLength: number): EditEntry {
@@ -99,9 +96,6 @@ describe("adjustOffset", () => {
   });
 });
 
-// =============================================================================
-// Anchor Creation
-// =============================================================================
 
 describe("Anchor Creation", () => {
   test("anchor helper has correct structure", () => {
@@ -146,9 +140,6 @@ describe("Anchor Creation", () => {
   });
 });
 
-// =============================================================================
-// Anchor Resolution
-// =============================================================================
 
 describe("Anchor Resolution", () => {
   test("resolveAnchor returns current MultiBufferPoint", () => {
@@ -196,9 +187,6 @@ describe("Anchor Resolution", () => {
   });
 });
 
-// =============================================================================
-// Bias Behavior at Insert Position
-// =============================================================================
 
 describe("Anchor Bias - Insert Behavior", () => {
   test("Bias.Left anchor stays left of inserted text", () => {
@@ -293,9 +281,6 @@ describe("Anchor Bias - Insert Behavior", () => {
   });
 });
 
-// =============================================================================
-// Bias Behavior at Delete Position
-// =============================================================================
 
 describe("Anchor Bias - Delete Behavior", () => {
   test("anchor before deleted range unchanged", () => {
@@ -388,9 +373,6 @@ describe("Anchor Bias - Delete Behavior", () => {
   });
 });
 
-// =============================================================================
-// Bias at Excerpt Boundaries
-// =============================================================================
 
 describe("Anchor Bias - Excerpt Boundaries", () => {
   test.todo("Bias.Left at excerpt end stays in current excerpt", () => {
@@ -406,9 +388,6 @@ describe("Anchor Bias - Excerpt Boundaries", () => {
   });
 });
 
-// =============================================================================
-// Anchor Survival Through Buffer Edits
-// =============================================================================
 
 describe("Anchor Survival - Buffer Edits", () => {
   test("anchor survives multiple sequential edits", () => {
@@ -477,9 +456,6 @@ describe("Anchor Survival - Buffer Edits", () => {
   });
 });
 
-// =============================================================================
-// Anchor Survival Through Excerpt Operations
-// =============================================================================
 
 describe("Anchor Survival - Excerpt Operations", () => {
   test.todo("anchor survives excerpt expansion", () => {
@@ -566,9 +542,6 @@ describe("Anchor Survival - Excerpt Operations", () => {
   });
 });
 
-// =============================================================================
-// Anchor Comparison
-// =============================================================================
 
 describe("Anchor Comparison", () => {
   test("anchors at same position are equal", () => {
@@ -604,9 +577,6 @@ describe("Anchor Comparison", () => {
   });
 });
 
-// =============================================================================
-// AnchorRange
-// =============================================================================
 
 describe("AnchorRange", () => {
   test("AnchorRange tracks both ends independently", () => {
@@ -687,9 +657,6 @@ describe("AnchorRange", () => {
   });
 });
 
-// =============================================================================
-// Selection
-// =============================================================================
 
 describe("Selection", () => {
   test("Selection has head at start or end", () => {
@@ -739,9 +706,6 @@ describe("Selection", () => {
   });
 });
 
-// =============================================================================
-// Batch Anchor Resolution (Performance - deferred)
-// =============================================================================
 
 describe("Batch Anchor Resolution", () => {
   test.todo("batch resolution reuses cursor state", () => {
