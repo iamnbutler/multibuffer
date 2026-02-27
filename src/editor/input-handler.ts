@@ -18,6 +18,7 @@ export class InputHandler {
   private _onCommand: CommandCallback;
   private _onKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private _onInput: ((e: Event) => void) | null = null;
+  private _onPaste: ((e: ClipboardEvent) => void) | null = null;
 
   constructor(onCommand: CommandCallback) {
     this._onCommand = onCommand;
@@ -35,7 +36,6 @@ export class InputHandler {
       "overflow:hidden",
       "resize:none",
       "white-space:pre",
-      "z-index:-1",
     ].join(";");
     textarea.setAttribute("autocomplete", "off");
     textarea.setAttribute("autocorrect", "off");
@@ -48,9 +48,11 @@ export class InputHandler {
 
     this._onKeyDown = (e: KeyboardEvent) => this._handleKeyDown(e);
     this._onInput = () => this._handleInput();
+    this._onPaste = (e: ClipboardEvent) => this._handlePaste(e);
 
     textarea.addEventListener("keydown", this._onKeyDown);
     textarea.addEventListener("input", this._onInput);
+    textarea.addEventListener("paste", this._onPaste);
   }
 
   unmount(): void {
@@ -61,11 +63,15 @@ export class InputHandler {
       if (this._onInput) {
         this._textarea.removeEventListener("input", this._onInput);
       }
+      if (this._onPaste) {
+        this._textarea.removeEventListener("paste", this._onPaste);
+      }
       this._textarea.remove();
     }
     this._textarea = null;
     this._onKeyDown = null;
     this._onInput = null;
+    this._onPaste = null;
   }
 
   focus(): void {
@@ -97,6 +103,15 @@ export class InputHandler {
     if (text.length > 0) {
       this._onCommand({ type: "insertText", text });
       this._textarea.value = "";
+    }
+  }
+
+  private _handlePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    const text = e.clipboardData?.getData("text/plain") ?? "";
+    if (text.length > 0) {
+      this._onCommand({ type: "paste", text });
+      if (this._textarea) this._textarea.value = "";
     }
   }
 }
