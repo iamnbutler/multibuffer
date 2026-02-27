@@ -57,15 +57,28 @@ export class Rope {
   private readonly _chunks: readonly Chunk[];
   private readonly _length: number;
   private readonly _newlineCount: number;
+  /** _chunkOffsets[i] = byte offset where chunk i starts. */
+  private readonly _chunkOffsets: readonly number[];
+  /** _chunkNewlines[i] = cumulative newlines in chunks 0..i-1. */
+  private readonly _chunkNewlinePrefixes: readonly number[];
 
   private constructor(chunks: readonly Chunk[]) {
     this._chunks = chunks;
     let length = 0;
     let newlines = 0;
-    for (const c of chunks) {
+    const offsets = new Array<number>(chunks.length);
+    const nlPrefixes = new Array<number>(chunks.length + 1);
+    nlPrefixes[0] = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      const c = chunks[i];
+      if (!c) continue;
+      offsets[i] = length;
       length += c.text.length;
       newlines += c.newlines;
+      nlPrefixes[i + 1] = newlines;
     }
+    this._chunkOffsets = offsets;
+    this._chunkNewlinePrefixes = nlPrefixes;
     this._length = length;
     this._newlineCount = newlines;
   }
@@ -199,52 +212,130 @@ export class Rope {
     return Rope.from(before + text + after);
   }
 
-  /** Convert a character offset to {line, col}. */
+  /** Convert a character offset to {line, col}. Binary search on chunk offsets. */
   offsetToLineCol(offset: number): { line: number; col: number } {
-    let line = 0;
-    let lineStartOffset = 0;
-    let currentOffset = 0;
+    if (offset <= 0) return { line: 0, col: 0 };
+    if (offset >= this._length) {
+      // Count total newlines, col = distance from last newline
+      const text = this._chunks[this._chunks.length - 1]?.text ?? "";
+      const lastNl = text.lastIndexOf("\n");
+      if (lastNl === -1) {
+        // Last chunk has no newline — col extends from previous chunks
+        const prevNewlines = this._chunkNewlinePrefixes[this._chunks.length - 1] ?? 0;
+        // Find offset of the start of the last line
+        let lineStartOff = 0;
+        if (prevNewlines > 0 || text.length < this._length) {
+          lineStartOff = this._findLineStartOffset(this._newlineCount);
+        }
+        return { line: this._newlineCount, col: this._length - lineStartOff };
+      }
+      const chunkOffset = this._chunkOffsets[this._chunks.length - 1] ?? 0;
+      return { line: this._newlineCount, col: this._length - (chunkOffset + lastNl + 1) };
+    }
 
-    for (const chunk of this._chunks) {
-      const text = chunk.text;
-      for (let i = 0; i < text.length; i++) {
-        if (currentOffset === offset) {
-          return { line, col: currentOffset - lineStartOffset };
-        }
-        if (text.charCodeAt(i) === 10) {
-          line++;
-          lineStartOffset = currentOffset + 1;
-        }
-        currentOffset++;
+    // Binary search for the chunk containing this offset
+    const ci = this._findChunkByOffset(offset);
+    const chunk = this._chunks[ci];
+    if (!chunk) return { line: 0, col: 0 };
+
+    const chunkStart = this._chunkOffsets[ci] ?? 0;
+    const posInChunk = offset - chunkStart;
+    const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
+
+    // Count newlines within this chunk up to posInChunk
+    let lineInChunk = 0;
+    let lastNlPos = -1;
+    for (let i = 0; i < posInChunk; i++) {
+      if (chunk.text.charCodeAt(i) === 10) {
+        lineInChunk++;
+        lastNlPos = i;
       }
     }
 
-    // offset is at end of text
-    return { line, col: currentOffset - lineStartOffset };
+    const line = linesBeforeChunk + lineInChunk;
+    const col = posInChunk - (lastNlPos + 1);
+    return { line, col };
   }
 
-  /** Convert {line, col} to a character offset. */
+  /** Convert {line, col} to a character offset. Binary search on chunk newline prefixes. */
   lineColToOffset(line: number, col: number): number {
-    let currentLine = 0;
-    let currentOffset = 0;
+    if (line <= 0) return Math.min(col, this._length);
+    if (line >= this.lineCount) return this._length;
 
-    for (const chunk of this._chunks) {
-      const text = chunk.text;
-      for (let i = 0; i < text.length; i++) {
-        if (currentLine === line) {
-          return currentOffset + col;
-        }
-        if (text.charCodeAt(i) === 10) {
-          currentLine++;
-        }
-        currentOffset++;
+    // Binary search for the chunk containing this line
+    const ci = this._findChunkByLine(line);
+    const chunk = this._chunks[ci];
+    if (!chunk) return 0;
+
+    const chunkStart = this._chunkOffsets[ci] ?? 0;
+    const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
+    const targetLineInChunk = line - linesBeforeChunk;
+
+    // Scan within the chunk for the target line
+    let lineInChunk = 0;
+    for (let i = 0; i < chunk.text.length; i++) {
+      if (lineInChunk === targetLineInChunk) {
+        return chunkStart + i + col;
+      }
+      if (chunk.text.charCodeAt(i) === 10) {
+        lineInChunk++;
       }
     }
 
-    // Target line is the last line
-    if (currentLine === line) {
-      return currentOffset + col;
+    // Target line starts after this chunk's content (shouldn't happen with correct binary search)
+    return chunkStart + chunk.text.length + col;
+  }
+
+  /** Binary search: find chunk index containing the given byte offset. */
+  private _findChunkByOffset(offset: number): number {
+    let lo = 0;
+    let hi = this._chunks.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if ((this._chunkOffsets[mid] ?? 0) <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
     }
-    return currentOffset;
+    return lo;
+  }
+
+  /** Binary search: find chunk index containing the given line number. */
+  private _findChunkByLine(line: number): number {
+    let lo = 0;
+    let hi = this._chunks.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if ((this._chunkNewlinePrefixes[mid] ?? 0) <= line) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo;
+  }
+
+  /** Find the byte offset of the start of a given line. */
+  private _findLineStartOffset(line: number): number {
+    if (line <= 0) return 0;
+    const ci = this._findChunkByLine(line);
+    const chunk = this._chunks[ci];
+    if (!chunk) return 0;
+
+    const chunkStart = this._chunkOffsets[ci] ?? 0;
+    const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
+    const targetLineInChunk = line - linesBeforeChunk;
+
+    let lineInChunk = 0;
+    for (let i = 0; i < chunk.text.length; i++) {
+      if (chunk.text.charCodeAt(i) === 10) {
+        lineInChunk++;
+        if (lineInChunk === targetLineInChunk) {
+          return chunkStart + i + 1;
+        }
+      }
+    }
+    return chunkStart + chunk.text.length;
   }
 }
