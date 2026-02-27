@@ -1,6 +1,6 @@
 {
   "last_run": "2026-02-27T00:00:00Z",
-  "last_run_id": "22500959074",
+  "last_run_id": "22501375488",
   "backlog_cursor": {
     "issues": 20,
     "note": "All issues through #20 seen. #7, #10, #11, #16, #20 are proxy CI/patch issues (artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments."
@@ -29,6 +29,14 @@
     "prs": {}
   },
   "prs_created": [
+    {
+      "pr_number": "patch-artifact-run-22501375488",
+      "branch": "repo-assist/feat-multi-excerpt-boundary-tests-mm3lh0xz",
+      "issue": null,
+      "description": "test(multibuffer): excerpt boundary edit tests (spool mm3lh0xz-0duv) - 9 tests + 2 test.todo stubs",
+      "created": "2026-02-27",
+      "status": "patch-only - push blocked; patch in agent-artifacts for run 22501375488"
+    },
     {
       "pr_number": 24,
       "branch": "repo-assist/feat-viewport-pure-fns-and-tests",
@@ -180,7 +188,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 16 (22500959074): Added clampScrollTop + calculateScrollTop pure functions to measurement.ts, updated DomRenderer.scrollTo to use them, and wrote 42 tests in tests/renderer/measurement.test.ts. PR #24 created. PR #23 (cursor blink) confirmed number. PR #12 (goal column) not in open PR list - may have been closed by maintainer. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only one commit on main), task_9 (no new contributors).",
+  "notes": "Run 17 (22501375488): Wrote 9 boundary-edit tests + 2 test.todo stubs for spool mm3lh0xz-0duv. Discovered that spool tasks mm3lgky2-vbu3, mm3lgsrj-0qkp, mm3lgstk-qlnu, mm3lh0um-k9qd were already completed by maintainer (complete events in 2026-02-27.jsonl). Remaining open spool tasks: mm3lh0xz-0duv (patch created this run), mm3lhem1-dz3e (perf), mm3lhpgn-mqnw (decoration range mapping), mm4ztys8-ux7k (browser tests - needs real browser). Tasks for next runs: task_4 (no network), task_6 (no stale PRs from others), task_8 (only one commit on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -203,8 +211,10 @@
   "syntax_highlight_fix_pr_number": 19,
   "paste_focus_fix_pr_number": 22,
   "viewport_pure_fns_pr_number": 24,
+  "boundary_tests_patch_run": "22501375488",
+  "boundary_tests_branch": "repo-assist/feat-multi-excerpt-boundary-tests-mm3lh0xz",
   "task_10_in_progress": {
-    "description": "Spool tasks completed this run: mm3lhpd9-u00r (scrollTop clamping), mm3lhpe5-g1e7 (scroll strategies), mm3lhphg-m6nv/mm3lhpi9-8bbb (viewport tests) - all in PR #24. Next candidates: spool data-model tasks (mm3lgky2-vbu3 point/offset conversion tests, mm3lh0um-k9qd excerpt merging, mm3lgsrj-0qkp anchor chain on excerpt replace). Browser integration tests (mm4ztys8-ux7k) still need real browser.",
+    "description": "Spool tasks completed this run: mm3lh0xz-0duv (excerpt boundary edit tests - patch created). Next candidates: mm3lhem1-dz3e (batch anchor resolution perf), mm3lhpgn-mqnw (decoration range mapping to pixel coords).",
     "spool_done_all": [
       "mm4ui36i-tbd7: Auto-scroll viewport - PR #21",
       "mm4v1ccl-hc8y: Bug: setCursor allows cursor past end of line (p0) - PR #18",
@@ -218,14 +228,13 @@
       "mm3lhpd9-u00r: scrollTop clamping (clampScrollTop fn) - PR #24",
       "mm3lhpe5-g1e7: scroll strategies pure fn (calculateScrollTop) - PR #24",
       "mm3lhphg-m6nv: viewport edge case tests - PR #24",
-      "mm3lhpi9-8bbb: all strategy tests - PR #24"
+      "mm3lhpi9-8bbb: all strategy tests - PR #24",
+      "mm3lh0xz-0duv: excerpt boundary edit tests - patch artifact run 22501375488"
     ],
     "spool_remaining_open": [
-      "mm3lgky2-vbu3: point/offset conversion tests",
-      "mm3lh0um-k9qd: excerpt merging when adjacent/overlapping",
-      "mm3lgsrj-0qkp: anchor chain on excerpt replace",
-      "mm3lgstk-qlnu: anchor degradation on excerpt replace",
-      "mm4ztys8-ux7k: browser integration tests (needs real browser)"
+      "mm3lhem1-dz3e: PERF cursor state reuse for batch anchor resolution (p2)",
+      "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
+      "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
     ]
   }
 }
