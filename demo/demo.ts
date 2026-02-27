@@ -49,7 +49,7 @@ async function main() {
     lineHeight: 20,
     charWidth: 8.4,
     gutterWidth: 48,
-    wrapWidth: 80,
+    wrapWidth: 120,
   };
 
   const renderer = createDomRenderer(measurements);
