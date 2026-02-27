@@ -87,7 +87,7 @@ async function main() {
     renderer.setSnapshot(snapshot);
 
     const viewport = createViewport(
-      0,
+      renderer.getScrollTop(),
       container.clientHeight,
       container.clientWidth,
       measurements,

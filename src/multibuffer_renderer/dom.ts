@@ -312,6 +312,11 @@ export class DomRenderer implements Renderer {
     this._scrollContainer.scrollTop = Math.max(0, scrollTop);
   }
 
+  /** Get the current scroll position from the DOM element. */
+  getScrollTop(): number {
+    return this._scrollContainer?.scrollTop ?? 0;
+  }
+
   getViewport(): Viewport {
     return this._viewport;
   }
