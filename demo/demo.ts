@@ -10,6 +10,7 @@ import type {
   BufferId,
   BufferPoint,
   BufferRow,
+  Buffer as MbBuffer,
 } from "../src/multibuffer/types.ts";
 import { createDomRenderer } from "../src/multibuffer_renderer/dom.ts";
 import { Highlighter } from "../src/multibuffer_renderer/highlighter.ts";
@@ -30,9 +31,13 @@ function range(startRow: number, endRow: number) {
 async function main() {
   const mb = createMultiBuffer();
 
+  // Keep Buffer references so we can re-parse syntax highlighting after edits.
+  const bufferObjects = new Map<string, MbBuffer>();
+
   for (const src of sources) {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
     const buf = createBuffer(src.path as BufferId, src.content);
+    bufferObjects.set(src.path, buf);
     const lineCount = src.content.split("\n").length;
 
     if (src.path.includes("single-line")) {
@@ -62,7 +67,10 @@ async function main() {
 
   renderer.mount(container);
 
-  // Initialize syntax highlighting
+  // Initialize syntax highlighting.
+  // parsedVersions tracks which buffer version was last parsed so renderAll()
+  // can skip re-parsing buffers that haven't changed.
+  const parsedVersions = new Map<string, number>();
   const highlighter = new Highlighter();
   try {
     await highlighter.init(
@@ -71,6 +79,8 @@ async function main() {
     );
     for (const src of sources) {
       highlighter.parseBuffer(src.path, src.content);
+      const buf = bufferObjects.get(src.path);
+      if (buf) parsedVersions.set(src.path, buf.version);
     }
     renderer.setHighlighter(highlighter);
   } catch (e) {
@@ -83,6 +93,19 @@ async function main() {
   // Render function: refreshes the display from current state
   function renderAll() {
     if (!container) return;
+
+    // Re-parse any buffers whose content has changed since the last parse.
+    // This keeps syntax highlighting correct after edits.
+    if (highlighter.ready) {
+      for (const [bufferId, buf] of bufferObjects) {
+        const lastVersion = parsedVersions.get(bufferId) ?? -1;
+        if (buf.version > lastVersion) {
+          highlighter.parseBuffer(bufferId, buf.snapshot().text());
+          parsedVersions.set(bufferId, buf.version);
+        }
+      }
+    }
+
     const snapshot = mb.snapshot();
     renderer.setSnapshot(snapshot);
 
@@ -123,6 +146,7 @@ async function main() {
     // Render cursor and selection
     const cursor = editor.cursor;
     renderer.renderCursor(cursor);
+    renderer.scrollTo({ row: cursor.row, strategy: "nearest" });
 
     const sel = editor.selection;
     if (sel) {

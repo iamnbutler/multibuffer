@@ -185,10 +185,11 @@ describe("Editor - setCursor", () => {
     expectPoint(editor.cursor, 0, 5);
   });
 
-  test("setCursor clips row past last row to last row", () => {
+  test("setCursor clips row past last row to end of buffer", () => {
     const { editor } = setup("AB\nCD");
     editor.setCursor(mbPoint(99, 0));
-    expectPoint(editor.cursor, 1, 0);
+    // clipPoint maps past-end to the end of the last line
+    expectPoint(editor.cursor, 1, 2);
   });
 
   test("setCursor clips row and column together", () => {
@@ -713,35 +714,37 @@ describe("Editor - Multi-excerpt", () => {
 
 // ─── keyEventToCommand ──────────────────────────────────────────
 //
-// All tests use macOS conventions (Cmd=meta, Opt=alt).
-// In Bun on macOS, navigator.platform = "MacIntel" so isMac=true
-// and the platform modifier = metaKey.
+// The platform modifier (Cmd on Mac, Ctrl on Linux/Windows) depends on
+// navigator.platform at import time. Tests use a `mod` flag that maps
+// to the correct modifier for the current platform.
+
+const testIsMac =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
 
 describe("keyEventToCommand", () => {
   let keyEventToCommand: typeof import("../../src/editor/input-handler.ts").keyEventToCommand;
 
   beforeEach(async () => {
-    const mod = await import("../../src/editor/input-handler.ts");
-    keyEventToCommand = mod.keyEventToCommand;
+    const m = await import("../../src/editor/input-handler.ts");
+    keyEventToCommand = m.keyEventToCommand;
   });
 
-  /** Create a minimal KeyboardEvent-like object for testing. */
+  /** Create a minimal KeyboardEvent-like object for testing.
+   *  `mod: true` sets the platform modifier (metaKey on Mac, ctrlKey elsewhere). */
   function key(
     keyName: string,
-    opts: { meta?: boolean; ctrl?: boolean; shift?: boolean; alt?: boolean } = {},
+    opts: { mod?: boolean; shift?: boolean; alt?: boolean } = {},
   ) {
+    const modKey = opts.mod ?? false;
     // biome-ignore lint/plugin/no-type-assertion: expect: minimal KeyboardEvent stub for unit test
     return {
       key: keyName,
-      metaKey: opts.meta ?? false,
-      ctrlKey: opts.ctrl ?? false,
+      metaKey: testIsMac ? modKey : false,
+      ctrlKey: testIsMac ? false : modKey,
       shiftKey: opts.shift ?? false,
       altKey: opts.alt ?? false,
     } as unknown as KeyboardEvent;
   }
-
-  // On macOS (Bun), isMac=true, so platform mod = metaKey.
-  // We use meta: true for Cmd (platform mod) tests.
 
   // ── Basic arrow movement ──────────────────────────────────────
 
@@ -768,22 +771,22 @@ describe("keyEventToCommand", () => {
   // ── Cmd+Arrow = line/buffer (platform mod) ────────────────────
 
   test("Cmd+Left → moveCursor left line (line start)", () => {
-    const cmd = keyEventToCommand(key("ArrowLeft", { meta: true }));
+    const cmd = keyEventToCommand(key("ArrowLeft", { mod: true }));
     expect(cmd).toEqual({ type: "moveCursor", direction: "left", granularity: "line" });
   });
 
   test("Cmd+Right → moveCursor right line (line end)", () => {
-    const cmd = keyEventToCommand(key("ArrowRight", { meta: true }));
+    const cmd = keyEventToCommand(key("ArrowRight", { mod: true }));
     expect(cmd).toEqual({ type: "moveCursor", direction: "right", granularity: "line" });
   });
 
   test("Cmd+Up → moveCursor up buffer (buffer start)", () => {
-    const cmd = keyEventToCommand(key("ArrowUp", { meta: true }));
+    const cmd = keyEventToCommand(key("ArrowUp", { mod: true }));
     expect(cmd).toEqual({ type: "moveCursor", direction: "up", granularity: "buffer" });
   });
 
   test("Cmd+Down → moveCursor down buffer (buffer end)", () => {
-    const cmd = keyEventToCommand(key("ArrowDown", { meta: true }));
+    const cmd = keyEventToCommand(key("ArrowDown", { mod: true }));
     expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "buffer" });
   });
 
@@ -824,22 +827,22 @@ describe("keyEventToCommand", () => {
   // ── Shift+Cmd+Arrow = extend to line/buffer ───────────────────
 
   test("Shift+Cmd+Left → extendSelection left line", () => {
-    const cmd = keyEventToCommand(key("ArrowLeft", { shift: true, meta: true }));
+    const cmd = keyEventToCommand(key("ArrowLeft", { shift: true, mod: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "left", granularity: "line" });
   });
 
   test("Shift+Cmd+Right → extendSelection right line", () => {
-    const cmd = keyEventToCommand(key("ArrowRight", { shift: true, meta: true }));
+    const cmd = keyEventToCommand(key("ArrowRight", { shift: true, mod: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "right", granularity: "line" });
   });
 
   test("Shift+Cmd+Up → extendSelection up buffer", () => {
-    const cmd = keyEventToCommand(key("ArrowUp", { shift: true, meta: true }));
+    const cmd = keyEventToCommand(key("ArrowUp", { shift: true, mod: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "up", granularity: "buffer" });
   });
 
   test("Shift+Cmd+Down → extendSelection down buffer", () => {
-    const cmd = keyEventToCommand(key("ArrowDown", { shift: true, meta: true }));
+    const cmd = keyEventToCommand(key("ArrowDown", { shift: true, mod: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "down", granularity: "buffer" });
   });
 
@@ -868,12 +871,12 @@ describe("keyEventToCommand", () => {
   });
 
   test("Cmd+Backspace → deleteBackward line", () => {
-    const cmd = keyEventToCommand(key("Backspace", { meta: true }));
+    const cmd = keyEventToCommand(key("Backspace", { mod: true }));
     expect(cmd).toEqual({ type: "deleteBackward", granularity: "line" });
   });
 
   test("Cmd+Shift+K → deleteLine", () => {
-    const cmd = keyEventToCommand(key("k", { meta: true, shift: true }));
+    const cmd = keyEventToCommand(key("k", { mod: true, shift: true }));
     expect(cmd).toEqual({ type: "deleteLine" });
   });
 
@@ -907,27 +910,27 @@ describe("keyEventToCommand", () => {
   // ── Shortcuts ─────────────────────────────────────────────────
 
   test("Cmd+A → selectAll", () => {
-    const cmd = keyEventToCommand(key("a", { meta: true }));
+    const cmd = keyEventToCommand(key("a", { mod: true }));
     expect(cmd).toEqual({ type: "selectAll" });
   });
 
   test("Cmd+Z → undo", () => {
-    const cmd = keyEventToCommand(key("z", { meta: true }));
+    const cmd = keyEventToCommand(key("z", { mod: true }));
     expect(cmd).toEqual({ type: "undo" });
   });
 
   test("Cmd+Shift+Z → redo", () => {
-    const cmd = keyEventToCommand(key("z", { meta: true, shift: true }));
+    const cmd = keyEventToCommand(key("z", { mod: true, shift: true }));
     expect(cmd).toEqual({ type: "redo" });
   });
 
   test("Cmd+C → copy", () => {
-    const cmd = keyEventToCommand(key("c", { meta: true }));
+    const cmd = keyEventToCommand(key("c", { mod: true }));
     expect(cmd).toEqual({ type: "copy" });
   });
 
   test("Cmd+X → cut", () => {
-    const cmd = keyEventToCommand(key("x", { meta: true }));
+    const cmd = keyEventToCommand(key("x", { mod: true }));
     expect(cmd).toEqual({ type: "cut" });
   });
 
@@ -951,5 +954,66 @@ describe("keyEventToCommand", () => {
   test("PageDown → moveCursor down page", () => {
     const cmd = keyEventToCommand(key("PageDown"));
     expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "page" });
+  });
+});
+
+// ─── Goal Column ──────────────────────────────────────────────────
+
+describe("Editor - Goal Column", () => {
+  test("goal column preserved across short line when moving down", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB" length
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 4); // restored to goal column 4
+  });
+
+  test("goal column resets on horizontal move", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped
+    editor.dispatch({ type: "moveCursor", direction: "left", granularity: "character" });
+    expectPoint(editor.cursor, 1, 1); // horizontal move, goal column reset
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 1); // col 1, not the old goal col 4
+  });
+
+  test("goal column resets on text insertion", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB"
+    editor.dispatch({ type: "insertText", text: "X" }); // inserts at (1,2) → cursor at (1,3), resets goal
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 2, 3); // col 3, not old goal col 4
+  });
+
+  test("goal column preserved moving up through short line", () => {
+    const { editor } = setup("CCCCC\nBB\nAAAAA");
+    editor.setCursor(mbPoint(2, 4));
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 1, 2); // clamped to "BB"
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 0, 4); // restored to goal column 4
+  });
+
+  test("extend selection preserves goal column vertically", () => {
+    const { editor } = setup("AAAAA\nBB\nCCCCC");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    // head moves to (1, 2) — clamped
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    // head should be at (2, 4) — goal column restored
+    const snap = editor.multiBuffer.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+    const end = snap.resolveAnchor(sel.range.end);
+    expect(end).toBeDefined();
+    if (!end) return;
+    expect(num(end.row)).toBe(2);
+    expect(end.column).toBe(4);
   });
 });
