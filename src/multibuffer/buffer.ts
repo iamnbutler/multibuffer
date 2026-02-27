@@ -13,6 +13,7 @@ import type {
   BufferPoint,
   BufferRow,
   BufferSnapshot,
+  EditEntry,
   TextSummary,
 } from "./types.ts";
 
@@ -85,6 +86,7 @@ class BufferSnapshotImpl implements BufferSnapshot {
   readonly id: BufferId;
   readonly lineCount: number;
   readonly textSummary: TextSummary;
+  readonly version: number;
   private readonly _lines: readonly string[];
   private readonly _lineStarts: readonly number[];
   private readonly _textLength: number;
@@ -95,6 +97,7 @@ class BufferSnapshotImpl implements BufferSnapshot {
     lineStarts: readonly number[],
     textSummary: TextSummary,
     textLength: number,
+    version: number,
   ) {
     this.id = id;
     this._lines = lines;
@@ -102,6 +105,7 @@ class BufferSnapshotImpl implements BufferSnapshot {
     this.lineCount = lines.length;
     this.textSummary = textSummary;
     this._textLength = textLength;
+    this.version = version;
   }
 
   line(row: BufferRow): string {
@@ -185,6 +189,8 @@ class BufferImpl implements Buffer {
   private _lineStarts: number[];
   private _textSummary: TextSummary;
   private _textLength: number;
+  private _version = 0;
+  private _editLog: EditEntry[] = [];
 
   constructor(id: BufferId, text: string) {
     this.id = id;
@@ -194,6 +200,16 @@ class BufferImpl implements Buffer {
     this._textLength = text.length;
   }
 
+  get version(): number {
+    return this._version;
+  }
+
+  editsSince(version: number): readonly EditEntry[] {
+    if (version >= this._version) return [];
+    if (version < 0) return this._editLog;
+    return this._editLog.slice(version);
+  }
+
   snapshot(): BufferSnapshot {
     return new BufferSnapshotImpl(
       this.id,
@@ -201,22 +217,45 @@ class BufferImpl implements Buffer {
       this._lineStarts.slice(),
       this._textSummary,
       this._textLength,
+      this._version,
     );
   }
 
   insert(at: BufferOffset, text: string): void {
+    this._editLog.push({
+      offset: at,
+      deletedLength: 0,
+      insertedLength: text.length,
+    });
+    this._version++;
     const current = this._lines.join("\n");
     const updated = current.slice(0, at) + text + current.slice(at);
     this._applyText(updated);
   }
 
   delete(start: BufferOffset, end: BufferOffset): void {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for offset difference
+    const deletedLength = (end as number) - (start as number);
+    this._editLog.push({
+      offset: start,
+      deletedLength,
+      insertedLength: 0,
+    });
+    this._version++;
     const current = this._lines.join("\n");
     const updated = current.slice(0, start) + current.slice(end);
     this._applyText(updated);
   }
 
   replace(start: BufferOffset, end: BufferOffset, text: string): void {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for offset difference
+    const deletedLength = (end as number) - (start as number);
+    this._editLog.push({
+      offset: start,
+      deletedLength,
+      insertedLength: text.length,
+    });
+    this._version++;
     const current = this._lines.join("\n");
     const updated = current.slice(0, start) + text + current.slice(end);
     this._applyText(updated);

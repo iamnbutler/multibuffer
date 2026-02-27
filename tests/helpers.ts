@@ -111,8 +111,8 @@ export function excerptRange(
   return { context, primary };
 }
 
-export function bufferAnchor(off: number, bias: Bias = Bias.Right): BufferAnchor {
-  return { offset: offset(off), bias };
+export function bufferAnchor(off: number, bias: Bias = Bias.Right, version: number = 0): BufferAnchor {
+  return { offset: offset(off), bias, version };
 }
 
 export function anchor(

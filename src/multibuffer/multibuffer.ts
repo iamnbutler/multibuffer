@@ -6,6 +6,7 @@
  * Snapshots are immutable copies of the excerpt list + info.
  */
 
+import { adjustOffset } from "./anchor.ts";
 import { createExcerpt, toExcerptInfo } from "./excerpt.ts";
 import { SlotMap } from "./slot_map.ts";
 import type {
@@ -32,10 +33,16 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
   private readonly _excerptData: readonly Excerpt[];
+  private readonly _buffers: ReadonlyMap<string, Buffer>;
 
-  constructor(excerpts: readonly ExcerptInfo[], excerptData: readonly Excerpt[]) {
+  constructor(
+    excerpts: readonly ExcerptInfo[],
+    excerptData: readonly Excerpt[],
+    buffers: ReadonlyMap<string, Buffer>,
+  ) {
     this.excerpts = excerpts;
     this._excerptData = excerptData;
+    this._buffers = buffers;
     let total = 0;
     for (const e of excerpts) {
       total += e.endRow - e.startRow;
@@ -132,9 +139,73 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     return result;
   }
 
-  resolveAnchor(_anchor: Anchor): MultiBufferPoint | undefined {
-    // TODO: implement anchor resolution
-    return undefined;
+  resolveAnchor(anchor: Anchor): MultiBufferPoint | undefined {
+    // 1. Find the excerpt data and info
+    const excerptData = this._excerptData.find(
+      (e) =>
+        e.id.index === anchor.excerptId.index &&
+        e.id.generation === anchor.excerptId.generation,
+    );
+    if (!excerptData) return undefined;
+
+    const info = this.excerpts.find(
+      (e) =>
+        e.id.index === anchor.excerptId.index &&
+        e.id.generation === anchor.excerptId.generation,
+    );
+    if (!info) return undefined;
+
+    // 2. Get the mutable buffer to replay edits since anchor creation
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    const buffer = this._buffers.get(excerptData.bufferId as string);
+    if (!buffer) {
+      // Fallback: resolve with original offset (no edit adjustment)
+      const bufferPoint = excerptData.buffer.offsetToPoint(anchor.textAnchor.offset);
+      return this._bufferPointToMbPoint(bufferPoint, excerptData, info);
+    }
+
+    // 3. Adjust offset through edits since anchor creation
+    const edits = buffer.editsSince(anchor.textAnchor.version);
+    const adjustedOffset = adjustOffset(
+      anchor.textAnchor.offset,
+      anchor.textAnchor.bias,
+      edits,
+    );
+
+    // 4. Clamp to buffer bounds and convert to point
+    const currentSnapshot = buffer.snapshot();
+    const clampedOffset = currentSnapshot.clipOffset(
+      adjustedOffset,
+      anchor.textAnchor.bias,
+    );
+    const bufferPoint = currentSnapshot.offsetToPoint(clampedOffset);
+
+    return this._bufferPointToMbPoint(bufferPoint, excerptData, info);
+  }
+
+  private _bufferPointToMbPoint(
+    bufferPoint: BufferPoint,
+    excerptData: Excerpt,
+    info: ExcerptInfo,
+  ): MultiBufferPoint | undefined {
+    const startRow = excerptData.range.context.start.row;
+    const endRow = excerptData.range.context.end.row;
+
+    if (bufferPoint.row < startRow || bufferPoint.row >= endRow) {
+      // Anchor drifted outside excerpt; clamp to boundary
+      if (bufferPoint.row < startRow) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        return { row: info.startRow as MultiBufferRow, column: 0 };
+      }
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const mbRow = (info.endRow - 1) as MultiBufferRow;
+      return { row: mbRow, column: 0 };
+    }
+
+    const offsetInExcerpt = bufferPoint.row - startRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const mbRow = (info.startRow + offsetInExcerpt) as MultiBufferRow;
+    return { row: mbRow, column: bufferPoint.column };
   }
 
   clipPoint(point: MultiBufferPoint, _bias: Bias): MultiBufferPoint {
@@ -221,6 +292,7 @@ class MultiBufferImpl implements MultiBuffer {
   private _order: ExcerptId[] = [];
   private _cachedInfos: ExcerptInfo[] = [];
   private _cachedLineCount = 0;
+  private _buffers = new Map<string, Buffer>();
 
   get lineCount(): number {
     return this._cachedLineCount;
@@ -244,6 +316,7 @@ class MultiBufferImpl implements MultiBuffer {
     return new MultiBufferSnapshotImpl(
       this._cachedInfos.slice(),
       excerptData,
+      this._buffers,
     );
   }
 
@@ -252,6 +325,8 @@ class MultiBufferImpl implements MultiBuffer {
     range: ExcerptRange,
     options?: { hasTrailingNewline?: boolean },
   ): ExcerptId {
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    this._buffers.set(buffer.id as string, buffer);
     const snapshot = buffer.snapshot();
     const hasTrailing = options?.hasTrailingNewline ?? false;
     // Insert a placeholder to allocate the slot and get the key.
@@ -290,11 +365,32 @@ class MultiBufferImpl implements MultiBuffer {
   }
 
   createAnchor(
-    _point: MultiBufferPoint,
-    _bias: Bias,
+    point: MultiBufferPoint,
+    bias: Bias,
   ): Anchor | undefined {
-    // TODO: implement anchor creation
-    return undefined;
+    const snap = this.snapshot();
+    const bufResult = snap.toBufferPoint(point);
+    if (!bufResult) return undefined;
+
+    // Find the internal excerpt data to access the buffer snapshot
+    const excerpt = this._excerpts.get(bufResult.excerpt.id);
+    if (!excerpt) return undefined;
+
+    const bufferOffset = excerpt.buffer.pointToOffset(bufResult.point);
+
+    // Get the buffer's current version for anchor tracking
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    const buffer = this._buffers.get(excerpt.bufferId as string);
+    const version = buffer?.version ?? excerpt.buffer.version;
+
+    return {
+      excerptId: bufResult.excerpt.id,
+      textAnchor: {
+        offset: bufferOffset,
+        bias,
+        version,
+      },
+    };
   }
 
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined {

@@ -112,6 +112,8 @@ export interface BufferAnchor {
   readonly offset: BufferOffset;
   /** Determines behavior when text is inserted at this position */
   readonly bias: Bias;
+  /** Buffer version at the time this anchor was created */
+  readonly version: number;
 }
 
 /**
@@ -280,6 +282,9 @@ export interface BufferSnapshot {
    * Clip an offset to valid buffer bounds, respecting bias.
    */
   clipOffset(offset: BufferOffset, bias: Bias): BufferOffset;
+
+  /** The buffer version at the time this snapshot was taken */
+  readonly version: number;
 }
 
 /**
@@ -299,6 +304,12 @@ export interface Buffer {
 
   /** Replace a range with new text */
   replace(start: BufferOffset, end: BufferOffset, text: string): void;
+
+  /** Monotonically increasing edit counter */
+  readonly version: number;
+
+  /** Return all edits since the given version */
+  editsSince(version: number): readonly EditEntry[];
 }
 
 // =============================================================================
@@ -424,6 +435,23 @@ export interface MultiBuffer {
     point: BufferPoint,
   ): MultiBufferPoint | undefined;
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
+}
+
+// =============================================================================
+// Edit Tracking Types
+// =============================================================================
+
+/**
+ * A single buffer edit, recorded for anchor offset adjustment.
+ * All offsets are in pre-edit buffer coordinates.
+ */
+export interface EditEntry {
+  /** Byte offset where the edit starts (in pre-edit buffer) */
+  readonly offset: BufferOffset;
+  /** Number of bytes deleted at that offset */
+  readonly deletedLength: number;
+  /** Number of bytes inserted at that offset */
+  readonly insertedLength: number;
 }
 
 // =============================================================================
