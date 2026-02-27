@@ -1,21 +1,21 @@
 /**
  * DOM-based renderer for the multibuffer.
- * Renders visible rows into a scrollable container.
- * Each row is either a content line or an excerpt header, in document order.
+ * Renders visible visual rows into a scrollable container.
+ * Supports soft wrapping via WrapMap.
  */
 
 import type { MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 import {
   calculateContentHeight,
+  calculateVisibleRows,
   createViewport,
+  rowToY,
   xToColumn,
-  yToRow,
+  yToVisualRow,
 } from "./measurement.ts";
 import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
+import { WrapMap, wrapLine } from "./wrap-map.ts";
 
-/**
- * A pooled row element that can be either a content line or an excerpt header.
- */
 interface RowElement {
   root: HTMLDivElement;
   gutter: HTMLSpanElement;
@@ -32,6 +32,7 @@ export class DomRenderer implements Renderer {
   private _rowPool: RowElement[] = [];
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
+  private _wrapMap: WrapMap | null = null;
   private _onScroll: (() => void) | null = null;
 
   constructor(measurements: Measurements) {
@@ -84,15 +85,21 @@ export class DomRenderer implements Renderer {
     this._linesContainer = null;
     this._rowPool = [];
     this._snapshot = null;
+    this._wrapMap = null;
     this._onScroll = null;
   }
 
   setMeasurements(measurements: Measurements): void {
     this._measurements = measurements;
+    // Rebuild wrap map if snapshot exists and wrapping is enabled
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
   }
 
   setSnapshot(snapshot: MultiBufferSnapshot): void {
     this._snapshot = snapshot;
+    this._wrapMap = this._buildWrapMap(snapshot);
   }
 
   render(state: RenderState, lines: readonly string[]): void {
@@ -101,47 +108,96 @@ export class DomRenderer implements Renderer {
     const { viewport, excerptHeaders } = state;
     this._viewport = viewport;
 
+    // Update spacer height
     const totalLines = this._snapshot?.lineCount ?? viewport.endRow;
-    const contentHeight = calculateContentHeight(totalLines, this._measurements.lineHeight);
+    const contentHeight = calculateContentHeight(
+      totalLines,
+      this._measurements.lineHeight,
+      this._wrapMap ?? undefined,
+    );
     this._spacer.style.height = `${contentHeight}px`;
 
-    this._linesContainer.style.transform =
-      `translateY(${viewport.startRow * this._measurements.lineHeight}px)`;
-
-    // Build header lookup: row number → header info
+    // Build header lookup: buffer row → header info
     const headerMap = new Map<number, { path: string; label?: string }>();
     for (const header of excerptHeaders) {
       headerMap.set(header.row, header);
     }
 
-    const visibleCount = viewport.endRow - viewport.startRow;
-    this._ensureRowPool(visibleCount);
+    // Determine the wrap width
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
+
+    // Build the list of visual rows to render
+    const visualRows: Array<{
+      mbRow: number;
+      segment: number;
+      text: string;
+      isHeader: boolean;
+      headerPath?: string;
+      headerLabel?: string;
+    }> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const mbRow = viewport.startRow + i;
+      const lineText = lines[i] ?? "";
+      const header = headerMap.get(mbRow);
+
+      if (wrapWidth > 0) {
+        const segments = wrapLine(lineText, wrapWidth);
+        for (let s = 0; s < segments.length; s++) {
+          visualRows.push({
+            mbRow,
+            segment: s,
+            text: segments[s] ?? "",
+            isHeader: s === 0 && header !== undefined,
+            headerPath: header?.path,
+            headerLabel: header?.label,
+          });
+        }
+      } else {
+        visualRows.push({
+          mbRow,
+          segment: 0,
+          text: lineText,
+          isHeader: header !== undefined,
+          headerPath: header?.path,
+          headerLabel: header?.label,
+        });
+      }
+    }
+
+    this._ensureRowPool(visualRows.length);
 
     // Hide all pooled rows
     for (const row of this._rowPool) {
       row.root.style.display = "none";
     }
 
-    for (let i = 0; i < visibleCount; i++) {
-      const mbRow = viewport.startRow + i;
+    // Position the lines container at the first visual row
+    const firstVisualRow = this._wrapMap
+      ? this._wrapMap.bufferRowToFirstVisualRow(viewport.startRow)
+      : viewport.startRow;
+    this._linesContainer.style.transform =
+      `translateY(${firstVisualRow * this._measurements.lineHeight}px)`;
+
+    // Render each visual row
+    for (let i = 0; i < visualRows.length; i++) {
+      const vr = visualRows[i];
       const rowEl = this._rowPool[i];
-      if (!rowEl) continue;
+      if (!vr || !rowEl) continue;
 
-      const header = headerMap.get(mbRow);
-
-      if (header) {
-        // Render as excerpt header
-        this._renderAsHeader(rowEl, header.path, header.label);
+      if (vr.isHeader && vr.headerPath) {
+        this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        // Render as content line
-        this._renderAsLine(rowEl, mbRow, lines[i] ?? "");
+        // Show line number only on the first segment of a buffer row
+        const gutterText = vr.segment === 0 ? String(vr.mbRow + 1) : "";
+        this._renderAsLine(rowEl, gutterText, vr.text);
       }
     }
   }
 
   scrollTo(target: ScrollTarget): void {
     if (!this._scrollContainer) return;
-    const y = target.row * this._measurements.lineHeight;
+    const y = rowToY(target.row, this._measurements.lineHeight, this._wrapMap ?? undefined);
     const { height } = this._viewport;
 
     let scrollTop: number;
@@ -178,9 +234,18 @@ export class DomRenderer implements Renderer {
   hitTest(x: number, y: number): { row: MultiBufferRow; column: number } | undefined {
     if (!this._scrollContainer) return undefined;
     const scrollTop = this._scrollContainer.scrollTop;
-    const row = yToRow(scrollTop + y, this._measurements.lineHeight);
-    const column = xToColumn(x, this._measurements);
-    return { row, column };
+    const visualRow = yToVisualRow(scrollTop + y, this._measurements.lineHeight);
+    const colInSegment = xToColumn(x, this._measurements);
+
+    if (this._wrapMap) {
+      const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
+      const wrapWidth = this._measurements.wrapWidth ?? 0;
+      const column = segment * wrapWidth + colInSegment;
+      return { row: mbRow, column };
+    }
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    return { row: visualRow as MultiBufferRow, column: colInSegment };
   }
 
   private _handleScroll(): void {
@@ -190,12 +255,14 @@ export class DomRenderer implements Renderer {
     const height = this._scrollContainer.clientHeight;
     const width = this._scrollContainer.clientWidth;
 
+    const totalLines = this._snapshot.lineCount;
     const viewport = createViewport(
       scrollTop,
       height,
       width,
       this._measurements,
-      this._snapshot.lineCount,
+      totalLines,
+      this._wrapMap ?? undefined,
     );
 
     const { startRow, endRow } = viewport;
@@ -203,8 +270,6 @@ export class DomRenderer implements Renderer {
     const excerptBoundaries = this._snapshot.excerptBoundaries(startRow, endRow);
 
     const excerptHeaders = excerptBoundaries.map((b) => ({
-      // For the first excerpt, header is at its startRow.
-      // For subsequent excerpts, use the previous excerpt's trailing newline row.
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       row: (b.prev ? b.row - 1 : b.row) as MultiBufferRow,
       path: b.next.bufferId,
@@ -221,6 +286,12 @@ export class DomRenderer implements Renderer {
       },
       lines,
     );
+  }
+
+  private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
+    const wrapWidth = this._measurements.wrapWidth;
+    if (!wrapWidth || wrapWidth <= 0) return null;
+    return new WrapMap(snapshot, wrapWidth);
   }
 
   private _renderAsHeader(
@@ -242,13 +313,13 @@ export class DomRenderer implements Renderer {
 
   private _renderAsLine(
     rowEl: RowElement,
-    mbRow: number,
+    gutterText: string,
     text: string,
   ): void {
     rowEl.root.style.display = "flex";
     rowEl.root.style.background = "";
     rowEl.root.style.borderTop = "";
-    rowEl.gutter.textContent = String(mbRow + 1);
+    rowEl.gutter.textContent = gutterText;
     rowEl.gutter.style.background = "";
     rowEl.content.textContent = text;
     rowEl.content.style.color = "";

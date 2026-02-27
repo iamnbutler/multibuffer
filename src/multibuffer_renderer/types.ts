@@ -20,6 +20,8 @@ export interface Measurements {
   readonly charWidth: number;
   /** Padding at the start of each line (for line numbers, etc.) */
   readonly gutterWidth: number;
+  /** Character column limit for soft wrapping. Undefined or 0 = no wrap. */
+  readonly wrapWidth?: number;
 }
 
 /**

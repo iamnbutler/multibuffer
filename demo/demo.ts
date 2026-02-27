@@ -47,6 +47,7 @@ function main() {
     lineHeight: 20,
     charWidth: 8.4,
     gutterWidth: 48,
+    wrapWidth: 60,
   };
 
   const renderer = createDomRenderer(measurements);
