@@ -175,8 +175,24 @@ describe("Anchor Resolution", () => {
     expect(mb.snapshot().resolveAnchor(fakeAnchor)).toBeUndefined();
   });
 
-  test.todo("resolveAnchor follows replaced_excerpts chain", () => {
-    // Depends on setExcerptsForBuffer
+  test("resolveAnchor follows replaced_excerpts chain", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 4));
+
+    // Create anchor at row 1, col 2
+    const a = mb.createAnchor(mbPoint(1, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace the excerpt — anchor's excerptId is now stale
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 4)]);
+
+    // Should still resolve via replacement chain
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 2);
   });
 });
 
@@ -492,12 +508,47 @@ describe("Anchor Survival - Excerpt Operations", () => {
     expectPoint(resolved, 0, 3);
   });
 
-  test.todo("anchor survives excerpt replacement", () => {
-    // Depends on setExcerptsForBuffer + replaced_excerpts
+  test("anchor survives excerpt replacement", () => {
+    const buf = createBuffer(createBufferId(), "ABCDE\nFGHIJ\nKLMNO");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    const a = mb.createAnchor(mbPoint(1, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace with two smaller excerpts
+    mb.setExcerptsForBuffer(buf, [
+      excerptRange(0, 2),
+      excerptRange(2, 3),
+    ]);
+
+    // Anchor was at buffer row 1 col 2 — now in first new excerpt, mb row 1 col 2
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 2);
   });
 
-  test.todo("anchor follows multi-step replacement chain", () => {
-    // Depends on setExcerptsForBuffer
+  test("anchor follows multi-step replacement chain", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 4));
+
+    const a = mb.createAnchor(mbPoint(2, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace 1: original → new set A
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 4)]);
+    // Replace 2: set A → new set B
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 4)]);
+
+    // Anchor should follow chain: original → A → B
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 2, 3);
   });
 
   test("anchor returns undefined when excerpt fully removed", () => {

@@ -558,10 +558,94 @@ describe("MultiBuffer - Snapshot", () => {
 // =============================================================================
 
 describe("MultiBuffer - Batch Operations", () => {
-  test.todo("setExcerptsForBuffer replaces all excerpts for buffer", () => {});
-  test.todo("setExcerptsForBuffer tracks replaced excerpts", () => {});
-  test.todo("setExcerptsForBuffer returns new excerpt IDs", () => {});
-  test.todo("setExcerptsForBuffer with empty array removes all", () => {});
+  test("setExcerptsForBuffer replaces all excerpts for buffer", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // lines 0-1
+    mb.addExcerpt(buf, excerptRange(2, 4)); // lines 2-3
+    expect(mb.excerpts.length).toBe(2);
+
+    // Replace with a single excerpt covering all lines
+    const newIds = mb.setExcerptsForBuffer(buf, [excerptRange(0, 4)]);
+    expect(newIds.length).toBe(1);
+    expect(mb.excerpts.length).toBe(1);
+
+    // The new excerpt should show all 4 lines
+    expect(mb.lineCount).toBe(4);
+    const lines = mb.lines(mbRow(0), mbRow(4));
+    expect(lines[0]).toBe("Line 0");
+    expect(lines[3]).toBe("Line 3");
+  });
+
+  test("setExcerptsForBuffer tracks replaced excerpts for anchor resolution", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 4)); // all 4 lines
+
+    // Create anchor at row 2, col 3 (in "Line 2")
+    const a = mb.createAnchor(mbPoint(2, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace with two excerpts
+    mb.setExcerptsForBuffer(buf, [
+      excerptRange(0, 2), // lines 0-1
+      excerptRange(2, 4), // lines 2-3
+    ]);
+
+    // Anchor should still resolve — it follows the replacement chain
+    // The anchor was in "Line 2" col 3, which is now in the second new excerpt at row 2
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    // Row 2 col 3 in buffer → second excerpt starts at mb row 2, offset 0 → mb row 2 col 3
+    expectPoint(resolved, 2, 3);
+  });
+
+  test("setExcerptsForBuffer returns new excerpt IDs", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2");
+    const mb = createMultiBuffer();
+    const oldId = mb.addExcerpt(buf, excerptRange(0, 3));
+
+    const newIds = mb.setExcerptsForBuffer(buf, [
+      excerptRange(0, 1),
+      excerptRange(1, 3),
+    ]);
+    expect(newIds.length).toBe(2);
+    // New IDs should be different from the old one
+    for (const newId of newIds) {
+      expect(
+        newId.index === oldId.index && newId.generation === oldId.generation,
+      ).toBe(false);
+    }
+  });
+
+  test("setExcerptsForBuffer with empty array removes all", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    expect(mb.excerpts.length).toBe(1);
+
+    const newIds = mb.setExcerptsForBuffer(buf, []);
+    expect(newIds.length).toBe(0);
+    expect(mb.excerpts.length).toBe(0);
+    expect(mb.lineCount).toBe(0);
+  });
+
+  test("setExcerptsForBuffer preserves excerpts from other buffers", () => {
+    const buf1 = createBuffer(createBufferId(), "Buffer 1");
+    const buf2 = createBuffer(createBufferId(), "Buffer 2");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 1));
+    mb.addExcerpt(buf2, excerptRange(0, 1));
+    expect(mb.excerpts.length).toBe(2);
+
+    // Replace only buf1's excerpts
+    mb.setExcerptsForBuffer(buf1, []);
+    expect(mb.excerpts.length).toBe(1);
+    // Remaining excerpt should be from buf2
+    expect(mb.excerpts[0]?.bufferId).toBe(buf2.id);
+  });
 });
 
 // =============================================================================

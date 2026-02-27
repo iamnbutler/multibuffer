@@ -34,15 +34,18 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly excerpts: readonly ExcerptInfo[];
   private readonly _excerptData: readonly Excerpt[];
   private readonly _buffers: ReadonlyMap<string, Buffer>;
+  private readonly _replacedExcerpts: ReadonlyMap<string, ExcerptId>;
 
   constructor(
     excerpts: readonly ExcerptInfo[],
     excerptData: readonly Excerpt[],
     buffers: ReadonlyMap<string, Buffer>,
+    replacedExcerpts: ReadonlyMap<string, ExcerptId>,
   ) {
     this.excerpts = excerpts;
     this._excerptData = excerptData;
     this._buffers = buffers;
+    this._replacedExcerpts = replacedExcerpts;
     let total = 0;
     for (const e of excerpts) {
       total += e.endRow - e.startRow;
@@ -140,47 +143,63 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   }
 
   resolveAnchor(anchor: Anchor): MultiBufferPoint | undefined {
-    // 1. Find the excerpt data and info
-    const excerptData = this._excerptData.find(
+    // 1. Follow replacement chain to find the current excerpt ID
+    let currentId = anchor.excerptId;
+    const maxChainLength = 100; // prevent infinite loops
+    for (let i = 0; i < maxChainLength; i++) {
+      const key = `${currentId.index}:${currentId.generation}`;
+      const replacement = this._replacedExcerpts.get(key);
+      if (!replacement) break;
+      currentId = replacement;
+    }
+
+    // 2. Find the excerpt data
+    const initialExcerpt = this._excerptData.find(
       (e) =>
-        e.id.index === anchor.excerptId.index &&
-        e.id.generation === anchor.excerptId.generation,
+        e.id.index === currentId.index &&
+        e.id.generation === currentId.generation,
     );
-    if (!excerptData) return undefined;
+    if (!initialExcerpt) return undefined;
+
+    // 3. Get the mutable buffer to replay edits since anchor creation
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    const buffer = this._buffers.get(initialExcerpt.bufferId as string);
+
+    // 4. Compute the adjusted buffer point
+    let bufferPoint: BufferPoint;
+    if (!buffer) {
+      bufferPoint = initialExcerpt.buffer.offsetToPoint(anchor.textAnchor.offset);
+    } else {
+      const edits = buffer.editsSince(anchor.textAnchor.version);
+      const adjustedOffset = adjustOffset(
+        anchor.textAnchor.offset,
+        anchor.textAnchor.bias,
+        edits,
+      );
+      const currentSnapshot = buffer.snapshot();
+      const clampedOffset = currentSnapshot.clipOffset(
+        adjustedOffset,
+        anchor.textAnchor.bias,
+      );
+      bufferPoint = currentSnapshot.offsetToPoint(clampedOffset);
+    }
+
+    // 5. Find the best excerpt for this buffer point.
+    //    Start with the initial excerpt, but if the point falls outside its range,
+    //    search other excerpts from the same buffer.
+    const resolvedExcerpt = this._findExcerptForBufferPoint(
+      bufferPoint,
+      initialExcerpt,
+    );
 
     const info = this.excerpts.find(
       (e) =>
-        e.id.index === anchor.excerptId.index &&
-        e.id.generation === anchor.excerptId.generation,
+        e.id.index === resolvedExcerpt.id.index &&
+        e.id.generation === resolvedExcerpt.id.generation,
     );
     if (!info) return undefined;
 
-    // 2. Get the mutable buffer to replay edits since anchor creation
-    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
-    const buffer = this._buffers.get(excerptData.bufferId as string);
-    if (!buffer) {
-      // Fallback: resolve with original offset (no edit adjustment)
-      const bufferPoint = excerptData.buffer.offsetToPoint(anchor.textAnchor.offset);
-      return this._bufferPointToMbPoint(bufferPoint, excerptData, info);
-    }
-
-    // 3. Adjust offset through edits since anchor creation
-    const edits = buffer.editsSince(anchor.textAnchor.version);
-    const adjustedOffset = adjustOffset(
-      anchor.textAnchor.offset,
-      anchor.textAnchor.bias,
-      edits,
-    );
-
-    // 4. Clamp to buffer bounds and convert to point
-    const currentSnapshot = buffer.snapshot();
-    const clampedOffset = currentSnapshot.clipOffset(
-      adjustedOffset,
-      anchor.textAnchor.bias,
-    );
-    const bufferPoint = currentSnapshot.offsetToPoint(clampedOffset);
-
-    return this._bufferPointToMbPoint(bufferPoint, excerptData, info);
+    return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, info);
   }
 
   private _bufferPointToMbPoint(
@@ -206,6 +225,33 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     const mbRow = (info.startRow + offsetInExcerpt) as MultiBufferRow;
     return { row: mbRow, column: bufferPoint.column };
+  }
+
+  private _findExcerptForBufferPoint(
+    bufferPoint: BufferPoint,
+    initialExcerpt: Excerpt,
+  ): Excerpt {
+    const startRow = initialExcerpt.range.context.start.row;
+    const endRow = initialExcerpt.range.context.end.row;
+    if (bufferPoint.row >= startRow && bufferPoint.row < endRow) {
+      return initialExcerpt;
+    }
+
+    // Search other excerpts from the same buffer
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+    const bid = initialExcerpt.bufferId as string;
+    for (const alt of this._excerptData) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      if ((alt.bufferId as string) !== bid) continue;
+      const altStart = alt.range.context.start.row;
+      const altEnd = alt.range.context.end.row;
+      if (bufferPoint.row >= altStart && bufferPoint.row < altEnd) {
+        return alt;
+      }
+    }
+
+    // No matching excerpt found; return the initial one (will be clamped)
+    return initialExcerpt;
   }
 
   clipPoint(point: MultiBufferPoint, _bias: Bias): MultiBufferPoint {
@@ -293,6 +339,7 @@ class MultiBufferImpl implements MultiBuffer {
   private _cachedInfos: ExcerptInfo[] = [];
   private _cachedLineCount = 0;
   private _buffers = new Map<string, Buffer>();
+  private _replacedExcerpts = new Map<string, ExcerptId>();
 
   get lineCount(): number {
     return this._cachedLineCount;
@@ -317,6 +364,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._cachedInfos.slice(),
       excerptData,
       this._buffers,
+      this._replacedExcerpts,
     );
   }
 
@@ -349,11 +397,58 @@ class MultiBufferImpl implements MultiBuffer {
   }
 
   setExcerptsForBuffer(
-    _buffer: Buffer,
-    _ranges: readonly ExcerptRange[],
+    buffer: Buffer,
+    ranges: readonly ExcerptRange[],
   ): readonly ExcerptId[] {
-    // TODO: implement batch replacement with anchor tracking
-    return [];
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    const bufferId = buffer.id as string;
+    this._buffers.set(bufferId, buffer);
+
+    // 1. Collect old excerpt IDs for this buffer
+    const oldIds: ExcerptId[] = [];
+    for (const id of this._order) {
+      const exc = this._excerpts.get(id);
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      if (exc && (exc.bufferId as string) === bufferId) {
+        oldIds.push(id);
+      }
+    }
+
+    // 2. Remove old excerpts
+    for (const id of oldIds) {
+      this._excerpts.remove(id);
+    }
+    this._order = this._order.filter((id) => {
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      const exc = this._excerpts.get(id);
+      // Keep IDs that still have a valid excerpt (i.e. from other buffers)
+      return exc !== undefined;
+    });
+
+    // 3. Add new excerpts
+    const snapshot = buffer.snapshot();
+    const newIds: ExcerptId[] = [];
+    for (const range of ranges) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
+      const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
+      const excerpt = createExcerpt(id, snapshot, range, false);
+      this._excerpts.set(id, excerpt);
+      this._order.push(id);
+      newIds.push(id);
+    }
+
+    // 4. Build replacement map: each old ID maps to the first new ID
+    //    that covers the same buffer region (or the first new ID as fallback)
+    if (newIds.length > 0) {
+      for (const oldId of oldIds) {
+        const key = `${oldId.index}:${oldId.generation}`;
+        // biome-ignore lint/plugin/no-type-assertion: expect: newIds[0] is guaranteed non-undefined by length check
+        this._replacedExcerpts.set(key, newIds[0] as ExcerptId);
+      }
+    }
+
+    this._rebuildCache();
+    return newIds;
   }
 
   expandExcerpt(

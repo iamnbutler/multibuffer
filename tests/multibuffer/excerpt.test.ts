@@ -13,16 +13,19 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createExcerpt, toExcerptInfo } from "../../src/multibuffer/excerpt.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type {
   ExcerptInfo,
   ExcerptRange,
 } from "../../src/multibuffer/types.ts";
 import {
+  Bias,
   createBufferId,
   createExcerptId,
   excerptId,
   excerptRange,
   expectPoint,
+  mbPoint,
   mbRow,
   num,
   range,
@@ -389,17 +392,51 @@ describe("Excerpt Anchor Stability", () => {
 // =============================================================================
 
 describe("Excerpt Replacement", () => {
-  test.todo("replaced excerpt tracked in map", () => {
-    // After setExcerptsForBuffer, old ID maps to new ID
+  test("replaced excerpt tracked in map", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2");
+    const mb = createMultiBuffer();
+    const oldId = mb.addExcerpt(buf, excerptRange(0, 3));
+
+    const newIds = mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+    expect(newIds.length).toBe(1);
+    // Old ID should no longer be directly in excerpts
+    const found = mb.excerpts.find(
+      (e) => e.id.index === oldId.index && e.id.generation === oldId.generation,
+    );
+    expect(found).toBeUndefined();
   });
 
-  test.todo("replacement chain is followed", () => {
-    // Excerpt 1 replaced by 2, then 2 replaced by 3
-    // Anchor referencing 1 should resolve via 1 -> 2 -> 3
+  test("replacement chain is followed", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Create anchor in original excerpt
+    const a = mb.createAnchor(mbPoint(1, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace twice: original -> A -> B
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+
+    // Anchor should still resolve
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 2);
   });
 
-  test.todo("anchor degrades gracefully when excerpt fully removed", () => {
-    // If excerpt is removed without replacement, anchor should
-    // resolve to nearest valid position or undefined
+  test("anchor degrades gracefully when excerpt fully removed", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    mb.removeExcerpt(eid);
+    expect(mb.snapshot().resolveAnchor(a)).toBeUndefined();
   });
 });
