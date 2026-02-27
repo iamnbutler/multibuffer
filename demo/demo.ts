@@ -7,10 +7,10 @@ import { InputHandler } from "../src/editor/input-handler.ts";
 import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type {
-  Buffer as MbBuffer,
   BufferId,
   BufferPoint,
   BufferRow,
+  Buffer as MbBuffer,
 } from "../src/multibuffer/types.ts";
 import { createDomRenderer } from "../src/multibuffer_renderer/dom.ts";
 import { Highlighter } from "../src/multibuffer_renderer/highlighter.ts";
