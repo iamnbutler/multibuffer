@@ -1,9 +1,9 @@
 {
-  "last_run": "2026-02-27T20:00:00Z",
-  "last_run_id": "22497633874",
+  "last_run": "2026-02-27T21:00:00Z",
+  "last_run_id": "22497894975",
   "backlog_cursor": {
-    "issues": 11,
-    "note": "All issues through #11 have been seen. Issues #7, #10, #11 are proxy CI PR issues (patch artifacts); #8 is the monthly summary. Issues #3-#6 and #9 have Repo Assist comments."
+    "issues": 16,
+    "note": "All issues through #16 seen. #7, #10, #11, #16 are proxy CI issues (patch artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-02-27",
@@ -59,7 +59,7 @@
       "issue": 4,
       "description": "feat(editor): clipboard cut/paste/getSelectedText() - 16 new tests",
       "created": "2026-02-27",
-      "status": "open draft PR - confirmed in this run"
+      "status": "open draft PR"
     },
     {
       "pr_number": "patch-artifact-run-22497633874",
@@ -67,7 +67,15 @@
       "issue": 5,
       "description": "ci: add CI workflow for typecheck, lint, and tests",
       "created": "2026-02-27",
-      "status": "patch-only - sandbox cannot push to GitHub; patch in agent-artifacts"
+      "status": "patch-only - sandbox cannot push .github/workflows changes; patch in agent-artifacts"
+    },
+    {
+      "pr_number": "patch-artifact-run-22497894975",
+      "branch": "repo-assist/feat-fixture-switcher-6",
+      "issue": 6,
+      "description": "feat(demo): fixture scenario switcher panel",
+      "created": "2026-02-27",
+      "status": "patch-only - push failed; patch in agent-artifacts for run 22497894975"
     }
   ],
   "issues_created": [
@@ -94,6 +102,12 @@
       "number": 11,
       "created": "2026-02-27",
       "description": "Proxy issue for CI PR (run 22494486270) - duplicate, can be closed by maintainer"
+    },
+    {
+      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
+      "number": 16,
+      "created": "2026-02-27",
+      "description": "Proxy issue for CI PR (run 22497633874) - duplicate, can be closed by maintainer"
     }
   ],
   "labels_applied": {
@@ -104,7 +118,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 8 (22497633874): CI workflow patch submitted again (branch repo-assist/feat-ci-workflow-2). PRs #12-#15 are all confirmed live open draft PRs. Monthly summary issue #8 updated. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only 1 commit on main), task_9 (no new contributors).",
+  "notes": "Run 9 (22497894975): fixture switcher patch submitted (branch repo-assist/feat-fixture-switcher-6). PRs #12-#15 are open draft PRs on GitHub. Monthly summary #8 updated. Push is blocked for all branches (not just .github/workflows). Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only 1 commit on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -118,7 +132,9 @@
   "shift_page_pr_number": 13,
   "undo_redo_pr_number": 14,
   "clipboard_pr_number": 15,
+  "fixture_switcher_patch_run": "22497894975",
+  "fixture_switcher_branch": "repo-assist/feat-fixture-switcher-6",
   "task_10_in_progress": {
-    "description": "All core issue #4 features implemented in PRs #12-#15 (goal column, Shift+PageUp/Down, undo/redo, clipboard). CI workflow patch submitted (run 22497633874). Next priority once any PRs merge: benchmark-on-merge workflow (issue #3)."
+    "description": "Issue #4 features done (PRs #12-#15). CI workflow patch done (multiple runs). Fixture switcher patch done (run 22497894975, addresses #6). Next: benchmark-on-merge workflow (issue #3) once CI is merged. Spool CI integration (issue #9) once access model clarified."
   }
 }
