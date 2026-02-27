@@ -1,6 +1,6 @@
 {
   "last_run": "2026-02-27T00:00:00Z",
-  "last_run_id": "22500513995",
+  "last_run_id": "22500959074",
   "backlog_cursor": {
     "issues": 20,
     "note": "All issues through #20 seen. #7, #10, #11, #16, #20 are proxy CI/patch issues (artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments."
@@ -30,12 +30,20 @@
   },
   "prs_created": [
     {
-      "pr_number": "pending-run-22500513995",
+      "pr_number": 24,
+      "branch": "repo-assist/feat-viewport-pure-fns-and-tests",
+      "issue": null,
+      "description": "feat(renderer): pure scroll-target functions + viewport measurement tests (spool mm3lhpd9-u00r, mm3lhpe5-g1e7, mm3lhpi9-8bbb)",
+      "created": "2026-02-27",
+      "status": "open draft PR on GitHub"
+    },
+    {
+      "pr_number": 23,
       "branch": "repo-assist/feat-cursor-blink-mm4ui38a",
       "issue": null,
       "description": "feat(demo): cursor blink animation + focus-aware rendering (spool mm4ui38a-b39o, p2)",
       "created": "2026-02-27",
-      "status": "submitted run 22500513995 - check GitHub for PR number"
+      "status": "open draft PR on GitHub"
     },
     {
       "pr_number": 22,
@@ -107,7 +115,7 @@
       "issue": 4,
       "description": "feat(editor): goal column tracking for vertical cursor navigation",
       "created": "2026-02-27",
-      "status": "open draft PR on GitHub"
+      "status": "not in open PR list - may have been closed or merged by maintainer"
     },
     {
       "pr_number": "patch-artifact-run-22499179459",
@@ -172,7 +180,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 15 (22500513995): Implemented cursor blink animation (spool mm4ui38a-b39o, p2) in DomRenderer + wired focus/blur in demo.ts. PR submitted (branch repo-assist/feat-cursor-blink-mm4ui38a) - PR number pending. Also confirmed PR #22 (paste/focus fix) is a proper open draft PR. Updated monthly summary #8. PR #22 now confirmed open. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only few commits on main), task_9 (no new contributors).",
+  "notes": "Run 16 (22500959074): Added clampScrollTop + calculateScrollTop pure functions to measurement.ts, updated DomRenderer.scrollTo to use them, and wrote 42 tests in tests/renderer/measurement.test.ts. PR #24 created. PR #23 (cursor blink) confirmed number. PR #12 (goal column) not in open PR list - may have been closed by maintainer. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only one commit on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -184,8 +192,7 @@
   "ci_pr_branch_latest": "repo-assist/feat-ci-workflow-2",
   "todo_workflow_patch_run": "22499179459",
   "todo_workflow_branch": "repo-assist/feat-spool-todo-workflow",
-  "cursor_blink_pr_branch": "repo-assist/feat-cursor-blink-mm4ui38a",
-  "cursor_blink_pr_run": "22500513995",
+  "cursor_blink_pr_number": 23,
   "auto_scroll_pr_number": 21,
   "goal_column_pr_number": 12,
   "shift_page_pr_number": 13,
@@ -195,9 +202,10 @@
   "set_cursor_fix_pr_number": 18,
   "syntax_highlight_fix_pr_number": 19,
   "paste_focus_fix_pr_number": 22,
+  "viewport_pure_fns_pr_number": 24,
   "task_10_in_progress": {
-    "description": "Spool tasks done: mm4ui36i-tbd7 (auto-scroll, PR #21), mm4v1ccl-hc8y (setCursor bounds, PR #18), mm4yjzgw-4zpn/mm4ui393-y4os (syntax highlight, PR #19), mm4f23aq-gjlr (undo/redo, PR #14), mm4f23gq-qmqn (clipboard, PR #15), mm4ui37e-2yrw (paste wiring, PR #22), mm4v03zz-ttyy (textarea focus, PR #22), mm4ui38a-b39o (cursor blink, PR pending run 22500513995). Next: browser integration tests (mm4ztys8-ux7k, p1) - needs browser environment.",
-    "spool_done": [
+    "description": "Spool tasks completed this run: mm3lhpd9-u00r (scrollTop clamping), mm3lhpe5-g1e7 (scroll strategies), mm3lhphg-m6nv/mm3lhpi9-8bbb (viewport tests) - all in PR #24. Next candidates: spool data-model tasks (mm3lgky2-vbu3 point/offset conversion tests, mm3lh0um-k9qd excerpt merging, mm3lgsrj-0qkp anchor chain on excerpt replace). Browser integration tests (mm4ztys8-ux7k) still need real browser.",
+    "spool_done_all": [
       "mm4ui36i-tbd7: Auto-scroll viewport - PR #21",
       "mm4v1ccl-hc8y: Bug: setCursor allows cursor past end of line (p0) - PR #18",
       "mm4yjzgw-4zpn: Bug: Syntax highlighting breaks when characters inserted (p1) - PR #19",
@@ -206,10 +214,18 @@
       "mm4f23gq-qmqn: Implement clipboard operations (p2) - PR #15",
       "mm4ui37e-2yrw: Wire paste event in InputHandler (p1) - PR #22",
       "mm4v03zz-ttyy: Bug: Hidden textarea never receives focus (p0) - PR #22",
-      "mm4ui38a-b39o: Add cursor blink animation (p2) - PR pending run 22500513995"
+      "mm4ui38a-b39o: Add cursor blink animation (p2) - PR #23",
+      "mm3lhpd9-u00r: scrollTop clamping (clampScrollTop fn) - PR #24",
+      "mm3lhpe5-g1e7: scroll strategies pure fn (calculateScrollTop) - PR #24",
+      "mm3lhphg-m6nv: viewport edge case tests - PR #24",
+      "mm3lhpi9-8bbb: all strategy tests - PR #24"
     ],
-    "spool_open_tasks": [
-      "mm4ztys8-ux7k: Add browser integration tests for scroll+render interaction (p1) - needs real browser"
+    "spool_remaining_open": [
+      "mm3lgky2-vbu3: point/offset conversion tests",
+      "mm3lh0um-k9qd: excerpt merging when adjacent/overlapping",
+      "mm3lgsrj-0qkp: anchor chain on excerpt replace",
+      "mm3lgstk-qlnu: anchor degradation on excerpt replace",
+      "mm4ztys8-ux7k: browser integration tests (needs real browser)"
     ]
   }
 }
