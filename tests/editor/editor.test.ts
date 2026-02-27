@@ -180,6 +180,162 @@ describe("Editor - setCursor", () => {
   });
 });
 
+// ─── Mouse Selection (drag, double-click, triple-click) ─────────
+
+describe("Editor - extendSelectionTo (drag)", () => {
+  test("drag from (0,0) to (0,5) selects 'Hello'", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    editor.extendSelectionTo(mbPoint(0, 5));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 5);
+  });
+
+  test("drag across lines", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.extendSelectionTo(mbPoint(1, 2));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 3);
+    if (end) expectPoint(end, 1, 2);
+  });
+
+  test("drag backward (right to left)", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 8));
+    editor.extendSelectionTo(mbPoint(0, 3));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 3);
+    if (end) expectPoint(end, 0, 8);
+  });
+
+  test("cursor follows head during drag", () => {
+    const { editor } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    editor.extendSelectionTo(mbPoint(0, 5));
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  test("continuing drag updates selection", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    editor.extendSelectionTo(mbPoint(0, 3));
+    editor.extendSelectionTo(mbPoint(0, 8));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 8);
+  });
+});
+
+describe("Editor - selectWordAt (double-click)", () => {
+  test("double-click on word selects it", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.selectWordAt(mbPoint(0, 2));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 5);
+  });
+
+  test("double-click on second word", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.selectWordAt(mbPoint(0, 8));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 6);
+    if (end) expectPoint(end, 0, 11);
+  });
+
+  test("double-click on space selects space", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.selectWordAt(mbPoint(0, 5));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    // Should select the whitespace run
+    if (start) expectPoint(start, 0, 5);
+    if (end) expectPoint(end, 0, 6);
+  });
+});
+
+describe("Editor - selectLineAt (triple-click)", () => {
+  test("triple-click selects entire line", () => {
+    const { editor, mb } = setup("Hello\nWorld\nFoo");
+    editor.selectLineAt(mbPoint(1, 2));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 1, 0);
+    if (end) expectPoint(end, 1, 5);
+  });
+
+  test("triple-click on first line", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.selectLineAt(mbPoint(0, 3));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 5);
+  });
+});
+
 // ─── Text Insertion ─────────────────────────────────────────────
 
 describe("Editor - Text Insertion", () => {

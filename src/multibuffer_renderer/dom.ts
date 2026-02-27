@@ -53,7 +53,13 @@ export class DomRenderer implements Renderer {
   private _highlighter: Highlighter | null = null;
   private _onScroll: (() => void) | null = null;
   private _onClick: ((e: MouseEvent) => void) | null = null;
+  private _onMouseMove: ((e: MouseEvent) => void) | null = null;
+  private _onMouseUp: ((e: MouseEvent) => void) | null = null;
+  private _isDragging = false;
   private _onClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
 
   constructor(measurements: Measurements) {
     this._measurements = measurements;
@@ -103,8 +109,12 @@ export class DomRenderer implements Renderer {
     this._onScroll = () => this._handleScroll();
     scrollContainer.addEventListener("scroll", this._onScroll, { passive: true });
 
-    this._onClick = (e: MouseEvent) => this._handleClick(e);
+    this._onClick = (e: MouseEvent) => this._handleMouseDown(e);
+    this._onMouseMove = (e: MouseEvent) => this._handleMouseMove(e);
+    this._onMouseUp = () => this._handleMouseUp();
     scrollContainer.addEventListener("mousedown", this._onClick);
+    document.addEventListener("mousemove", this._onMouseMove);
+    document.addEventListener("mouseup", this._onMouseUp);
   }
 
   unmount(): void {
@@ -112,6 +122,8 @@ export class DomRenderer implements Renderer {
       if (this._onScroll) this._scrollContainer.removeEventListener("scroll", this._onScroll);
       if (this._onClick) this._scrollContainer.removeEventListener("mousedown", this._onClick);
     }
+    if (this._onMouseMove) document.removeEventListener("mousemove", this._onMouseMove);
+    if (this._onMouseUp) document.removeEventListener("mouseup", this._onMouseUp);
     if (this._container && this._scrollContainer) {
       this._container.removeChild(this._scrollContainer);
     }
@@ -438,9 +450,24 @@ export class DomRenderer implements Renderer {
     }
   }
 
-  /** Register a callback for mouse clicks (cursor placement). */
+  /** Register a callback for single click (cursor placement). */
   onClickPosition(cb: (point: MultiBufferPoint) => void): void {
     this._onClickCallback = cb;
+  }
+
+  /** Register a callback for drag (selection extension). */
+  onDrag(cb: (point: MultiBufferPoint) => void): void {
+    this._onDragCallback = cb;
+  }
+
+  /** Register a callback for double-click (word selection). */
+  onDoubleClick(cb: (point: MultiBufferPoint) => void): void {
+    this._onDoubleClickCallback = cb;
+  }
+
+  /** Register a callback for triple-click (line selection). */
+  onTripleClick(cb: (point: MultiBufferPoint) => void): void {
+    this._onTripleClickCallback = cb;
   }
 
   /** Render cursor at a multibuffer point. */
@@ -525,23 +552,43 @@ export class DomRenderer implements Renderer {
     }
   }
 
-  private _handleClick(e: MouseEvent): void {
+  private _hitTestFromEvent(e: MouseEvent): { row: MultiBufferRow; column: number } | undefined {
+    if (!this._scrollContainer) return undefined;
+    const rect = this._scrollContainer.getBoundingClientRect();
+    return this.hitTest(e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  private _handleMouseDown(e: MouseEvent): void {
     if (!this._scrollContainer) return;
 
     // Prevent the browser from focusing the scrollContainer,
     // so the hidden textarea retains focus for keyboard input.
     e.preventDefault();
 
-    if (!this._onClickCallback) return;
+    const point = this._hitTestFromEvent(e);
+    if (!point) return;
 
-    const rect = this._scrollContainer.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const result = this.hitTest(x, y);
-    if (result) {
-      this._onClickCallback(result);
+    if (e.detail >= 3 && this._onTripleClickCallback) {
+      this._onTripleClickCallback(point);
+    } else if (e.detail === 2 && this._onDoubleClickCallback) {
+      this._onDoubleClickCallback(point);
+    } else if (this._onClickCallback) {
+      this._onClickCallback(point);
     }
+
+    this._isDragging = true;
+  }
+
+  private _handleMouseMove(e: MouseEvent): void {
+    if (!this._isDragging || !this._onDragCallback) return;
+    const point = this._hitTestFromEvent(e);
+    if (point) {
+      this._onDragCallback(point);
+    }
+  }
+
+  private _handleMouseUp(): void {
+    this._isDragging = false;
   }
 }
 

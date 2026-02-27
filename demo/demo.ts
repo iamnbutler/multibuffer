@@ -137,9 +137,18 @@ async function main() {
   // Wire editor state changes to re-render
   editor.onChange(renderAll);
 
-  // Wire mouse clicks to cursor placement
+  // Wire mouse interactions
   renderer.onClickPosition((clickPoint) => {
     editor.setCursor(clickPoint);
+  });
+  renderer.onDrag((dragPoint) => {
+    editor.extendSelectionTo(dragPoint);
+  });
+  renderer.onDoubleClick((clickPoint) => {
+    editor.selectWordAt(clickPoint);
+  });
+  renderer.onTripleClick((clickPoint) => {
+    editor.selectLineAt(clickPoint);
   });
 
   // Wire keyboard input

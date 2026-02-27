@@ -3,7 +3,11 @@
  * Receives EditorCommands and updates the multibuffer + cursor/selection state.
  */
 
-import { resolveAnchorRange } from "../multibuffer/anchor.ts";
+import {
+  createAnchorRange,
+  createSelection,
+  resolveAnchorRange,
+} from "../multibuffer/anchor.ts";
 import type {
   MultiBuffer,
   MultiBufferPoint,
@@ -11,7 +15,8 @@ import type {
   MultiBufferSnapshot,
   Selection,
 } from "../multibuffer/types.ts";
-import { moveCursor } from "./cursor.ts";
+import { Bias } from "../multibuffer/types.ts";
+import { isWordChar, moveCursor } from "./cursor.ts";
 import {
   collapseSelection,
   extendSelection,
@@ -61,6 +66,112 @@ export class Editor {
   setCursor(point: MultiBufferPoint): void {
     this._cursor = point;
     this._selection = selectionAtPoint(this.multiBuffer, point);
+    this._onChange?.();
+  }
+
+  /** Extend selection from current anchor to a new point (for mouse drag). */
+  extendSelectionTo(point: MultiBufferPoint): void {
+    if (!this._selection) {
+      this.setCursor(point);
+      return;
+    }
+
+    const snap = this.multiBuffer.snapshot();
+
+    // The anchor end is the non-head end of the current selection
+    const anchorEnd =
+      this._selection.head === "end"
+        ? this._selection.range.start
+        : this._selection.range.end;
+    const anchorPoint = snap.resolveAnchor(anchorEnd);
+    if (!anchorPoint) return;
+
+    const newHeadAnchor = this.multiBuffer.createAnchor(point, Bias.Right);
+    if (!newHeadAnchor) return;
+
+    // Determine ordering
+    if (
+      point.row < anchorPoint.row ||
+      (point.row === anchorPoint.row && point.column <= anchorPoint.column)
+    ) {
+      this._selection = createSelection(
+        createAnchorRange(newHeadAnchor, anchorEnd),
+        "start",
+      );
+    } else {
+      this._selection = createSelection(
+        createAnchorRange(anchorEnd, newHeadAnchor),
+        "end",
+      );
+    }
+    this._cursor = point;
+    this._onChange?.();
+  }
+
+  /** Select the word at a point (for double-click). */
+  selectWordAt(point: MultiBufferPoint): void {
+    const snap = this.multiBuffer.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
+    const lineText = snap.lines(point.row, nextRow)[0] ?? "";
+    const col = point.column;
+
+    // Find word boundaries
+    let wordStart = col;
+    let wordEnd = col;
+
+    if (col < lineText.length && isWordChar(lineText.charCodeAt(col))) {
+      // On a word character — expand to word boundaries
+      while (wordStart > 0 && isWordChar(lineText.charCodeAt(wordStart - 1)))
+        wordStart--;
+      while (wordEnd < lineText.length && isWordChar(lineText.charCodeAt(wordEnd)))
+        wordEnd++;
+    } else {
+      // On non-word (whitespace/punctuation) — expand to non-word boundaries
+      while (wordStart > 0 && !isWordChar(lineText.charCodeAt(wordStart - 1)))
+        wordStart--;
+      while (wordEnd < lineText.length && !isWordChar(lineText.charCodeAt(wordEnd)))
+        wordEnd++;
+      // If we backed into word chars, reset start
+      if (wordStart < col && isWordChar(lineText.charCodeAt(wordStart))) {
+        wordStart = col;
+      }
+    }
+
+    const startPoint: MultiBufferPoint = { row: point.row, column: wordStart };
+    const endPoint: MultiBufferPoint = { row: point.row, column: wordEnd };
+
+    const startAnchor = this.multiBuffer.createAnchor(startPoint, Bias.Left);
+    const endAnchor = this.multiBuffer.createAnchor(endPoint, Bias.Right);
+    if (!startAnchor || !endAnchor) return;
+
+    this._selection = createSelection(
+      createAnchorRange(startAnchor, endAnchor),
+      "end",
+    );
+    this._cursor = endPoint;
+    this._onChange?.();
+  }
+
+  /** Select the entire line at a point (for triple-click). */
+  selectLineAt(point: MultiBufferPoint): void {
+    const snap = this.multiBuffer.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
+    const lineText = snap.lines(point.row, nextRow)[0] ?? "";
+
+    const startPoint: MultiBufferPoint = { row: point.row, column: 0 };
+    const endPoint: MultiBufferPoint = { row: point.row, column: lineText.length };
+
+    const startAnchor = this.multiBuffer.createAnchor(startPoint, Bias.Left);
+    const endAnchor = this.multiBuffer.createAnchor(endPoint, Bias.Right);
+    if (!startAnchor || !endAnchor) return;
+
+    this._selection = createSelection(
+      createAnchorRange(startAnchor, endAnchor),
+      "end",
+    );
+    this._cursor = endPoint;
     this._onChange?.();
   }
 

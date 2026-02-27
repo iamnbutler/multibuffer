@@ -188,7 +188,7 @@ function nextRow(row: MultiBufferRow, lineCount: number): MultiBufferRow {
   return Math.min(row + 1, lineCount) as MultiBufferRow;
 }
 
-function isWordChar(charCode: number): boolean {
+export function isWordChar(charCode: number): boolean {
   return (
     (charCode >= 48 && charCode <= 57) || // 0-9
     (charCode >= 65 && charCode <= 90) || // A-Z
