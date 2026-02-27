@@ -935,3 +935,139 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "page" });
   });
 });
+
+// ─── Undo / Redo ────────────────────────────────────────────────
+
+describe("Editor - Undo/Redo", () => {
+  test("undo reverses insertText", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "insertText", text: " World" });
+    expect(getText(mb)).toBe("Hello World");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("undo restores cursor position to before the edit", () => {
+    const { mb, editor } = setup("Hello");
+    // cursor starts at (0,0)
+    editor.dispatch({ type: "insertText", text: "XY" });
+    expect(getText(mb)).toBe("XYHello");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("undo reverses deleteBackward", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(mb)).toBe("Hell");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("undo reverses deleteForward", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+    expect(getText(mb)).toBe("ello");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("undo reverses deleteLine", () => {
+    const { mb, editor } = setup("Hello\nWorld");
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("World");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
+
+  test("undo reverses insertNewline", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertNewline" });
+    expect(getText(mb)).toBe("Hello\n");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("redo re-applies undone insertText", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "insertText", text: " World" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe("Hello World");
+  });
+
+  test("multiple undo steps restore successive states", () => {
+    const { mb, editor } = setup("A");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "insertText", text: "B" });
+    editor.dispatch({ type: "insertText", text: "C" });
+    expect(getText(mb)).toBe("ABC");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AB");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("A");
+  });
+
+  test("multiple redo steps re-apply successive states", () => {
+    const { mb, editor } = setup("A");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "insertText", text: "B" });
+    editor.dispatch({ type: "insertText", text: "C" });
+    editor.dispatch({ type: "undo" });
+    editor.dispatch({ type: "undo" });
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe("AB");
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe("ABC");
+  });
+
+  test("new edit clears redo stack", () => {
+    const { mb, editor } = setup("A");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "insertText", text: "B" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("A");
+    // Make a new edit — redo stack should be cleared
+    editor.dispatch({ type: "insertText", text: "C" });
+    editor.dispatch({ type: "redo" }); // should be a no-op
+    expect(getText(mb)).toBe("AC");
+  });
+
+  test("undo when stack is empty is a no-op", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("redo when stack is empty is a no-op", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe("Hello");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("undo does not affect pure cursor movements", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "insertText", text: "X" });
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+    // Cursor movements should not create history entries
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello"); // undoes insert, not cursor moves
+  });
+
+  test("undo after selection-replace restores selection-replaced text", () => {
+    const { mb, editor } = setup("Hello World");
+    // Select all then type to replace
+    editor.dispatch({ type: "selectAll" });
+    editor.dispatch({ type: "insertText", text: "Hi" });
+    expect(getText(mb)).toBe("Hi");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello World");
+  });
+});
