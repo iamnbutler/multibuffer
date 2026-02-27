@@ -15,6 +15,8 @@ import {
   excerptRange,
   expectPoint,
   mbPoint,
+  mbRow,
+  num,
   resetCounters,
 } from "../helpers.ts";
 
@@ -383,6 +385,105 @@ describe("Editor - Selection Extension", () => {
       if (start) expectPoint(start, 0, 0);
       if (end) expectPoint(end, 1, 5);
     }
+  });
+});
+
+// ─── Sequential Edits ───────────────────────────────────────────
+
+describe("Editor - Sequential Edits", () => {
+  test("type several characters in sequence", () => {
+    const { editor, mb } = setup("");
+    editor.dispatch({ type: "insertText", text: "H" });
+    editor.dispatch({ type: "insertText", text: "i" });
+    editor.dispatch({ type: "insertText", text: "!" });
+    expect(getText(mb)).toBe("Hi!");
+    expectPoint(editor.cursor, 0, 3);
+  });
+
+  test("type then delete", () => {
+    const { editor, mb } = setup("");
+    editor.dispatch({ type: "insertText", text: "Hello" });
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(mb)).toBe("Hell");
+    expectPoint(editor.cursor, 0, 4);
+  });
+
+  test("type newline then type on new line", () => {
+    const { editor, mb } = setup("");
+    editor.dispatch({ type: "insertText", text: "Line 1" });
+    editor.dispatch({ type: "insertNewline" });
+    editor.dispatch({ type: "insertText", text: "Line 2" });
+    expect(getText(mb)).toBe("Line 1\nLine 2");
+    expectPoint(editor.cursor, 1, 6);
+  });
+
+  test("delete backward across newline", () => {
+    const { editor, mb } = setup("Line 1\nLine 2");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(mb)).toBe("Line 1Line 2");
+    expectPoint(editor.cursor, 0, 6);
+  });
+
+  test("select all then type replaces everything", () => {
+    const { editor, mb } = setup("Old content");
+    editor.dispatch({ type: "selectAll" });
+    editor.dispatch({ type: "insertText", text: "New" });
+    expect(getText(mb)).toBe("New");
+    expectPoint(editor.cursor, 0, 3);
+  });
+
+  test("select all then delete clears buffer", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.dispatch({ type: "selectAll" });
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(mb)).toBe("");
+    expectPoint(editor.cursor, 0, 0);
+  });
+});
+
+// ─── Multi-excerpt Editing ──────────────────────────────────────
+
+describe("Editor - Multi-excerpt", () => {
+  /** Create a multibuffer with two excerpts from different buffers. */
+  function setupMulti() {
+    const buf1 = createBuffer(createBufferId(), "Alpha\nBravo");
+    const buf2 = createBuffer(createBufferId(), "Charlie\nDelta");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 2));
+    const editor = new Editor(mb);
+    return { mb, editor };
+  }
+
+  test("cursor movement across excerpt boundary", () => {
+    const { editor } = setupMulti();
+    // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline
+    // Excerpt 2: row 3 = "Charlie", row 4 = "Delta"
+    editor.setCursor(mbPoint(1, 5));
+    // Move down from "Bravo" (row 1) → trailing newline (row 2)
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    // Should be on row 2 (trailing newline)
+    expect(num(editor.cursor.row)).toBe(2);
+    // Move down again → "Charlie" (row 3)
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(3);
+  });
+
+  test("typing in first excerpt does not affect second", () => {
+    const { editor, mb } = setupMulti();
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertText", text: "!" });
+
+    const snap = mb.snapshot();
+    // First excerpt, first line
+    expect(snap.lines(mbRow(0), mbRow(1))).toEqual(["Alpha!"]);
+    // Second excerpt should still be intact — find it after the trailing newline
+    // The exact row may shift if trailing newline row shifted
+    const lastRow = snap.lineCount;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const lastLines = snap.lines((lastRow - 2) as import("../../src/multibuffer/types.ts").MultiBufferRow, lastRow as import("../../src/multibuffer/types.ts").MultiBufferRow);
+    expect(lastLines).toEqual(["Charlie", "Delta"]);
   });
 });
 
