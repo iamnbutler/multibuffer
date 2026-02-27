@@ -442,11 +442,42 @@ class MultiBufferImpl implements MultiBuffer {
   }
 
   expandExcerpt(
-    _excerptId: ExcerptId,
-    _linesBefore: number,
-    _linesAfter: number,
+    excerptId: ExcerptId,
+    linesBefore: number,
+    linesAfter: number,
   ): void {
-    // TODO: implement excerpt expansion
+    const oldExcerpt = this._excerpts.get(excerptId);
+    if (!oldExcerpt) return;
+
+    // Get the mutable buffer to create a fresh snapshot
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+    const buffer = this._buffers.get(oldExcerpt.bufferId as string);
+    const snapshot = buffer ? buffer.snapshot() : oldExcerpt.buffer;
+
+    // Compute new range, clamped to buffer bounds
+    const oldStart = oldExcerpt.range.context.start.row;
+    const oldEnd = oldExcerpt.range.context.end.row;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const newStart = Math.max(0, oldStart - linesBefore) as import("./types.ts").BufferRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const newEnd = Math.min(snapshot.lineCount, oldEnd + linesAfter) as import("./types.ts").BufferRow;
+
+    const newRange: ExcerptRange = {
+      context: {
+        start: { row: newStart, column: 0 },
+        end: { row: newEnd, column: 0 },
+      },
+      primary: oldExcerpt.range.primary,
+    };
+
+    const newExcerpt = createExcerpt(
+      excerptId,
+      snapshot,
+      newRange,
+      oldExcerpt.hasTrailingNewline,
+    );
+    this._excerpts.set(excerptId, newExcerpt);
+    this._rebuildCache();
   }
 
   createAnchor(

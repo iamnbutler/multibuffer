@@ -295,20 +295,50 @@ describe("Excerpt Range Merging", () => {
 
 
 describe("Excerpt Expansion", () => {
-  test.todo("expand adds context lines before", () => {
-    // expandExcerpt(id, 3, 0) adds 3 lines before
+  test("expand adds context lines before", () => {
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(5, 8)); // lines 5-7
+
+    expect(mb.lineCount).toBe(3);
+    mb.expandExcerpt(eid, 2, 0); // add 2 lines before
+    expect(mb.lineCount).toBe(5); // now lines 3-7
+    expect(mb.excerpts[0]?.range.context.start.row).toBe(row(3));
   });
 
-  test.todo("expand adds context lines after", () => {
-    // expandExcerpt(id, 0, 3) adds 3 lines after
+  test("expand adds context lines after", () => {
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(2, 5)); // lines 2-4
+
+    expect(mb.lineCount).toBe(3);
+    mb.expandExcerpt(eid, 0, 3); // add 3 lines after
+    expect(mb.lineCount).toBe(6); // now lines 2-7
+    expect(mb.excerpts[0]?.range.context.end.row).toBe(row(8));
   });
 
-  test.todo("expand is clamped to buffer bounds", () => {
-    // Cannot expand before line 0 or past last line
+  test("expand is clamped to buffer bounds", () => {
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(1, 4)); // lines 1-3
+
+    mb.expandExcerpt(eid, 100, 100); // way past bounds
+    // Should clamp to 0..5 (full buffer)
+    expect(mb.excerpts[0]?.range.context.start.row).toBe(row(0));
+    expect(mb.excerpts[0]?.range.context.end.row).toBe(row(5));
   });
 
-  test.todo("expand updates startRow for subsequent excerpts", () => {
-    // If excerpt A expands, excerpt B's startRow increases
+  test("expand updates startRow for subsequent excerpts", () => {
+    const buf1 = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9");
+    const buf2 = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+    const eid1 = mb.addExcerpt(buf1, excerptRange(3, 5), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+
+    const startRowBefore = num(mb.excerpts[1]?.startRow ?? mbRow(0));
+    mb.expandExcerpt(eid1, 2, 0); // add 2 lines before first excerpt
+    const startRowAfter = num(mb.excerpts[1]?.startRow ?? mbRow(0));
+    expect(startRowAfter).toBe(startRowBefore + 2);
   });
 });
 
