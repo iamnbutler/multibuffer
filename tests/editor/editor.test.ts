@@ -14,6 +14,7 @@ import {
   createBufferId,
   excerptRange,
   expectPoint,
+  generateText,
   mbPoint,
   mbRow,
   num,
@@ -597,6 +598,40 @@ describe("Editor - Selection Extension", () => {
     expectPoint(editor.cursor, 0, 5);
   });
 
+  test("extend selection down by page", () => {
+    const { editor, mb } = setup(generateText(50));
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "page" });
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    // page size is 30 rows
+    if (end) expect(num(end.row)).toBe(30);
+  });
+
+  test("extend selection up by page", () => {
+    const { editor, mb } = setup(generateText(50));
+    editor.setCursor(mbPoint(40, 0));
+    editor.dispatch({ type: "extendSelection", direction: "up", granularity: "page" });
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    // head moves from row 40 to row 10 (40 - 30 page), which is before anchor at 40
+    if (start) expect(num(start.row)).toBe(10);
+    if (end) expectPoint(end, 40, 0);
+  });
+
   test("select all", () => {
     const { editor, mb } = setup("Hello\nWorld");
     editor.dispatch({ type: "selectAll" });
@@ -946,6 +981,16 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "moveCursor", direction: "right", granularity: "line" });
   });
 
+  test("Shift+Home → extendSelection left line", () => {
+    const cmd = keyEventToCommand(key("Home", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "left", granularity: "line" });
+  });
+
+  test("Shift+End → extendSelection right line", () => {
+    const cmd = keyEventToCommand(key("End", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "right", granularity: "line" });
+  });
+
   test("PageUp → moveCursor up page", () => {
     const cmd = keyEventToCommand(key("PageUp"));
     expect(cmd).toEqual({ type: "moveCursor", direction: "up", granularity: "page" });
@@ -954,6 +999,16 @@ describe("keyEventToCommand", () => {
   test("PageDown → moveCursor down page", () => {
     const cmd = keyEventToCommand(key("PageDown"));
     expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "page" });
+  });
+
+  test("Shift+PageUp → extendSelection up page", () => {
+    const cmd = keyEventToCommand(key("PageUp", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "up", granularity: "page" });
+  });
+
+  test("Shift+PageDown → extendSelection down page", () => {
+    const cmd = keyEventToCommand(key("PageDown", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "down", granularity: "page" });
   });
 });
 
