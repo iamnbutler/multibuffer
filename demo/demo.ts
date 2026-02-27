@@ -157,6 +157,13 @@ async function main() {
   });
   inputHandler.mount(container);
 
+  // Wire focus state to cursor blink animation
+  const textarea = container.querySelector("textarea");
+  if (textarea) {
+    textarea.addEventListener("focus", () => renderer.setFocused(true));
+    textarea.addEventListener("blur", () => renderer.setFocused(false));
+  }
+
   // Focus the input handler on container click
   container.addEventListener("mousedown", () => {
     inputHandler.focus();

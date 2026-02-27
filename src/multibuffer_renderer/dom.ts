@@ -45,6 +45,7 @@ export class DomRenderer implements Renderer {
   private _linesContainer: HTMLDivElement | null = null;
   private _cursorEl: HTMLDivElement | null = null;
   private _selectionLayer: HTMLDivElement | null = null;
+  private _blinkStyle: HTMLStyleElement | null = null;
   private _measurements: Measurements;
   private _rowPool: RowElement[] = [];
   private _viewport: Viewport;
@@ -56,6 +57,7 @@ export class DomRenderer implements Renderer {
   private _onMouseMove: ((e: MouseEvent) => void) | null = null;
   private _onMouseUp: ((e: MouseEvent) => void) | null = null;
   private _isDragging = false;
+  private _focused = false;
   private _onClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
@@ -76,6 +78,13 @@ export class DomRenderer implements Renderer {
 
   mount(container: HTMLElement): void {
     this._container = container;
+
+    // Inject blink animation keyframes (once per document)
+    const blinkStyle = document.createElement("style");
+    blinkStyle.textContent =
+      "@keyframes cursor-blink { from { opacity: 1; } to { opacity: 0; } }";
+    document.head.appendChild(blinkStyle);
+    this._blinkStyle = blinkStyle;
 
     const scrollContainer = document.createElement("div");
     scrollContainer.style.cssText =
@@ -127,12 +136,16 @@ export class DomRenderer implements Renderer {
     if (this._container && this._scrollContainer) {
       this._container.removeChild(this._scrollContainer);
     }
+    if (this._blinkStyle?.parentNode) {
+      this._blinkStyle.parentNode.removeChild(this._blinkStyle);
+    }
     this._container = null;
     this._scrollContainer = null;
     this._spacer = null;
     this._linesContainer = null;
     this._cursorEl = null;
     this._selectionLayer = null;
+    this._blinkStyle = null;
     this._rowPool = [];
     this._snapshot = null;
     this._wrapMap = null;
@@ -505,6 +518,18 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
+    this._cursorEl.style.animation = this._focused
+      ? "cursor-blink 600ms steps(1, end) infinite alternate"
+      : "none";
+  }
+
+  /** Update focus state — call when the editor gains or loses keyboard focus. */
+  setFocused(focused: boolean): void {
+    this._focused = focused;
+    if (!this._cursorEl || this._cursorEl.style.display === "none") return;
+    this._cursorEl.style.animation = focused
+      ? "cursor-blink 600ms steps(1, end) infinite alternate"
+      : "none";
   }
 
   /** Render selection highlight between two multibuffer points. */
