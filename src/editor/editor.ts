@@ -64,8 +64,10 @@ export class Editor {
 
   /** Set cursor to a specific point (e.g. from mouse click). */
   setCursor(point: MultiBufferPoint): void {
-    this._cursor = point;
-    this._selection = selectionAtPoint(this.multiBuffer, point);
+    const snap = this.multiBuffer.snapshot();
+    const clipped = snap.clipPoint(point, Bias.Left);
+    this._cursor = clipped;
+    this._selection = selectionAtPoint(this.multiBuffer, clipped);
     this._onChange?.();
   }
 
