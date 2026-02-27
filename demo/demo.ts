@@ -29,12 +29,18 @@ function main() {
     const buf = createBuffer(src.path as BufferId, src.content);
     const lineCount = src.content.split("\n").length;
 
-    // Show a 15-line excerpt from the middle of each file
-    const excerptSize = Math.min(15, lineCount);
-    const start = Math.max(0, Math.floor((lineCount - excerptSize) / 2));
-    const end = Math.min(start + excerptSize, lineCount);
-
-    mb.addExcerpt(buf, range(start, end), { hasTrailingNewline: true });
+    if (src.path.includes("single-line")) {
+      // Single-line file: show the whole thing
+      mb.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+    } else if (src.path.includes("large-file")) {
+      // Large file: show two separate excerpts (functions + data)
+      mb.addExcerpt(buf, range(10, 28), { hasTrailingNewline: true });
+      mb.addExcerpt(buf, range(80, 105), { hasTrailingNewline: true });
+    } else {
+      // Default: show up to 20 lines from the top
+      const end = Math.min(20, lineCount);
+      mb.addExcerpt(buf, range(0, end), { hasTrailingNewline: true });
+    }
   }
 
   const measurements: Measurements = {

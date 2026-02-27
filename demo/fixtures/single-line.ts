@@ -1,0 +1,1 @@
+export const ONLY_LINE = "This entire file is a single line with no newline at the end";
