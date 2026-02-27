@@ -7,17 +7,21 @@ import type { MultiBufferRow } from "../multibuffer/types.ts";
 import type { Measurements, Viewport } from "./types.ts";
 
 /** Calculate the visible row range from a scroll position. */
+/** Number of extra rows to render above and below the viewport. */
+const OVERDRAW = 10;
+
 export function calculateVisibleRows(
   scrollTop: number,
   viewportHeight: number,
   lineHeight: number,
   totalLines: number,
 ): { startRow: MultiBufferRow; endRow: MultiBufferRow } {
-  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-  const startRow = Math.max(0, Math.floor(scrollTop / lineHeight)) as MultiBufferRow;
+  const visibleStart = Math.floor(scrollTop / lineHeight);
   const visibleLines = Math.ceil(viewportHeight / lineHeight) + 1;
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-  const endRow = Math.min(startRow + visibleLines, totalLines) as MultiBufferRow;
+  const startRow = Math.max(0, visibleStart - OVERDRAW) as MultiBufferRow;
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+  const endRow = Math.min(visibleStart + visibleLines + OVERDRAW, totalLines) as MultiBufferRow;
   return { startRow, endRow };
 }
 
