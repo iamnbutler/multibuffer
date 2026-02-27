@@ -287,6 +287,22 @@ describe("Editor - Delete Backward", () => {
     expect(getText(mb)).toBe(" World");
     expectPoint(editor.cursor, 0, 0);
   });
+
+  test("Cmd+Backspace deletes to line start", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 7));
+    editor.dispatch({ type: "deleteBackward", granularity: "line" });
+    expect(getText(mb)).toBe("orld");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("Opt+Backspace deletes word backward", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 11));
+    editor.dispatch({ type: "deleteBackward", granularity: "word" });
+    expect(getText(mb)).toBe("Hello ");
+    expectPoint(editor.cursor, 0, 6);
+  });
 });
 
 describe("Editor - Delete Forward", () => {
@@ -488,12 +504,14 @@ describe("Editor - Multi-excerpt", () => {
 });
 
 // ─── keyEventToCommand ──────────────────────────────────────────
+//
+// All tests use macOS conventions (Cmd=meta, Opt=alt).
+// In Bun on macOS, navigator.platform = "MacIntel" so isMac=true
+// and the platform modifier = metaKey.
 
 describe("keyEventToCommand", () => {
-  // Import inline to avoid issues with navigator not being defined in some envs
   let keyEventToCommand: typeof import("../../src/editor/input-handler.ts").keyEventToCommand;
 
-  // Use a lazy import since the module checks navigator at import time
   beforeEach(async () => {
     const mod = await import("../../src/editor/input-handler.ts");
     keyEventToCommand = mod.keyEventToCommand;
@@ -502,7 +520,7 @@ describe("keyEventToCommand", () => {
   /** Create a minimal KeyboardEvent-like object for testing. */
   function key(
     keyName: string,
-    opts: { meta?: boolean; ctrl?: boolean; shift?: boolean } = {},
+    opts: { meta?: boolean; ctrl?: boolean; shift?: boolean; alt?: boolean } = {},
   ) {
     // biome-ignore lint/plugin/no-type-assertion: expect: minimal KeyboardEvent stub for unit test
     return {
@@ -510,8 +528,14 @@ describe("keyEventToCommand", () => {
       metaKey: opts.meta ?? false,
       ctrlKey: opts.ctrl ?? false,
       shiftKey: opts.shift ?? false,
+      altKey: opts.alt ?? false,
     } as unknown as KeyboardEvent;
   }
+
+  // On macOS (Bun), isMac=true, so platform mod = metaKey.
+  // We use meta: true for Cmd (platform mod) tests.
+
+  // ── Basic arrow movement ──────────────────────────────────────
 
   test("ArrowRight → moveCursor right character", () => {
     const cmd = keyEventToCommand(key("ArrowRight"));
@@ -533,25 +557,124 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "moveCursor", direction: "up", granularity: "character" });
   });
 
-  test("Shift+ArrowRight → extendSelection right", () => {
+  // ── Cmd+Arrow = line/buffer (platform mod) ────────────────────
+
+  test("Cmd+Left → moveCursor left line (line start)", () => {
+    const cmd = keyEventToCommand(key("ArrowLeft", { meta: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "left", granularity: "line" });
+  });
+
+  test("Cmd+Right → moveCursor right line (line end)", () => {
+    const cmd = keyEventToCommand(key("ArrowRight", { meta: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "right", granularity: "line" });
+  });
+
+  test("Cmd+Up → moveCursor up buffer (buffer start)", () => {
+    const cmd = keyEventToCommand(key("ArrowUp", { meta: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "up", granularity: "buffer" });
+  });
+
+  test("Cmd+Down → moveCursor down buffer (buffer end)", () => {
+    const cmd = keyEventToCommand(key("ArrowDown", { meta: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "buffer" });
+  });
+
+  // ── Opt+Arrow = word (altKey) ─────────────────────────────────
+
+  test("Opt+Left → moveCursor left word", () => {
+    const cmd = keyEventToCommand(key("ArrowLeft", { alt: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "left", granularity: "word" });
+  });
+
+  test("Opt+Right → moveCursor right word", () => {
+    const cmd = keyEventToCommand(key("ArrowRight", { alt: true }));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "right", granularity: "word" });
+  });
+
+  // ── Shift+Arrow = extend selection ────────────────────────────
+
+  test("Shift+Right → extendSelection right character", () => {
     const cmd = keyEventToCommand(key("ArrowRight", { shift: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "right", granularity: "character" });
   });
 
-  test("Shift+ArrowLeft → extendSelection left", () => {
+  test("Shift+Left → extendSelection left character", () => {
     const cmd = keyEventToCommand(key("ArrowLeft", { shift: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "left", granularity: "character" });
   });
+
+  test("Shift+Down → extendSelection down character", () => {
+    const cmd = keyEventToCommand(key("ArrowDown", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "down", granularity: "character" });
+  });
+
+  test("Shift+Up → extendSelection up character", () => {
+    const cmd = keyEventToCommand(key("ArrowUp", { shift: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "up", granularity: "character" });
+  });
+
+  // ── Shift+Cmd+Arrow = extend to line/buffer ───────────────────
+
+  test("Shift+Cmd+Left → extendSelection left line", () => {
+    const cmd = keyEventToCommand(key("ArrowLeft", { shift: true, meta: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "left", granularity: "line" });
+  });
+
+  test("Shift+Cmd+Right → extendSelection right line", () => {
+    const cmd = keyEventToCommand(key("ArrowRight", { shift: true, meta: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "right", granularity: "line" });
+  });
+
+  test("Shift+Cmd+Up → extendSelection up buffer", () => {
+    const cmd = keyEventToCommand(key("ArrowUp", { shift: true, meta: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "up", granularity: "buffer" });
+  });
+
+  test("Shift+Cmd+Down → extendSelection down buffer", () => {
+    const cmd = keyEventToCommand(key("ArrowDown", { shift: true, meta: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "down", granularity: "buffer" });
+  });
+
+  // ── Shift+Opt+Arrow = extend by word ──────────────────────────
+
+  test("Shift+Opt+Left → extendSelection left word", () => {
+    const cmd = keyEventToCommand(key("ArrowLeft", { shift: true, alt: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "left", granularity: "word" });
+  });
+
+  test("Shift+Opt+Right → extendSelection right word", () => {
+    const cmd = keyEventToCommand(key("ArrowRight", { shift: true, alt: true }));
+    expect(cmd).toEqual({ type: "extendSelection", direction: "right", granularity: "word" });
+  });
+
+  // ── Deletion ──────────────────────────────────────────────────
 
   test("Backspace → deleteBackward character", () => {
     const cmd = keyEventToCommand(key("Backspace"));
     expect(cmd).toEqual({ type: "deleteBackward", granularity: "character" });
   });
 
+  test("Opt+Backspace → deleteBackward word", () => {
+    const cmd = keyEventToCommand(key("Backspace", { alt: true }));
+    expect(cmd).toEqual({ type: "deleteBackward", granularity: "word" });
+  });
+
+  test("Cmd+Backspace → deleteBackward line", () => {
+    const cmd = keyEventToCommand(key("Backspace", { meta: true }));
+    expect(cmd).toEqual({ type: "deleteBackward", granularity: "line" });
+  });
+
   test("Delete → deleteForward character", () => {
     const cmd = keyEventToCommand(key("Delete"));
     expect(cmd).toEqual({ type: "deleteForward", granularity: "character" });
   });
+
+  test("Opt+Delete → deleteForward word", () => {
+    const cmd = keyEventToCommand(key("Delete", { alt: true }));
+    expect(cmd).toEqual({ type: "deleteForward", granularity: "word" });
+  });
+
+  // ── Text input ────────────────────────────────────────────────
 
   test("Enter → insertNewline", () => {
     const cmd = keyEventToCommand(key("Enter"));
@@ -568,6 +691,35 @@ describe("keyEventToCommand", () => {
     expect(cmd).toBeUndefined();
   });
 
+  // ── Shortcuts ─────────────────────────────────────────────────
+
+  test("Cmd+A → selectAll", () => {
+    const cmd = keyEventToCommand(key("a", { meta: true }));
+    expect(cmd).toEqual({ type: "selectAll" });
+  });
+
+  test("Cmd+Z → undo", () => {
+    const cmd = keyEventToCommand(key("z", { meta: true }));
+    expect(cmd).toEqual({ type: "undo" });
+  });
+
+  test("Cmd+Shift+Z → redo", () => {
+    const cmd = keyEventToCommand(key("z", { meta: true, shift: true }));
+    expect(cmd).toEqual({ type: "redo" });
+  });
+
+  test("Cmd+C → copy", () => {
+    const cmd = keyEventToCommand(key("c", { meta: true }));
+    expect(cmd).toEqual({ type: "copy" });
+  });
+
+  test("Cmd+X → cut", () => {
+    const cmd = keyEventToCommand(key("x", { meta: true }));
+    expect(cmd).toEqual({ type: "cut" });
+  });
+
+  // ── Home/End ──────────────────────────────────────────────────
+
   test("Home → moveCursor left line", () => {
     const cmd = keyEventToCommand(key("Home"));
     expect(cmd).toEqual({ type: "moveCursor", direction: "left", granularity: "line" });
@@ -576,5 +728,15 @@ describe("keyEventToCommand", () => {
   test("End → moveCursor right line", () => {
     const cmd = keyEventToCommand(key("End"));
     expect(cmd).toEqual({ type: "moveCursor", direction: "right", granularity: "line" });
+  });
+
+  test("PageUp → moveCursor up page", () => {
+    const cmd = keyEventToCommand(key("PageUp"));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "up", granularity: "page" });
+  });
+
+  test("PageDown → moveCursor down page", () => {
+    const cmd = keyEventToCommand(key("PageDown"));
+    expect(cmd).toEqual({ type: "moveCursor", direction: "down", granularity: "page" });
   });
 });

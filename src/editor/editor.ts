@@ -152,8 +152,7 @@ export class Editor {
 
     // Delete backward from cursor
     const cursor = this.cursor;
-    const deleteGranularity = granularity === "word" ? "word" : "character" as const;
-    const target = moveCursor(snap, cursor, "left", deleteGranularity);
+    const target = moveCursor(snap, cursor, "left", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
       this.multiBuffer.edit(target, cursor, "");
       this._cursor = target;
@@ -173,8 +172,7 @@ export class Editor {
     }
 
     const cursor = this.cursor;
-    const fwdGranularity = granularity === "word" ? "word" : "character" as const;
-    const target = moveCursor(snap, cursor, "right", fwdGranularity);
+    const target = moveCursor(snap, cursor, "right", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
       this.multiBuffer.edit(cursor, target, "");
       // Cursor stays in place

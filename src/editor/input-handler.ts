@@ -109,80 +109,54 @@ const isMac =
  */
 export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
   const mod = isMac ? e.metaKey : e.ctrlKey;
+  const alt = e.altKey;
   const shift = e.shiftKey;
 
   // Don't intercept if both Ctrl and Meta are pressed (system shortcuts)
   if (e.ctrlKey && e.metaKey) return undefined;
 
   switch (e.key) {
-    // Navigation
-    case "ArrowLeft":
-      if (shift) {
-        return {
-          type: "extendSelection",
-          direction: "left",
-          granularity: mod ? "word" : "character",
-        };
-      }
-      return {
-        type: "moveCursor",
-        direction: "left",
-        granularity: mod ? "word" : "character",
-      };
+    // ── Navigation ──────────────────────────────────────────────
+    //
+    // Granularity priority: mod (Cmd/Ctrl) > alt (Opt) > character
+    //   Horizontal: mod=line, alt=word, none=character
+    //   Vertical:   mod=buffer, none=character
 
-    case "ArrowRight":
-      if (shift) {
-        return {
-          type: "extendSelection",
-          direction: "right",
-          granularity: mod ? "word" : "character",
-        };
-      }
-      return {
-        type: "moveCursor",
-        direction: "right",
-        granularity: mod ? "word" : "character",
-      };
+    case "ArrowLeft": {
+      const granularity = mod ? "line" : alt ? "word" : "character";
+      if (shift) return { type: "extendSelection", direction: "left", granularity };
+      return { type: "moveCursor", direction: "left", granularity };
+    }
 
-    case "ArrowUp":
-      if (shift) {
-        return { type: "extendSelection", direction: "up", granularity: "character" };
-      }
-      return { type: "moveCursor", direction: "up", granularity: "character" };
+    case "ArrowRight": {
+      const granularity = mod ? "line" : alt ? "word" : "character";
+      if (shift) return { type: "extendSelection", direction: "right", granularity };
+      return { type: "moveCursor", direction: "right", granularity };
+    }
 
-    case "ArrowDown":
-      if (shift) {
-        return { type: "extendSelection", direction: "down", granularity: "character" };
-      }
-      return { type: "moveCursor", direction: "down", granularity: "character" };
+    case "ArrowUp": {
+      const granularity = mod ? "buffer" : "character";
+      if (shift) return { type: "extendSelection", direction: "up", granularity };
+      return { type: "moveCursor", direction: "up", granularity };
+    }
+
+    case "ArrowDown": {
+      const granularity = mod ? "buffer" : "character";
+      if (shift) return { type: "extendSelection", direction: "down", granularity };
+      return { type: "moveCursor", direction: "down", granularity };
+    }
 
     case "Home":
       if (shift) {
-        return {
-          type: "extendSelection",
-          direction: "left",
-          granularity: mod ? "buffer" : "line",
-        };
+        return { type: "extendSelection", direction: "left", granularity: mod ? "buffer" : "line" };
       }
-      return {
-        type: "moveCursor",
-        direction: "left",
-        granularity: mod ? "buffer" : "line",
-      };
+      return { type: "moveCursor", direction: "left", granularity: mod ? "buffer" : "line" };
 
     case "End":
       if (shift) {
-        return {
-          type: "extendSelection",
-          direction: "right",
-          granularity: mod ? "buffer" : "line",
-        };
+        return { type: "extendSelection", direction: "right", granularity: mod ? "buffer" : "line" };
       }
-      return {
-        type: "moveCursor",
-        direction: "right",
-        granularity: mod ? "buffer" : "line",
-      };
+      return { type: "moveCursor", direction: "right", granularity: mod ? "buffer" : "line" };
 
     case "PageUp":
       return { type: "moveCursor", direction: "up", granularity: "page" };
@@ -190,12 +164,19 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
     case "PageDown":
       return { type: "moveCursor", direction: "down", granularity: "page" };
 
-    // Editing
-    case "Backspace":
-      return { type: "deleteBackward", granularity: mod ? "word" : "character" };
+    // ── Editing ─────────────────────────────────────────────────
+    //
+    // Granularity: mod=line, alt=word, none=character
 
-    case "Delete":
-      return { type: "deleteForward", granularity: mod ? "word" : "character" };
+    case "Backspace": {
+      const granularity = mod ? "line" : alt ? "word" : "character";
+      return { type: "deleteBackward", granularity };
+    }
+
+    case "Delete": {
+      const granularity = alt ? "word" : "character";
+      return { type: "deleteForward", granularity };
+    }
 
     case "Enter":
       return { type: "insertNewline" };
@@ -203,10 +184,11 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
     case "Tab":
       return { type: "insertTab" };
 
-    // Shortcuts
+    // ── Shortcuts ───────────────────────────────────────────────
+
     case "a":
       if (mod) return { type: "selectAll" };
-      return undefined; // let input event handle it
+      return undefined;
 
     case "z":
       if (mod && shift) return { type: "redo" };
