@@ -250,7 +250,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     return initialExcerpt;
   }
 
-  clipPoint(point: MultiBufferPoint, _bias: Bias): MultiBufferPoint {
+  clipPoint(point: MultiBufferPoint, bias: Bias): MultiBufferPoint {
     if (this.lineCount === 0) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       return { row: 0 as MultiBufferRow, column: 0 };
@@ -297,10 +297,12 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
 
     const offsetInExcerpt = point.row - info.startRow;
     const bufferRow = info.range.context.start.row + offsetInExcerpt;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    const lineLen = data.buffer.line(bufferRow as import("./types.ts").BufferRow).length;
-    const col = Math.max(0, Math.min(point.column, lineLen));
-    return { row: point.row, column: col };
+    const bufferPoint = data.buffer.clipPoint(
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      { row: bufferRow as import("./types.ts").BufferRow, column: point.column },
+      bias,
+    );
+    return { row: point.row, column: bufferPoint.column };
   }
 
   excerptBoundaries(

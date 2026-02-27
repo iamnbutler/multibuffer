@@ -379,20 +379,50 @@ describe("MultiBuffer - Clipping", () => {
     expectPoint(clipped, 1, 5);
   });
 
-  test.todo("clipPoint respects Bias.Left at boundaries", () => {
-    // GOTCHA: Must preserve bias semantics through the 3-layer conversion
+  test("clipPoint respects Bias.Left — clips column to line length", () => {
+    const buf = createBuffer(createBufferId(), "short\nmedium len\nhi");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Column 100 on a 5-char line → clip to 5 (end of "short")
+    const snap = mb.snapshot();
+    const clipped = snap.clipPoint(mbPoint(0, 100), Bias.Left);
+    expectPoint(clipped, 0, 5);
   });
 
-  test.todo("clipPoint respects Bias.Right at boundaries", () => {
-    // At excerpt boundary, Bias.Right should prefer next excerpt
+  test("clipPoint respects Bias.Right — clips column to line length", () => {
+    const buf = createBuffer(createBufferId(), "short\nmedium len\nhi");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    const snap = mb.snapshot();
+    const clipped = snap.clipPoint(mbPoint(0, 100), Bias.Right);
+    expectPoint(clipped, 0, 5);
   });
 
-  test.todo("clipPoint at excerpt boundary with Bias.Left", () => {
-    // At row 10 (start of excerpt B), Bias.Left -> end of excerpt A
+  test("clipPoint at excerpt boundary trailing newline", () => {
+    const buf1 = createBuffer(createBufferId(), "AAA\nBBB");
+    const buf2 = createBuffer(createBufferId(), "CCC\nDDD");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 2));
+
+    // Row 2 is trailing newline of excerpt 1 (endRow=3, startRow=0).
+    // It maps past the buffer's content, so clipPoint clamps to last buffer line.
+    const snap = mb.snapshot();
+    const clipped = snap.clipPoint(mbPoint(2, 5), Bias.Left);
+    expectPoint(clipped, 2, 3); // clipped to "BBB" length
   });
 
-  test.todo("clipPoint at excerpt boundary with Bias.Right", () => {
-    // At row 10 (start of excerpt B), Bias.Right -> start of excerpt B
+  test("clipPoint past end clamps to last line", () => {
+    const buf = createBuffer(createBufferId(), "Hello\nWorld");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+
+    const snap = mb.snapshot();
+    const clipped = snap.clipPoint(mbPoint(99, 50), Bias.Right);
+    // Last row is 1 ("World", 5 chars)
+    expectPoint(clipped, 1, 5);
   });
 });
 
