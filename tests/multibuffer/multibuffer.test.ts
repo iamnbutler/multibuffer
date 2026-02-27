@@ -11,13 +11,23 @@
  * - Snapshot pattern for immutable concurrent reads
  */
 
-import { beforeEach, describe, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/multibuffer/buffer.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import {
+  Bias,
+  benchmark,
+  createBufferId,
+  excerptRange,
+  expectPoint,
+  generateText,
+  mbPoint,
+  mbRow,
+  num,
+  point,
   resetCounters,
+  time,
 } from "../helpers.ts";
-
-// TODO: Import actual implementation once created
-// import { createMultiBuffer, createBuffer } from "../../src/multibuffer/index.ts";
 
 beforeEach(() => {
   resetCounters();
@@ -28,33 +38,48 @@ beforeEach(() => {
 // =============================================================================
 
 describe("MultiBuffer Creation", () => {
-  test.todo("creates empty multibuffer", () => {
-    // const mb = createMultiBuffer();
-    // expect(mb.lineCount).toBe(0);
-    // expect(mb.excerpts).toEqual([]);
-    // expect(mb.isSingleton).toBe(false); // No excerpts, not singleton
+  test("creates empty multibuffer", () => {
+    const mb = createMultiBuffer();
+    expect(mb.lineCount).toBe(0);
+    expect(mb.excerpts).toEqual([]);
+    expect(mb.isSingleton).toBe(false);
   });
 
-  test.todo("creates multibuffer with single excerpt", () => {
-    // const mb = createMultiBuffer();
-    // const buffer = createBuffer(createBufferId(), generateText(10));
-    // mb.addExcerpt(buffer, excerptRange(0, 10));
-    // expect(mb.lineCount).toBe(10);
-    // expect(mb.excerpts.length).toBe(1);
-    // expect(mb.isSingleton).toBe(true); // Single buffer, single excerpt
+  test("creates multibuffer with single excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    expect(mb.lineCount).toBe(10);
+    expect(mb.excerpts.length).toBe(1);
+    expect(mb.isSingleton).toBe(true);
   });
 
-  test.todo("singleton flag is true for single buffer single excerpt", () => {
-    // GOTCHA: This optimization must be maintained correctly
-    // or ALL position lookups fail
+  test("singleton flag is true for single buffer single excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buffer, excerptRange(0, 5));
+    expect(mb.isSingleton).toBe(true);
   });
 
-  test.todo("singleton flag becomes false with multiple excerpts", () => {
-    // Add second excerpt from same buffer -> no longer singleton
+  test("singleton flag becomes false with multiple excerpts", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(20));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    expect(mb.isSingleton).toBe(true);
+
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    expect(mb.isSingleton).toBe(false);
   });
 
-  test.todo("singleton flag becomes false with multiple buffers", () => {
-    // Add excerpt from different buffer -> no longer singleton
+  test("singleton flag becomes false with multiple buffers", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf1, excerptRange(0, 5));
+    expect(mb.isSingleton).toBe(true);
+
+    mb.addExcerpt(buf2, excerptRange(0, 5));
+    expect(mb.isSingleton).toBe(false);
   });
 });
 
@@ -63,45 +88,79 @@ describe("MultiBuffer Creation", () => {
 // =============================================================================
 
 describe("MultiBuffer - Multiple Excerpts", () => {
-  test.todo("line count is sum of excerpt line counts", () => {
-    // Excerpt 1: 10 lines
-    // Excerpt 2: 20 lines
-    // Excerpt 3: 15 lines
-    // Total: 45 lines
+  test("line count is sum of excerpt line counts", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(100));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    mb.addExcerpt(buffer, excerptRange(20, 40));
+    mb.addExcerpt(buffer, excerptRange(50, 65));
+    expect(mb.lineCount).toBe(10 + 20 + 15);
   });
 
-  test.todo("excerpts are ordered by addition order", () => {
-    // Add excerpt A, B, C
-    // excerpts should be [A, B, C]
+  test("excerpts are ordered by addition order", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buffer, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buffer, excerptRange(20, 30));
+
+    expect(mb.excerpts.length).toBe(3);
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idB);
+    expect(mb.excerpts[2]?.id).toEqual(idC);
   });
 
-  test.todo("removing excerpt updates line count", () => {
-    // Add 3 excerpts totaling 45 lines
-    // Remove middle excerpt (20 lines)
-    // Total should be 25 lines
+  test("removing excerpt updates line count", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(50));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 30));
+    mb.addExcerpt(buffer, excerptRange(30, 45));
+    expect(mb.lineCount).toBe(10 + 20 + 15);
+
+    mb.removeExcerpt(idB);
+    expect(mb.lineCount).toBe(10 + 15);
   });
 
-  test.todo("removing excerpt updates subsequent excerpt start rows", () => {
-    // CRITICAL: This is a common source of bugs
-    // Excerpt A: rows 0-9
-    // Excerpt B: rows 10-29
-    // Excerpt C: rows 30-44
-    // Remove B
-    // Excerpt C should now be rows 10-24 (shifted up by 20)
+  test("removing excerpt updates subsequent excerpt start rows", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(50));
+    mb.addExcerpt(buffer, excerptRange(0, 10)); // rows 0-9
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 30)); // rows 10-29
+    mb.addExcerpt(buffer, excerptRange(30, 45)); // rows 30-44
+
+    mb.removeExcerpt(idB);
+
+    // Excerpt C should now start at row 10 (was 30)
+    expect(mb.excerpts.length).toBe(2);
+    expect(num(mb.excerpts[1]?.startRow ?? mbRow(0))).toBe(10);
+    expect(num(mb.excerpts[1]?.endRow ?? mbRow(0))).toBe(25);
   });
 
-  test.todo("removing first excerpt shifts all rows", () => {
-    // Excerpt A: rows 0-9
-    // Excerpt B: rows 10-29
-    // Remove A
-    // Excerpt B should now be rows 0-19
+  test("removing first excerpt shifts all rows", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buffer, excerptRange(0, 10));
+    mb.addExcerpt(buffer, excerptRange(10, 30));
+
+    mb.removeExcerpt(idA);
+
+    expect(mb.excerpts.length).toBe(1);
+    expect(num(mb.excerpts[0]?.startRow ?? mbRow(-1))).toBe(0);
+    expect(num(mb.excerpts[0]?.endRow ?? mbRow(-1))).toBe(20);
   });
 
-  test.todo("removing last excerpt doesn't affect others", () => {
-    // Excerpt A: rows 0-9
-    // Excerpt B: rows 10-29
-    // Remove B
-    // Excerpt A unchanged: rows 0-9
+  test("removing last excerpt doesn't affect others", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 30));
+
+    mb.removeExcerpt(idB);
+
+    expect(mb.excerpts.length).toBe(1);
+    expect(num(mb.excerpts[0]?.startRow ?? mbRow(-1))).toBe(0);
+    expect(num(mb.excerpts[0]?.endRow ?? mbRow(-1))).toBe(10);
   });
 });
 
@@ -110,34 +169,64 @@ describe("MultiBuffer - Multiple Excerpts", () => {
 // =============================================================================
 
 describe("MultiBuffer - Row Navigation", () => {
-  test.todo("excerptAt returns correct excerpt for row", () => {
-    // Excerpt A: rows 0-9
-    // Excerpt B: rows 10-29
-    // excerptAt(5) -> A
-    // excerptAt(15) -> B
+  test("excerptAt returns correct excerpt for row", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buffer, excerptRange(0, 10)); // rows 0-9
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 30)); // rows 10-29
+
+    const snap = mb.snapshot();
+    const atRow5 = snap.excerptAt(mbRow(5));
+    const atRow15 = snap.excerptAt(mbRow(15));
+
+    expect(atRow5?.id).toEqual(idA);
+    expect(atRow15?.id).toEqual(idB);
   });
 
-  test.todo("excerptAt returns correct excerpt at boundaries", () => {
-    // Excerpt A: rows 0-9
-    // Excerpt B: rows 10-29
-    // excerptAt(0) -> A (first row)
-    // excerptAt(9) -> A (last row of A)
-    // excerptAt(10) -> B (first row of B)
+  test("excerptAt returns correct excerpt at boundaries", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buffer, excerptRange(0, 10)); // rows 0-9
+    const idB = mb.addExcerpt(buffer, excerptRange(10, 30)); // rows 10-29
+
+    const snap = mb.snapshot();
+    expect(snap.excerptAt(mbRow(0))?.id).toEqual(idA);
+    expect(snap.excerptAt(mbRow(9))?.id).toEqual(idA);
+    expect(snap.excerptAt(mbRow(10))?.id).toEqual(idB);
   });
 
-  test.todo("excerptAt returns undefined for out of bounds", () => {
-    // Total 30 rows
-    // excerptAt(30) -> undefined (exclusive end)
-    // excerptAt(31) -> undefined
+  test("excerptAt returns undefined for out of bounds", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+
+    const snap = mb.snapshot();
+    expect(snap.excerptAt(mbRow(10))).toBeUndefined();
+    expect(snap.excerptAt(mbRow(11))).toBeUndefined();
   });
 
-  test.todo("excerptAt returns undefined for negative row", () => {
-    // excerptAt(-1) -> undefined
+  test("excerptAt returns undefined for negative row", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+
+    const snap = mb.snapshot();
+    expect(snap.excerptAt(mbRow(-1))).toBeUndefined();
   });
 
-  test.todo("excerptAt uses binary search (O(log n))", () => {
-    // With 1000 excerpts, lookup should be ~10 comparisons
-    // Not 500 (linear average)
+  test("excerptAt uses binary search (O(log n))", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    for (let i = 0; i < 1000; i++) {
+      mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
+    }
+    const snap = mb.snapshot();
+
+    const early = benchmark(() => snap.excerptAt(mbRow(50)), 1000);
+    const late = benchmark(() => snap.excerptAt(mbRow(9950)), 1000);
+
+    // Binary search: late lookup should be within 3x of early
+    expect(late.avgMs).toBeLessThan(early.avgMs * 3 + 0.001);
   });
 });
 
@@ -146,44 +235,89 @@ describe("MultiBuffer - Row Navigation", () => {
 // =============================================================================
 
 describe("MultiBuffer - Position Conversion", () => {
-  test.todo(
-    "toBufferPoint converts multibuffer position to buffer position",
-    () => {
-      // Excerpt at multibuffer row 10, showing buffer rows 50-70
-      // toBufferPoint({ row: 15, column: 5 }) -> { excerpt, point: { row: 55, column: 5 } }
-    },
-  );
+  test("toBufferPoint converts multibuffer position to buffer position", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(100));
+    mb.addExcerpt(buffer, excerptRange(50, 60)); // rows 0-9 → buffer 50-59
+    mb.addExcerpt(buffer, excerptRange(80, 100)); // rows 10-29 → buffer 80-99
 
-  test.todo("toBufferPoint returns undefined for invalid position", () => {
-    // Position outside all excerpts -> undefined
+    const snap = mb.snapshot();
+    const result = snap.toBufferPoint(mbPoint(5, 3));
+    if (!result) throw new Error("expected result");
+    expectPoint(result.point, 55, 3);
   });
 
-  test.todo(
-    "toMultiBufferPoint converts buffer position to multibuffer position",
-    () => {
-      // Excerpt starts at multibuffer row 10, covers buffer rows 50-70
-      // toMultiBufferPoint(excerptId, { row: 55, column: 5 }) -> { row: 15, column: 5 }
-    },
-  );
+  test("toBufferPoint returns undefined for invalid position", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
 
-  test.todo(
-    "toMultiBufferPoint returns undefined for position outside excerpt",
-    () => {
-      // Buffer position that's not within the excerpt range -> undefined
-    },
-  );
-
-  test.todo("toMultiBufferPoint returns undefined for unknown excerpt", () => {
-    // Unknown excerptId -> undefined
+    const snap = mb.snapshot();
+    expect(snap.toBufferPoint(mbPoint(20, 0))).toBeUndefined();
   });
 
-  test.todo("position conversion roundtrip", () => {
-    // toMultiBufferPoint(toBufferPoint(p).excerpt.id, toBufferPoint(p).point) == p
+  test("toMultiBufferPoint converts buffer position to multibuffer position", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(100));
+    mb.addExcerpt(buffer, excerptRange(50, 60)); // mb rows 0-9
+    const idB = mb.addExcerpt(buffer, excerptRange(80, 100)); // mb rows 10-29
+
+    const snap = mb.snapshot();
+    const result = snap.toMultiBufferPoint(idB, point(85, 3));
+    if (!result) throw new Error("expected result");
+    expectPoint(result, 15, 3); // 85 - 80 = 5 offset, + 10 start = row 15
   });
 
-  test.todo("position conversion handles excerpt with offset", () => {
-    // Excerpt showing buffer rows 100-200
-    // Must correctly offset when converting
+  test("toMultiBufferPoint returns undefined for position outside excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(100));
+    const id = mb.addExcerpt(buffer, excerptRange(50, 60));
+
+    const snap = mb.snapshot();
+    // Buffer row 45 is before the excerpt range
+    expect(snap.toMultiBufferPoint(id, point(45, 0))).toBeUndefined();
+  });
+
+  test("toMultiBufferPoint returns undefined for unknown excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+
+    const snap = mb.snapshot();
+    // Fabricate a non-existent excerpt ID
+    const fakeId = { index: 999, generation: 0 };
+    // biome-ignore lint/plugin/no-type-assertion: expect: test fabrication of branded ExcerptId
+    expect(snap.toMultiBufferPoint(fakeId as never, point(0, 0))).toBeUndefined();
+  });
+
+  test("position conversion roundtrip", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(50));
+    mb.addExcerpt(buffer, excerptRange(10, 20)); // mb rows 0-9
+    mb.addExcerpt(buffer, excerptRange(30, 50)); // mb rows 10-29
+
+    const snap = mb.snapshot();
+    const testPoints = [mbPoint(0, 0), mbPoint(5, 3), mbPoint(10, 0), mbPoint(25, 2)];
+
+    for (const p of testPoints) {
+      const bufResult = snap.toBufferPoint(p);
+      if (!bufResult) throw new Error(`expected bufResult for ${num(p.row)},${p.column}`);
+      const mbResult = snap.toMultiBufferPoint(bufResult.excerpt.id, bufResult.point);
+      if (!mbResult) throw new Error(`expected mbResult for ${num(p.row)},${p.column}`);
+      expectPoint(mbResult, num(p.row), p.column);
+    }
+  });
+
+  test("position conversion handles excerpt with offset", () => {
+    const mb = createMultiBuffer();
+    // Buffer with 200 lines, excerpt covers rows 100-200
+    const buffer = createBuffer(createBufferId(), generateText(200));
+    mb.addExcerpt(buffer, excerptRange(100, 200)); // mb rows 0-99
+
+    const snap = mb.snapshot();
+    const result = snap.toBufferPoint(mbPoint(50, 0));
+    if (!result) throw new Error("expected result");
+    expectPoint(result.point, 150, 0); // 100 + 50 = 150
   });
 });
 
@@ -192,30 +326,58 @@ describe("MultiBuffer - Position Conversion", () => {
 // =============================================================================
 
 describe("MultiBuffer - Line Access", () => {
-  test.todo("lines() returns lines from single excerpt", () => {
-    // Excerpt with 10 lines
-    // lines(2, 5) returns lines 2, 3, 4
+  test("lines() returns lines from single excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    mb.addExcerpt(buffer, excerptRange(0, 5));
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(1), mbRow(4))).toEqual(["B", "C", "D"]);
   });
 
-  test.todo("lines() returns lines across excerpt boundary", () => {
-    // Excerpt A: lines ["A1", "A2", "A3"]
-    // Excerpt B: lines ["B1", "B2", "B3"]
-    // lines(1, 5) -> ["A2", "A3", "B1", "B2"]
+  test("lines() returns lines across excerpt boundary", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), "A1\nA2\nA3");
+    const buf2 = createBuffer(createBufferId(), "B1\nB2\nB3");
+    mb.addExcerpt(buf1, excerptRange(0, 3)); // mb rows 0-2
+    mb.addExcerpt(buf2, excerptRange(0, 3)); // mb rows 3-5
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(1), mbRow(5))).toEqual(["A2", "A3", "B1", "B2"]);
   });
 
-  test.todo("lines() returns lines across multiple excerpts", () => {
-    // Excerpt A: 3 lines
-    // Excerpt B: 3 lines
-    // Excerpt C: 3 lines
-    // lines(2, 8) spans all three
+  test("lines() returns lines across multiple excerpts", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), "A1\nA2\nA3");
+    const buf2 = createBuffer(createBufferId(), "B1\nB2\nB3");
+    const buf3 = createBuffer(createBufferId(), "C1\nC2\nC3");
+    mb.addExcerpt(buf1, excerptRange(0, 3)); // mb rows 0-2
+    mb.addExcerpt(buf2, excerptRange(0, 3)); // mb rows 3-5
+    mb.addExcerpt(buf3, excerptRange(0, 3)); // mb rows 6-8
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(2), mbRow(8))).toEqual([
+      "A3", "B1", "B2", "B3", "C1", "C2",
+    ]);
   });
 
-  test.todo("lines() handles empty range", () => {
-    // lines(5, 5) -> []
+  test("lines() handles empty range", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buffer, excerptRange(0, 3));
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(1), mbRow(1))).toEqual([]);
   });
 
-  test.todo("lines() clamps to valid range", () => {
-    // lines(0, 1000) with only 10 lines -> first 10 lines
+  test("lines() clamps to valid range", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buffer, excerptRange(0, 3));
+
+    const snap = mb.snapshot();
+    const result = snap.lines(mbRow(0), mbRow(100));
+    expect(result).toEqual(["A", "B", "C"]);
   });
 });
 
@@ -224,8 +386,15 @@ describe("MultiBuffer - Line Access", () => {
 // =============================================================================
 
 describe("MultiBuffer - Clipping", () => {
-  test.todo("clipPoint clamps to valid multibuffer position", () => {
-    // Point beyond last row should clamp to last valid position
+  test("clipPoint clamps to valid multibuffer position", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "Hello\nWorld");
+    mb.addExcerpt(buffer, excerptRange(0, 2));
+
+    const snap = mb.snapshot();
+    const clipped = snap.clipPoint(mbPoint(10, 0), Bias.Right);
+    // Past end → clamp to end of last line
+    expectPoint(clipped, 1, 5);
   });
 
   test.todo("clipPoint respects Bias.Left at boundaries", () => {
@@ -250,30 +419,12 @@ describe("MultiBuffer - Clipping", () => {
 // =============================================================================
 
 describe("MultiBuffer - Anchors", () => {
-  test.todo("createAnchor returns anchor for valid position", () => {
-    // const anchor = mb.createAnchor(mbPoint(5, 10), Bias.Right);
-    // expect(anchor).toBeDefined();
-  });
-
-  test.todo("createAnchor returns undefined for invalid position", () => {
-    // Position outside multibuffer -> undefined
-  });
-
-  test.todo("anchor stores correct excerpt ID", () => {
-    // Anchor at row 15 (in excerpt B) should have B's excerptId
-  });
-
-  test.todo("anchor stores correct buffer offset", () => {
-    // Anchor should store offset within the underlying buffer
-  });
-
-  test.todo("resolveAnchor returns current position", () => {
-    // After creating anchor and making edits, resolve should return updated position
-  });
-
-  test.todo("resolveAnchor follows replaced_excerpts chain", () => {
-    // After excerpt replacement, anchor should still resolve
-  });
+  test.todo("createAnchor returns anchor for valid position", () => {});
+  test.todo("createAnchor returns undefined for invalid position", () => {});
+  test.todo("anchor stores correct excerpt ID", () => {});
+  test.todo("anchor stores correct buffer offset", () => {});
+  test.todo("resolveAnchor returns current position", () => {});
+  test.todo("resolveAnchor follows replaced_excerpts chain", () => {});
 });
 
 // =============================================================================
@@ -281,41 +432,12 @@ describe("MultiBuffer - Anchors", () => {
 // =============================================================================
 
 describe("MultiBuffer - Anchor Survival", () => {
-  test.todo("anchor survives insert before anchor", () => {
-    // Anchor at offset 10
-    // Insert at offset 5
-    // Anchor should now resolve to offset 10 + insert_length
-  });
-
-  test.todo("anchor survives insert after anchor", () => {
-    // Anchor at offset 10
-    // Insert at offset 15
-    // Anchor should still resolve to offset 10
-  });
-
-  test.todo("anchor with Bias.Left at insert position stays left", () => {
-    // Anchor at offset 10 with Bias.Left
-    // Insert at offset 10
-    // Anchor should resolve to offset 10 (before inserted text)
-  });
-
-  test.todo("anchor with Bias.Right at insert position moves right", () => {
-    // Anchor at offset 10 with Bias.Right
-    // Insert at offset 10
-    // Anchor should resolve to offset 10 + insert_length
-  });
-
-  test.todo("anchor survives delete that doesn't include anchor", () => {
-    // Anchor at offset 20
-    // Delete range 5-10
-    // Anchor should resolve to offset 15 (20 - 5)
-  });
-
-  test.todo("anchor at deleted position resolves to boundary", () => {
-    // Anchor at offset 7
-    // Delete range 5-10
-    // Anchor should resolve to offset 5 (start of deleted range)
-  });
+  test.todo("anchor survives insert before anchor", () => {});
+  test.todo("anchor survives insert after anchor", () => {});
+  test.todo("anchor with Bias.Left at insert position stays left", () => {});
+  test.todo("anchor with Bias.Right at insert position moves right", () => {});
+  test.todo("anchor survives delete that doesn't include anchor", () => {});
+  test.todo("anchor at deleted position resolves to boundary", () => {});
 });
 
 // =============================================================================
@@ -323,24 +445,9 @@ describe("MultiBuffer - Anchor Survival", () => {
 // =============================================================================
 
 describe("MultiBuffer - Anchor Survival Through Replacement", () => {
-  test.todo("anchor survives excerpt replacement", () => {
-    // Create anchor in excerpt A
-    // Replace excerpt A with new excerpts
-    // Anchor should still resolve via replaced_excerpts map
-  });
-
-  test.todo("anchor follows replacement chain", () => {
-    // Anchor in excerpt 1
-    // Replace 1 with 2
-    // Replace 2 with 3
-    // Anchor should resolve via 1 -> 2 -> 3 chain
-  });
-
-  test.todo("anchor degrades when excerpt removed without replacement", () => {
-    // Anchor in excerpt A
-    // Remove A entirely (no replacement)
-    // Anchor should resolve to undefined or nearest valid position
-  });
+  test.todo("anchor survives excerpt replacement", () => {});
+  test.todo("anchor follows replacement chain", () => {});
+  test.todo("anchor degrades when excerpt removed without replacement", () => {});
 });
 
 // =============================================================================
@@ -348,21 +455,61 @@ describe("MultiBuffer - Anchor Survival Through Replacement", () => {
 // =============================================================================
 
 describe("MultiBuffer - Excerpt Boundaries", () => {
-  test.todo("excerptBoundaries returns boundaries in viewport", () => {
-    // 3 excerpts, viewport shows part of 2nd and all of 3rd
-    // Should return 2 boundaries
+  test("excerptBoundaries returns boundaries in viewport", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(10));
+    const buf2 = createBuffer(createBufferId(), generateText(10));
+    const buf3 = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buf1, excerptRange(0, 10)); // rows 0-9
+    mb.addExcerpt(buf2, excerptRange(0, 10)); // rows 10-19
+    mb.addExcerpt(buf3, excerptRange(0, 10)); // rows 20-29
+
+    const snap = mb.snapshot();
+    // Viewport rows 8-25 should include boundaries at row 10 and 20
+    const boundaries = snap.excerptBoundaries(mbRow(8), mbRow(25));
+    expect(boundaries.length).toBe(2);
+    expect(num(boundaries[0]?.row ?? mbRow(-1))).toBe(10);
+    expect(num(boundaries[1]?.row ?? mbRow(-1))).toBe(20);
   });
 
-  test.todo("excerptBoundaries includes boundary at start of viewport", () => {
-    // If viewport starts at an excerpt boundary, include it
+  test("excerptBoundaries includes boundary at start of viewport", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(10));
+    const buf2 = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buf1, excerptRange(0, 10)); // rows 0-9
+    mb.addExcerpt(buf2, excerptRange(0, 10)); // rows 10-19
+
+    const snap = mb.snapshot();
+    const boundaries = snap.excerptBoundaries(mbRow(10), mbRow(15));
+    expect(boundaries.length).toBe(1);
+    expect(num(boundaries[0]?.row ?? mbRow(-1))).toBe(10);
   });
 
-  test.todo("excerptBoundaries prev is undefined for first excerpt", () => {
-    // First boundary has prev: undefined
+  test("excerptBoundaries prev is undefined for first excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+
+    const snap = mb.snapshot();
+    const boundaries = snap.excerptBoundaries(mbRow(0), mbRow(10));
+    // First excerpt boundary: prev is undefined
+    expect(boundaries.length).toBe(1);
+    expect(boundaries[0]?.prev).toBeUndefined();
   });
 
-  test.todo("excerptBoundaries tracks file changes", () => {
-    // When prev and next have different bufferIds, it's a file boundary
+  test("excerptBoundaries tracks file changes", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf1, excerptRange(0, 5));
+    mb.addExcerpt(buf2, excerptRange(0, 5));
+
+    const snap = mb.snapshot();
+    const boundaries = snap.excerptBoundaries(mbRow(0), mbRow(10));
+    expect(boundaries.length).toBe(2);
+    // Second boundary has prev from buf1 and next from buf2
+    expect(boundaries[1]?.prev?.bufferId).toBe(buf1.id);
+    expect(boundaries[1]?.next.bufferId).toBe(buf2.id);
   });
 });
 
@@ -371,24 +518,39 @@ describe("MultiBuffer - Excerpt Boundaries", () => {
 // =============================================================================
 
 describe("MultiBuffer - Snapshot", () => {
-  test.todo("snapshot is immutable after mutations", () => {
-    // const snapshot1 = mb.snapshot();
-    // mb.addExcerpt(...);
-    // const snapshot2 = mb.snapshot();
-    // snapshot1 should be unchanged
+  test("snapshot is immutable after mutations", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buffer, excerptRange(0, 3));
+
+    const snap1 = mb.snapshot();
+    expect(snap1.lineCount).toBe(3);
+
+    const buffer2 = createBuffer(createBufferId(), "X\nY");
+    mb.addExcerpt(buffer2, excerptRange(0, 2));
+
+    const snap2 = mb.snapshot();
+    expect(snap1.lineCount).toBe(3); // unchanged
+    expect(snap2.lineCount).toBe(5);
   });
 
-  test.todo("multiple snapshots coexist", () => {
-    // Create multiple snapshots, mutate between
-    // All snapshots should remain valid and independent
+  test("multiple snapshots coexist", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    const s1 = mb.snapshot();
+
+    mb.addExcerpt(buf, excerptRange(2, 5));
+    const s2 = mb.snapshot();
+
+    expect(s1.lineCount).toBe(2);
+    expect(s1.excerpts.length).toBe(1);
+    expect(s2.lineCount).toBe(5);
+    expect(s2.excerpts.length).toBe(2);
   });
 
-  test.todo("anchors work with old snapshots", () => {
-    // Create anchor
-    // Get snapshot
-    // Mutate multibuffer
-    // Old snapshot should still resolve anchor correctly (for that point in time)
-  });
+  test.todo("anchors work with old snapshots", () => {});
 });
 
 // =============================================================================
@@ -396,23 +558,10 @@ describe("MultiBuffer - Snapshot", () => {
 // =============================================================================
 
 describe("MultiBuffer - Batch Operations", () => {
-  test.todo("setExcerptsForBuffer replaces all excerpts for buffer", () => {
-    // Add 3 excerpts from buffer A
-    // setExcerptsForBuffer(A, [newRange1, newRange2])
-    // Should have 2 excerpts from A now
-  });
-
-  test.todo("setExcerptsForBuffer tracks replaced excerpts", () => {
-    // Old excerpt IDs should map to new ones in replaced_excerpts
-  });
-
-  test.todo("setExcerptsForBuffer returns new excerpt IDs", () => {
-    // Returns array of new IDs in order
-  });
-
-  test.todo("setExcerptsForBuffer with empty array removes all", () => {
-    // setExcerptsForBuffer(A, []) removes all A excerpts
-  });
+  test.todo("setExcerptsForBuffer replaces all excerpts for buffer", () => {});
+  test.todo("setExcerptsForBuffer tracks replaced excerpts", () => {});
+  test.todo("setExcerptsForBuffer returns new excerpt IDs", () => {});
+  test.todo("setExcerptsForBuffer with empty array removes all", () => {});
 });
 
 // =============================================================================
@@ -420,31 +569,61 @@ describe("MultiBuffer - Batch Operations", () => {
 // =============================================================================
 
 describe("MultiBuffer - Edge Cases", () => {
-  test.todo("empty multibuffer operations", () => {
-    // excerptAt, toBufferPoint, lines on empty multibuffer
-    // Should return undefined/empty, not throw
+  test("empty multibuffer operations", () => {
+    const mb = createMultiBuffer();
+    const snap = mb.snapshot();
+    expect(snap.excerptAt(mbRow(0))).toBeUndefined();
+    expect(snap.toBufferPoint(mbPoint(0, 0))).toBeUndefined();
+    expect(snap.lines(mbRow(0), mbRow(10))).toEqual([]);
   });
 
-  test.todo("single empty excerpt", () => {
-    // GOTCHA: Empty excerpt (start == end) is valid
-    // Should have lineCount 0 but still exist
+  test("single empty excerpt", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buffer, excerptRange(2, 2)); // zero-length
+    expect(mb.lineCount).toBe(0);
+    expect(mb.excerpts.length).toBe(1);
   });
 
-  test.todo("excerpt with single line", () => {
-    // Edge case: 1-line excerpt
+  test("excerpt with single line", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buffer, excerptRange(1, 2)); // just "B"
+
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(1);
+    expect(snap.lines(mbRow(0), mbRow(1))).toEqual(["B"]);
   });
 
-  test.todo("excerpt at start of buffer", () => {
-    // Range starting at row 0
+  test("excerpt at start of buffer", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    mb.addExcerpt(buffer, excerptRange(0, 3));
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(3))).toEqual(["A", "B", "C"]);
   });
 
-  test.todo("excerpt at end of buffer", () => {
-    // Range ending at last row
+  test("excerpt at end of buffer", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    mb.addExcerpt(buffer, excerptRange(3, 5));
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(2))).toEqual(["D", "E"]);
   });
 
-  test.todo("overlapping excerpt ranges from same buffer", () => {
-    // Two excerpts showing overlapping ranges
-    // Each should work independently
+  test("overlapping excerpt ranges from same buffer", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    mb.addExcerpt(buffer, excerptRange(0, 3)); // A, B, C
+    mb.addExcerpt(buffer, excerptRange(2, 5)); // C, D, E
+
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(6);
+    expect(snap.lines(mbRow(0), mbRow(6))).toEqual([
+      "A", "B", "C", "C", "D", "E",
+    ]);
   });
 });
 
@@ -453,37 +632,46 @@ describe("MultiBuffer - Edge Cases", () => {
 // =============================================================================
 
 describe("MultiBuffer - Performance", () => {
-  test.todo("adding 100 excerpts completes in <10ms", () => {
-    // const mb = createMultiBuffer();
-    // const buffer = createBuffer(createBufferId(), generateText(1000));
-    // const { durationMs } = time(() => {
-    //   for (let i = 0; i < 100; i++) {
-    //     mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
-    //   }
-    // });
-    // expect(durationMs).toBeLessThan(10);
+  test("adding 100 excerpts completes in <10ms", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(1000));
+    const { durationMs } = time(() => {
+      for (let i = 0; i < 100; i++) {
+        mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
+      }
+    });
+    expect(durationMs).toBeLessThan(10);
   });
 
-  test.todo("excerptAt is O(log n) - binary search performance", () => {
-    // Create multibuffer with 1000 excerpts
-    // Benchmark lookup at various positions
-    // Should be consistent time (~10 comparisons, not 500)
+  test("excerptAt is O(log n) - binary search performance", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    for (let i = 0; i < 1000; i++) {
+      mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
+    }
+    const snap = mb.snapshot();
+
+    const early = benchmark(() => snap.excerptAt(mbRow(50)), 1000);
+    const late = benchmark(() => snap.excerptAt(mbRow(9950)), 1000);
+
+    expect(late.avgMs).toBeLessThan(early.avgMs * 3 + 0.001);
   });
 
-  test.todo("lines() fetches visible lines in <1ms", () => {
-    // Large multibuffer with many excerpts
-    // Fetch 50 lines (typical viewport)
-    // Should complete in <1ms
+  test("lines() fetches visible lines in <1ms", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    for (let i = 0; i < 100; i++) {
+      mb.addExcerpt(buffer, excerptRange(i * 100, i * 100 + 100));
+    }
+    const snap = mb.snapshot();
+
+    const { durationMs } = time(() => {
+      snap.lines(mbRow(500), mbRow(550)); // 50 lines
+    });
+    expect(durationMs).toBeLessThan(1);
   });
 
-  test.todo("anchor resolution is fast", () => {
-    // 1000 anchors in a large multibuffer
-    // Batch resolution should be efficient
-    // PERF: Cursor state reuse for sequential anchors
-  });
+  test.todo("anchor resolution is fast", () => {});
 
-  test.todo("singleton optimization provides speedup", () => {
-    // Compare performance of singleton vs non-singleton
-    // for same content
-  });
+  test.todo("singleton optimization provides speedup", () => {});
 });

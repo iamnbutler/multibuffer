@@ -11,6 +11,8 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/multibuffer/buffer.ts";
+import { createExcerpt, toExcerptInfo } from "../../src/multibuffer/excerpt.ts";
 import type {
   ExcerptInfo,
   ExcerptRange,
@@ -25,6 +27,7 @@ import {
   num,
   range,
   resetCounters,
+  row,
 } from "../helpers.ts";
 
 beforeEach(() => {
@@ -192,24 +195,94 @@ describe("Trailing Newline Handling", () => {
 // =============================================================================
 
 describe("Excerpt Creation", () => {
-  test.todo("creates excerpt from buffer range", () => {
-    // Will need createExcerpt function
+  test("creates excerpt from buffer range", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(1, 4); // lines B, C, D
+
+    const excerpt = createExcerpt(id, snapshot, er, false);
+
+    expect(excerpt.id).toEqual(id);
+    expect(excerpt.bufferId).toBe(snapshot.id);
+    expect(excerpt.hasTrailingNewline).toBe(false);
   });
 
-  test.todo("validates range is within buffer bounds", () => {
-    // Should throw if range extends beyond buffer
+  test("validates range is within buffer bounds", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(0, 10); // end row 10 exceeds 3-line buffer
+
+    expect(() => createExcerpt(id, snapshot, er, false)).toThrow();
   });
 
-  test.todo("excerpt lines match buffer lines", () => {
-    // Excerpt should provide view into buffer, not copy
+  test("excerpt lines match buffer lines", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(1, 4); // lines B, C, D
+
+    const excerpt = createExcerpt(id, snapshot, er, false);
+
+    // Excerpt provides a view — accessing lines goes through buffer snapshot
+    expect(excerpt.buffer.line(row(1))).toBe("B");
+    expect(excerpt.buffer.line(row(2))).toBe("C");
+    expect(excerpt.buffer.line(row(3))).toBe("D");
+    expect(excerpt.buffer).toBe(snapshot); // same reference
   });
 
-  test.todo("excerpt references buffer snapshot, not copy", () => {
-    // Verify memory efficiency - no text duplication
+  test("excerpt references buffer snapshot, not copy", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(0, 3);
+
+    const excerpt = createExcerpt(id, snapshot, er, false);
+
+    // Strict reference equality — no copying
+    expect(excerpt.buffer).toBe(snapshot);
   });
 
-  test.todo("excerpt textSummary is accurate", () => {
-    // Should match the text summary of the range
+  test("excerpt textSummary is accurate", () => {
+    const buf = createBuffer(createBufferId(), "Hello\nWorld\nFoo");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(0, 3); // all 3 lines
+
+    const excerpt = createExcerpt(id, snapshot, er, false);
+
+    expect(excerpt.textSummary.lines).toBe(3);
+    expect(excerpt.textSummary.bytes).toBe(15); // "Hello\nWorld\nFoo"
+    expect(excerpt.textSummary.lastLineLength).toBe(3); // "Foo"
+  });
+
+  test("toExcerptInfo converts with startRow", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(1, 4); // 3 lines: B, C, D
+
+    const excerpt = createExcerpt(id, snapshot, er, false);
+    const info = toExcerptInfo(excerpt, mbRow(10));
+
+    expect(num(info.startRow)).toBe(10);
+    expect(num(info.endRow)).toBe(13); // 3 lines
+    expect(info.hasTrailingNewline).toBe(false);
+  });
+
+  test("toExcerptInfo accounts for trailing newline", () => {
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const snapshot = buf.snapshot();
+    const id = createExcerptId();
+    const er = excerptRange(1, 4); // 3 lines: B, C, D
+
+    const excerpt = createExcerpt(id, snapshot, er, true);
+    const info = toExcerptInfo(excerpt, mbRow(10));
+
+    expect(num(info.startRow)).toBe(10);
+    expect(num(info.endRow)).toBe(14); // 3 lines + 1 trailing newline
+    expect(info.hasTrailingNewline).toBe(true);
   });
 });
 

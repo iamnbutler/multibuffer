@@ -93,6 +93,18 @@ export class SlotMap<V> {
   }
 
   /**
+   * Update the value at a key. Returns true if the key was valid and the value was set.
+   */
+  set(key: SlotKey, value: V): boolean {
+    const slot = this.slotAt(key.index);
+    if (slot?.occupied && slot.generation === key.generation) {
+      slot.value = value;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Remove the value at a key. Returns the value if it was present.
    * The slot is freed for reuse with an incremented generation.
    */
