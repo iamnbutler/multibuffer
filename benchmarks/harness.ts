@@ -21,6 +21,11 @@ export interface BenchmarkSuite {
   benchmarks: Benchmark[];
 }
 
+export interface SuiteResult {
+  suite: string;
+  results: BenchmarkResult[];
+}
+
 export interface BenchmarkResult {
   name: string;
   iterations: number;
@@ -105,20 +110,24 @@ export function formatResult(result: BenchmarkResult): string {
 }
 
 /**
- * Run all benchmark suites.
+ * Run all benchmark suites and return per-suite results.
  */
-export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<void> {
+export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<SuiteResult[]> {
   let totalPassed = 0;
   let totalFailed = 0;
+  const suiteResults: SuiteResult[] = [];
 
   for (const suite of suites) {
     console.log(`\n## ${suite.name}\n`);
+
+    const results: BenchmarkResult[] = [];
 
     for (const bench of suite.benchmarks) {
       try {
         const result = await runBenchmark(bench);
         console.log(formatResult(result));
         console.log("");
+        results.push(result);
 
         if (result.passed) {
           totalPassed++;
@@ -132,6 +141,8 @@ export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<void> {
         totalFailed++;
       }
     }
+
+    suiteResults.push({ suite: suite.name, results });
   }
 
   console.log("=".repeat(60));
@@ -139,8 +150,10 @@ export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<void> {
   console.log("=".repeat(60));
 
   if (totalFailed > 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
+
+  return suiteResults;
 }
 
 /**

@@ -11,6 +11,7 @@
 
 import { bufferBenchmarks } from "./buffer.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
+import { saveHistory } from "./history.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { viewportBenchmarks } from "./viewport.bench.ts";
 
@@ -25,4 +26,5 @@ console.log("Multibuffer Performance Benchmarks");
 console.log("=".repeat(60));
 console.log("");
 
-runBenchmarks(suites);
+const results = await runBenchmarks(suites);
+await saveHistory(results);
