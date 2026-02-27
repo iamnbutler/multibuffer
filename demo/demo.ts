@@ -146,6 +146,7 @@ async function main() {
     // Render cursor and selection
     const cursor = editor.cursor;
     renderer.renderCursor(cursor);
+    renderer.scrollTo({ row: cursor.row, strategy: "nearest" });
 
     const sel = editor.selection;
     if (sel) {
