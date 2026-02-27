@@ -1,6 +1,6 @@
 {
-  "last_run": "2026-02-27T21:00:00Z",
-  "last_run_id": "22497894975",
+  "last_run": "2026-02-27T22:00:00Z",
+  "last_run_id": "22498441103",
   "backlog_cursor": {
     "issues": 16,
     "note": "All issues through #16 seen. #7, #10, #11, #16 are proxy CI issues (patch artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments."
@@ -30,20 +30,20 @@
   },
   "prs_created": [
     {
-      "pr_number": 12,
-      "branch": "repo-assist/improve-goal-column-a09de9c94d66ac76",
-      "issue": 4,
-      "description": "Goal column tracking for vertical cursor navigation (feat(editor))",
+      "pr_number": 17,
+      "branch": "repo-assist/feat-fixture-switcher-6-b4040fa724509924",
+      "issue": 6,
+      "description": "feat(demo): fixture scenario switcher panel",
       "created": "2026-02-27",
-      "status": "open draft PR"
+      "status": "open draft PR on GitHub"
     },
     {
-      "pr_number": 13,
-      "branch": "repo-assist/improve-shift-page-nav-3ec1f2568d7bbad8",
+      "pr_number": 15,
+      "branch": "repo-assist/feat-clipboard-operations-72214609-776f7cd0585d8762",
       "issue": 4,
-      "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
+      "description": "feat(editor): clipboard cut/paste and getSelectedText() - 16 new tests",
       "created": "2026-02-27",
-      "status": "open draft PR"
+      "status": "open draft PR on GitHub"
     },
     {
       "pr_number": 14,
@@ -51,15 +51,31 @@
       "issue": 4,
       "description": "feat(editor): implement undo/redo with text-snapshot history stack",
       "created": "2026-02-27",
-      "status": "open draft PR"
+      "status": "open draft PR on GitHub"
     },
     {
-      "pr_number": 15,
-      "branch": "repo-assist/feat-clipboard-operations-72214609",
+      "pr_number": 13,
+      "branch": "repo-assist/improve-shift-page-nav-3ec1f2568d7bbad8",
       "issue": 4,
-      "description": "feat(editor): clipboard cut/paste/getSelectedText() - 16 new tests",
+      "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
       "created": "2026-02-27",
-      "status": "open draft PR"
+      "status": "open draft PR on GitHub"
+    },
+    {
+      "pr_number": 12,
+      "branch": "repo-assist/improve-goal-column-a09de9c94d66ac76",
+      "issue": 4,
+      "description": "feat(editor): goal column tracking for vertical cursor navigation",
+      "created": "2026-02-27",
+      "status": "open draft PR on GitHub"
+    },
+    {
+      "pr_number": "patch-artifact-run-22498441103",
+      "branch": "repo-assist/fix-setCursor-bounds",
+      "issue": null,
+      "description": "fix(editor): setCursor clips cursor to valid multibuffer bounds (p0 bug mm4v1ccl-hc8y)",
+      "created": "2026-02-27",
+      "status": "patch-only - push blocked; patch in agent-artifacts for run 22498441103"
     },
     {
       "pr_number": "patch-artifact-run-22497633874",
@@ -67,15 +83,7 @@
       "issue": 5,
       "description": "ci: add CI workflow for typecheck, lint, and tests",
       "created": "2026-02-27",
-      "status": "patch-only - sandbox cannot push .github/workflows changes; patch in agent-artifacts"
-    },
-    {
-      "pr_number": "patch-artifact-run-22497894975",
-      "branch": "repo-assist/feat-fixture-switcher-6",
-      "issue": 6,
-      "description": "feat(demo): fixture scenario switcher panel",
-      "created": "2026-02-27",
-      "status": "patch-only - push failed; patch in agent-artifacts for run 22497894975"
+      "status": "patch-only - push blocked; patch in agent-artifacts"
     }
   ],
   "issues_created": [
@@ -118,7 +126,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 9 (22497894975): fixture switcher patch submitted (branch repo-assist/feat-fixture-switcher-6). PRs #12-#15 are open draft PRs on GitHub. Monthly summary #8 updated. Push is blocked for all branches (not just .github/workflows). Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only 1 commit on main), task_9 (no new contributors).",
+  "notes": "Run 10 (22498441103): Fixed p0 bug mm4v1ccl-hc8y (setCursor allows cursor past end of line) - patch in agent-artifacts. PR #17 (fixture switcher) confirmed open on GitHub. PRs #12-#15 also open. Monthly summary #8 updated. Push still blocked for all regular branches. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only few commits on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -132,9 +140,18 @@
   "shift_page_pr_number": 13,
   "undo_redo_pr_number": 14,
   "clipboard_pr_number": 15,
-  "fixture_switcher_patch_run": "22497894975",
-  "fixture_switcher_branch": "repo-assist/feat-fixture-switcher-6",
+  "fixture_switcher_pr_number": 17,
+  "set_cursor_fix_patch_run": "22498441103",
+  "set_cursor_fix_branch": "repo-assist/fix-setCursor-bounds",
   "task_10_in_progress": {
-    "description": "Issue #4 features done (PRs #12-#15). CI workflow patch done (multiple runs). Fixture switcher patch done (run 22497894975, addresses #6). Next: benchmark-on-merge workflow (issue #3) once CI is merged. Spool CI integration (issue #9) once access model clarified."
+    "description": "Issue #4 features done (PRs #12-#15 open). CI workflow patch done. Fixture switcher PR #17 open. p0 bug fix (setCursor bounds, spool mm4v1ccl-hc8y) patched in run 22498441103. Next: wire paste event in InputHandler (spool mm4ui37e-2yrw), fix syntax highlighting on insert (spool mm4yjzgw-4zpn, p1), auto-scroll viewport (spool mm4ui36i-tbd7, p1).",
+    "spool_open_tasks": [
+      "mm4ui36i-tbd7: Auto-scroll viewport to follow cursor (p1)",
+      "mm4ui37e-2yrw: Wire paste event in InputHandler",
+      "mm4ui38a-b39o: Add cursor blink animation (p2)",
+      "mm4ui393-y4os: Re-parse buffer after edit for syntax highlighting",
+      "mm4yjzgw-4zpn: Bug: Syntax highlighting breaks when characters inserted (p1)",
+      "mm4v1ccl-hc8y: Bug: setCursor allows cursor past end of line (p0) - PATCHED run 22498441103"
+    ]
   }
 }
