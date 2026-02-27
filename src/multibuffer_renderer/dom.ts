@@ -155,6 +155,7 @@ export class DomRenderer implements Renderer {
       headerPath?: string;
       headerLabel?: string;
       tokens?: Token[];
+      gutterText: string;
     }> = [];
 
     for (let i = 0; i < lines.length; i++) {
@@ -162,22 +163,29 @@ export class DomRenderer implements Renderer {
       const lineText = lines[i] ?? "";
       const header = headerMap.get(mbRow);
 
-      // Get syntax tokens for this line if highlighter is available
+      // Look up the excerpt to get the real buffer row number
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const excerptInfo = this._snapshot?.excerptAt(mbRow as MultiBufferRow);
+      let bufferRow = -1;
       let lineTokens: Token[] | undefined;
-      if (this._highlighter?.ready && this._snapshot) {
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        const excerptInfo = this._snapshot.excerptAt(mbRow as MultiBufferRow);
-        if (excerptInfo) {
-          const bufferRow = excerptInfo.range.context.start.row + (mbRow - excerptInfo.startRow);
+
+      if (excerptInfo) {
+        bufferRow = excerptInfo.range.context.start.row + (mbRow - excerptInfo.startRow);
+
+        // Get syntax tokens if highlighter is available
+        if (this._highlighter?.ready) {
           // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
           lineTokens = this._highlighter.getLineTokens(excerptInfo.bufferId as string, bufferRow);
         }
       }
 
+      // Show buffer line number (1-based), or empty for headers/trailing newlines
+      const showLineNumber = !header && bufferRow >= 0;
+      const gutterBase = showLineNumber ? String(bufferRow + 1) : "";
+
       if (wrapWidth > 0) {
         const segments = wrapLine(lineText, wrapWidth);
         for (let s = 0; s < segments.length; s++) {
-          // Slice tokens to this segment's column range
           const segStart = s * wrapWidth;
           const segEnd = segStart + (segments[s]?.length ?? 0);
           const segTokens = lineTokens
@@ -192,6 +200,7 @@ export class DomRenderer implements Renderer {
             headerPath: header?.path,
             headerLabel: header?.label,
             tokens: segTokens,
+            gutterText: s === 0 ? gutterBase : "",
           });
         }
       } else {
@@ -203,6 +212,7 @@ export class DomRenderer implements Renderer {
           headerPath: header?.path,
           headerLabel: header?.label,
           tokens: lineTokens,
+          gutterText: gutterBase,
         });
       }
     }
@@ -230,9 +240,7 @@ export class DomRenderer implements Renderer {
       if (vr.isHeader && vr.headerPath) {
         this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        // Show line number only on the first segment of a buffer row
-        const gutterText = vr.segment === 0 ? String(vr.mbRow + 1) : "";
-        this._renderAsLine(rowEl, gutterText, vr.text, vr.tokens);
+        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens);
       }
     }
   }
