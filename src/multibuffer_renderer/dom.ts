@@ -7,7 +7,6 @@
 import type { MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 import {
   calculateContentHeight,
-  calculateVisibleRows,
   createViewport,
   rowToY,
   xToColumn,
