@@ -1,6 +1,10 @@
-// Re-export all types
+export { createDomRenderer, DomRenderer } from "./dom.ts";
+export {
+  calculateContentHeight,
+  calculateVisibleRows,
+  createViewport,
+  rowToY,
+  xToColumn,
+  yToRow,
+} from "./measurement.ts";
 export * from "./types.ts";
-
-// Renderer implementations will go here as they're created
-// export { createDomRenderer } from "./dom.ts";
-// export { createCanvasRenderer } from "./canvas.ts";
