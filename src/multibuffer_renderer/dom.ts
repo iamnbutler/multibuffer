@@ -526,7 +526,13 @@ export class DomRenderer implements Renderer {
   }
 
   private _handleClick(e: MouseEvent): void {
-    if (!this._scrollContainer || !this._onClickCallback) return;
+    if (!this._scrollContainer) return;
+
+    // Prevent the browser from focusing the scrollContainer,
+    // so the hidden textarea retains focus for keyboard input.
+    e.preventDefault();
+
+    if (!this._onClickCallback) return;
 
     const rect = this._scrollContainer.getBoundingClientRect();
     const x = e.clientX - rect.left;
