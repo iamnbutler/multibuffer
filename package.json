@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
-    "dev": "bun run demo/serve.ts"
+    "dev": "bun run demo/serve.ts",
+    "build:demo": "bun run demo/build.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

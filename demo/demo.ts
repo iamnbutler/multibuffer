@@ -65,8 +65,8 @@ async function main() {
   const highlighter = new Highlighter();
   try {
     await highlighter.init(
-      "/wasm/tree-sitter.wasm",
-      "/wasm/tree-sitter-typescript.wasm",
+      "./wasm/tree-sitter.wasm",
+      "./wasm/tree-sitter-typescript.wasm",
     );
 
     // Parse all buffers
