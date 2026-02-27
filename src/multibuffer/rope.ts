@@ -11,7 +11,6 @@
  */
 
 const TARGET_CHUNK_SIZE = 1024;
-const MAX_CHUNK_SIZE = TARGET_CHUNK_SIZE * 2;
 
 interface Chunk {
   readonly text: string;
@@ -116,7 +115,7 @@ export class Rope {
 
         if (currentLine === row) {
           // Find end of this line
-          let endPos = text.indexOf("\n", pos);
+          const endPos = text.indexOf("\n", pos);
           if (endPos === -1) {
             // Line spans into next chunk(s)
             let result = text.slice(pos);
