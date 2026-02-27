@@ -156,6 +156,145 @@ async function main() {
   // Initial render
   renderAll();
   inputHandler.focus();
+
+  // ── Debug API ───────────────────────────────────────────────────
+
+  /** Return plain serializable editor state (no branded types). */
+  function getState() {
+    const cursor = editor.cursor;
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    let selectionRange: {
+      start: { row: number; column: number };
+      end: { row: number; column: number };
+    } | null = null;
+    if (sel) {
+      const s = snap.resolveAnchor(sel.range.start);
+      const e = snap.resolveAnchor(sel.range.end);
+      if (s && e) {
+        selectionRange = {
+          start: { row: Number(s.row), column: s.column },
+          end: { row: Number(e.row), column: e.column },
+        };
+      }
+    }
+    return {
+      cursor: { row: Number(cursor.row), column: cursor.column },
+      lineCount: snap.lineCount,
+      selectionRange,
+    };
+  }
+
+  /** Return full buffer text. */
+  function getText() {
+    const snap = mb.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for debug API
+    const startRow = 0 as import("../src/multibuffer/types.ts").MultiBufferRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for debug API
+    const endRow = snap.lineCount as import("../src/multibuffer/types.ts").MultiBufferRow;
+    return snap.lines(startRow, endRow).join("\n");
+  }
+
+  /** Parse "Meta+Shift+ArrowRight" → KeyboardEventInit. */
+  function parseKeyCombo(combo: string): KeyboardEventInit & { key: string } {
+    const parts = combo.split("+");
+    const key = parts.pop() ?? "";
+    const init: KeyboardEventInit & { key: string } = {
+      key,
+      bubbles: true,
+      cancelable: true,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    };
+    for (const mod of parts) {
+      const m = mod.toLowerCase();
+      if (m === "meta" || m === "cmd") init.metaKey = true;
+      else if (m === "ctrl" || m === "control") init.ctrlKey = true;
+      else if (m === "shift") init.shiftKey = true;
+      else if (m === "alt" || m === "opt" || m === "option") init.altKey = true;
+    }
+    return init;
+  }
+
+  /** Simulate a keypress on the hidden textarea. */
+  function simulatePress(combo: string) {
+    const textarea = container?.querySelector("textarea");
+    if (!textarea) return;
+    textarea.focus();
+    const init = parseKeyCombo(combo);
+    textarea.dispatchEvent(new KeyboardEvent("keydown", init));
+  }
+
+  /** Simulate typing text into the hidden textarea. */
+  function simulateType(text: string) {
+    const textarea = container?.querySelector("textarea");
+    if (!textarea) return;
+    textarea.focus();
+    for (const ch of text) {
+      // For regular characters, set value and fire input event
+      textarea.value = ch;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  // Connect to debug WebSocket
+  const wsUrl = `ws://${location.host}/ws?role=browser`;
+  const ws = new WebSocket(wsUrl);
+  ws.onopen = () => console.log("[debug] Connected to debug server");
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      const { id, cmd } = msg;
+      let result: Record<string, number | string | boolean | null | Record<string, number>> | ReturnType<typeof getState> = { error: "unhandled" };
+
+      switch (cmd) {
+        case "getState":
+          result = getState();
+          break;
+        case "getText":
+          result = { text: getText() };
+          break;
+        case "dispatch":
+          editor.dispatch(msg.command);
+          result = getState();
+          break;
+        case "press":
+          simulatePress(msg.key);
+          result = getState();
+          break;
+        case "type":
+          simulateType(msg.text);
+          result = getState();
+          break;
+        case "click": {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for debug API
+          const clickRow = msg.row as import("../src/multibuffer/types.ts").MultiBufferRow;
+          editor.setCursor({ row: clickRow, column: msg.column });
+          result = getState();
+          break;
+        }
+        default:
+          result = { error: `Unknown command: ${cmd}` };
+      }
+
+      ws.send(JSON.stringify({ id, result }));
+    } catch (err) {
+      console.error("[debug] Error handling message:", err);
+    }
+  };
+
+  // Expose on window for direct console access too
+  // biome-ignore lint/plugin/no-type-assertion: expect: extending window for debug API
+  (window as unknown as Record<string, unknown>).__editor = {
+    editor,
+    multiBuffer: mb,
+    renderer,
+    inputHandler,
+    getState,
+    getText,
+  };
 }
 
 main();
