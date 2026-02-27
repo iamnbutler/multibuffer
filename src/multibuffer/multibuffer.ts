@@ -511,6 +511,83 @@ class MultiBufferImpl implements MultiBuffer {
     };
   }
 
+  edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void {
+    const snap = this.snapshot();
+
+    // Convert start point to buffer coordinates
+    const startBuf = snap.toBufferPoint(start);
+    if (!startBuf) return;
+
+    // For same-point edits (insert), reuse the same result
+    const endBuf =
+      start.row === end.row && start.column === end.column
+        ? startBuf
+        : snap.toBufferPoint(end);
+    if (!endBuf) return;
+
+    // Both points must be in the same buffer
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+    if ((startBuf.excerpt.bufferId as string) !== (endBuf.excerpt.bufferId as string)) return;
+
+    // Get the mutable buffer
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+    const buffer = this._buffers.get(startBuf.excerpt.bufferId as string);
+    if (!buffer) return;
+
+    // Convert buffer points to offsets
+    const bufSnap = buffer.snapshot();
+    const startOffset = bufSnap.pointToOffset(startBuf.point);
+    const endOffset = bufSnap.pointToOffset(endBuf.point);
+
+    // Apply the edit
+    if (text.length === 0) {
+      buffer.delete(startOffset, endOffset);
+    } else if (startOffset === endOffset) {
+      buffer.insert(startOffset, text);
+    } else {
+      buffer.replace(startOffset, endOffset, text);
+    }
+
+    // Refresh all excerpts from this buffer with new snapshots
+    this._refreshExcerptsForBuffer(buffer);
+  }
+
+  private _refreshExcerptsForBuffer(buffer: Buffer): void {
+    const newSnap = buffer.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+    const bid = buffer.id as string;
+
+    for (const id of this._order) {
+      const exc = this._excerpts.get(id);
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      if (!exc || (exc.bufferId as string) !== bid) continue;
+
+      // Clamp excerpt range to new buffer bounds (edits may change line count)
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
+      const clampedEndRow = Math.min(
+        exc.range.context.end.row,
+        newSnap.lineCount,
+      ) as import("./types.ts").BufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
+      const clampedStartRow = Math.min(
+        exc.range.context.start.row,
+        clampedEndRow,
+      ) as import("./types.ts").BufferRow;
+      const clampedRange: ExcerptRange = {
+        context: {
+          start: { row: clampedStartRow, column: exc.range.context.start.column },
+          end: { row: clampedEndRow, column: exc.range.context.end.column },
+        },
+        primary: exc.range.primary,
+      };
+
+      const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline);
+      this._excerpts.set(id, refreshed);
+    }
+
+    this._rebuildCache();
+  }
+
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined {
     return this.snapshot().excerptAt(row);
   }

@@ -385,6 +385,13 @@ export interface MultiBuffer {
    */
   createAnchor(point: MultiBufferPoint, bias: Bias): Anchor | undefined;
 
+  /**
+   * Edit text in multibuffer coordinates.
+   * Replaces the range [start, end) with the given text.
+   * For insert: start === end. For delete: text === "".
+   */
+  edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void;
+
   // Delegated to snapshot for convenience
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined;
   toBufferPoint(
