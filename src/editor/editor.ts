@@ -215,11 +215,13 @@ export class Editor {
       case "deleteLine":
         this._deleteLine(snap);
         break;
+      case "paste":
+        this._insertText(snap, command.text);
+        break;
       case "undo":
       case "redo":
       case "copy":
       case "cut":
-      case "paste":
         // TODO: implement
         break;
     }
