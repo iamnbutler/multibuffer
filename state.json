@@ -1,6 +1,6 @@
 {
-  "last_run": "2026-02-27T17:30:00Z",
-  "last_run_id": "22495992753",
+  "last_run": "2026-02-27T18:00:00Z",
+  "last_run_id": "22496454381",
   "backlog_cursor": {
     "issues": 11,
     "note": "All issues through #11 have been seen. Issues #7, #10, #11 are proxy CI PR issues (patch artifacts); #8 is the monthly summary. Issues #3-#6 and #9 have Repo Assist comments."
@@ -54,10 +54,18 @@
       "status": "patch-only - sandbox cannot push to GitHub; direct push not available"
     },
     {
-      "pr_number": "patch-artifact-run-22495992753",
-      "branch": "repo-assist/improve-goal-column",
+      "pr_number": 12,
+      "branch": "repo-assist/improve-goal-column-a09de9c94d66ac76",
       "issue": 4,
       "description": "Goal column tracking for vertical cursor navigation (feat(editor))",
+      "created": "2026-02-27",
+      "status": "open draft PR - successfully created via safeoutputs tool"
+    },
+    {
+      "pr_number": "patch-artifact-run-22496454381",
+      "branch": "repo-assist/improve-shift-page-nav",
+      "issue": 4,
+      "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
       "created": "2026-02-27",
       "status": "patch-only - sandbox cannot push to GitHub; direct push not available"
     }
@@ -96,7 +104,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 4: Sandbox cannot push to GitHub - all PR pushes produce patch artifacts only. Do NOT retry CI PR push or goal column PR push in future runs - they will fail. Patches available: CI workflow from run 22494486270, goal column from run 22495992753. Focus on: task_4 (deps check - but no network to check npm), task_6 (no open PRs so nothing to do), task_8 (release - only 1 commit so nothing to release), task_9 (welcomes - no new contributors). Future runs should focus on: investigating other issues in depth, studying existing code, looking for additional improvements to implement.",
+  "notes": "Run 5: PR #12 (goal column) is a REAL PR successfully created via safeoutputs in run 22495992753. Memory was incorrect - it's not a patch artifact. Shift+PageUp/Down patch created in run 22496454381 (patch artifact only). Tasks not yet done: task_4 (deps - no network to npm), task_6 (no open PRs from others), task_8 (only 1 commit), task_9 (no new contributors). Future runs: investigate undo/redo for issue #4, investigate spool CI (issue #9), look at demo app fixture switcher (issue #6), check if task_9 has new contributors.",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -105,8 +113,10 @@
   "open_issues_without_ra_comment": [],
   "ci_pr_push_blocked": true,
   "ci_pr_patch_latest_run": "22494486270",
-  "goal_column_patch_run": "22495992753",
+  "goal_column_pr_number": 12,
+  "goal_column_pr_status": "open draft PR",
+  "shift_page_patch_run": "22496454381",
   "task_10_in_progress": {
-    "description": "Goal column feature implemented in run 22495992753 as patch artifact. Next: investigate remaining movement binding gaps (undo/redo, clipboard from issue #4), or investigate demo app fixture switcher (issue #6)."
+    "description": "Movement binding improvements for issue #4. Completed: goal column (PR #12), Shift+PageUp/Down (patch 22496454381). Next: investigate undo/redo implementation (needs history stack), or implement clipboard (needs browser API integration via input-handler paste event)."
   }
 }
