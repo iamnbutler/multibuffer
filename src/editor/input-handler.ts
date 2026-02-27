@@ -178,6 +178,10 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
       return { type: "deleteForward", granularity };
     }
 
+    case "k":
+      if (mod && shift) return { type: "deleteLine" };
+      return undefined;
+
     case "Enter":
       return { type: "insertNewline" };
 

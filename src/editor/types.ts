@@ -31,6 +31,7 @@ export type EditorCommand =
   | { type: "extendSelection"; direction: Direction; granularity: Granularity }
   | { type: "selectAll" }
   | { type: "collapseSelection"; to: "start" | "end" }
+  | { type: "deleteLine" }
   | { type: "undo" }
   | { type: "redo" }
   | { type: "copy" }

@@ -330,6 +330,40 @@ describe("Editor - Delete Forward", () => {
   });
 });
 
+// ─── Delete Line ────────────────────────────────────────────────
+
+describe("Editor - Delete Line", () => {
+  test("delete line removes current line", () => {
+    const { editor, mb } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 1));
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("AAA\nCCC");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  test("delete first line", () => {
+    const { editor, mb } = setup("AAA\nBBB\nCCC");
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("BBB\nCCC");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("delete last line", () => {
+    const { editor, mb } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(2, 2));
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("AAA\nBBB");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  test("delete only line leaves empty buffer", () => {
+    const { editor, mb } = setup("Hello");
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("");
+    expectPoint(editor.cursor, 0, 0);
+  });
+});
+
 // ─── Selection Extension ────────────────────────────────────────
 
 describe("Editor - Selection Extension", () => {
@@ -662,6 +696,11 @@ describe("keyEventToCommand", () => {
   test("Cmd+Backspace → deleteBackward line", () => {
     const cmd = keyEventToCommand(key("Backspace", { meta: true }));
     expect(cmd).toEqual({ type: "deleteBackward", granularity: "line" });
+  });
+
+  test("Cmd+Shift+K → deleteLine", () => {
+    const cmd = keyEventToCommand(key("k", { meta: true, shift: true }));
+    expect(cmd).toEqual({ type: "deleteLine" });
   });
 
   test("Delete → deleteForward character", () => {
