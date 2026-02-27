@@ -116,3 +116,73 @@ export function xToColumn(
 ): number {
   return Math.max(0, Math.floor((x - measurements.gutterWidth) / measurements.charWidth));
 }
+
+/**
+ * Clamp a scrollTop value to the valid range [0, maxScroll].
+ *
+ * maxScroll = max(0, contentHeight - viewportHeight)
+ *
+ * This ensures the viewport never scrolls past the start or end of content.
+ */
+export function clampScrollTop(
+  scrollTop: number,
+  contentHeight: number,
+  viewportHeight: number,
+): number {
+  const maxScroll = Math.max(0, contentHeight - viewportHeight);
+  return Math.min(Math.max(0, scrollTop), maxScroll);
+}
+
+/**
+ * Calculate the target scrollTop for a given scroll strategy.
+ *
+ * Strategies:
+ * - `top`: place the target row at the top of the viewport
+ * - `center`: center the target row in the viewport
+ * - `bottom`: place the target row at the bottom of the viewport
+ * - `nearest`: scroll only if the row is not already fully visible;
+ *   scroll the minimum distance needed
+ *
+ * The returned value is already clamped to [0, contentHeight - viewportHeight].
+ */
+export function calculateScrollTop(
+  row: MultiBufferRow,
+  strategy: "top" | "center" | "bottom" | "nearest",
+  currentScrollTop: number,
+  lineHeight: number,
+  viewportHeight: number,
+  contentHeight: number,
+  wrapMap?: WrapMap,
+): number {
+  const y = rowToY(row, lineHeight, wrapMap);
+
+  let scrollTop: number;
+  switch (strategy) {
+    case "top":
+      scrollTop = y;
+      break;
+    case "center":
+      scrollTop = y - viewportHeight / 2 + lineHeight / 2;
+      break;
+    case "bottom":
+      scrollTop = y - viewportHeight + lineHeight;
+      break;
+    case "nearest": {
+      const rowBottom = y + lineHeight;
+      const viewportBottom = currentScrollTop + viewportHeight;
+      if (y < currentScrollTop) {
+        // Row is above viewport: scroll up so row is at top
+        scrollTop = y;
+      } else if (rowBottom > viewportBottom) {
+        // Row is below viewport: scroll down so row is at bottom
+        scrollTop = y - viewportHeight + lineHeight;
+      } else {
+        // Row is already fully visible: no scroll needed
+        scrollTop = currentScrollTop;
+      }
+      break;
+    }
+  }
+
+  return clampScrollTop(scrollTop, contentHeight, viewportHeight);
+}
