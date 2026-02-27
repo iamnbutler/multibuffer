@@ -178,6 +178,25 @@ describe("Editor - setCursor", () => {
     editor.setCursor(mbPoint(0, 3));
     expect(called).toBe(true);
   });
+
+  test("setCursor clips column past end of line to line end", () => {
+    const { editor } = setup("Hello");
+    editor.setCursor(mbPoint(0, 1000));
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  test("setCursor clips row past last row to end of buffer", () => {
+    const { editor } = setup("AB\nCD");
+    editor.setCursor(mbPoint(99, 0));
+    // clipPoint maps past-end to the end of the last line
+    expectPoint(editor.cursor, 1, 2);
+  });
+
+  test("setCursor clips row and column together", () => {
+    const { editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(99, 999));
+    expectPoint(editor.cursor, 1, 5);
+  });
 });
 
 // ─── Mouse Selection (drag, double-click, triple-click) ─────────
