@@ -411,9 +411,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.remove(id);
     }
     this._order = this._order.filter((id) => {
-      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
       const exc = this._excerpts.get(id);
-      // Keep IDs that still have a valid excerpt (i.e. from other buffers)
       return exc !== undefined;
     });
 
