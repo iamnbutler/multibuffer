@@ -1,9 +1,9 @@
 {
-  "last_run": "2026-02-27T23:10:00Z",
-  "last_run_id": "22499179459",
+  "last_run": "2026-02-27T23:30:00Z",
+  "last_run_id": "22499730958",
   "backlog_cursor": {
-    "issues": 16,
-    "note": "All issues through #16 seen. #7, #10, #11, #16 are proxy CI issues (patch artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments. #9 had new human comment (maintainer committed .spool) - responded in run 22499179459."
+    "issues": 20,
+    "note": "All issues through #20 seen. #7, #10, #11, #16, #20 are proxy CI/patch issues (artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments. #9 had new human comment (maintainer committed .spool) - responded in run 22499179459."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-02-27",
@@ -29,6 +29,14 @@
     "prs": {}
   },
   "prs_created": [
+    {
+      "pr_number": "patch-artifact-run-22499730958",
+      "branch": "repo-assist/feat-auto-scroll-cursor-mm4ui36i",
+      "issue": null,
+      "description": "feat(demo): auto-scroll viewport to keep cursor visible on navigation (spool mm4ui36i-tbd7)",
+      "created": "2026-02-27",
+      "status": "patch-only - push blocked; patch in agent-artifacts for run 22499730958"
+    },
     {
       "pr_number": "patch-artifact-run-22499179459",
       "branch": "repo-assist/feat-spool-todo-workflow",
@@ -132,6 +140,12 @@
       "number": 16,
       "created": "2026-02-27",
       "description": "Proxy issue for CI PR (run 22497633874) - duplicate, can be closed by maintainer"
+    },
+    {
+      "title": "[Repo Assist] feat(ci): generate TODO.md from spool events on push to main",
+      "number": 20,
+      "created": "2026-02-27",
+      "description": "Proxy issue for spool->TODO.md workflow patch (run 22499179459) - can be closed by maintainer"
     }
   ],
   "labels_applied": {
@@ -142,7 +156,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 12 (22499179459): Replied to #9 - maintainer committed .spool, responded with spool->TODO.md implementation (patch artifact run 22499179459, branch repo-assist/feat-spool-todo-workflow). Push blocked again. Monthly summary #8 updated. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only few commits on main), task_9 (no new contributors).",
+  "notes": "Run 13 (22499730958): Created auto-scroll patch (feat(demo): scrollTo nearest after cursor render, spool mm4ui36i-tbd7). Push blocked again. Monthly summary #8 updated. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only few commits on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -154,6 +168,8 @@
   "ci_pr_branch_latest": "repo-assist/feat-ci-workflow-2",
   "todo_workflow_patch_run": "22499179459",
   "todo_workflow_branch": "repo-assist/feat-spool-todo-workflow",
+  "auto_scroll_patch_run": "22499730958",
+  "auto_scroll_branch": "repo-assist/feat-auto-scroll-cursor-mm4ui36i",
   "goal_column_pr_number": 12,
   "shift_page_pr_number": 13,
   "undo_redo_pr_number": 14,
@@ -162,16 +178,18 @@
   "set_cursor_fix_pr_number": 18,
   "syntax_highlight_fix_pr_number": 19,
   "task_10_in_progress": {
-    "description": "Issue #9 spool->TODO.md workflow: patch created (run 22499179459). Issue #4 features done (PRs #12-#15 open). CI workflow patch done (run 22497633874). Fixture switcher PR #17 open. p0 bug fix PR #18 open (setCursor bounds). Syntax highlight fix PR #19 open. Next: wire paste event in InputHandler (spool mm4ui37e-2yrw), auto-scroll viewport (spool mm4ui36i-tbd7, p1), cursor blink animation (spool mm4ui38a-b39o, p2).",
-    "spool_open_tasks": [
-      "mm4ui36i-tbd7: Auto-scroll viewport to follow cursor (p1)",
-      "mm4ui37e-2yrw: Wire paste event in InputHandler (p1)",
-      "mm4ui38a-b39o: Add cursor blink animation (p2)",
+    "description": "Spool tasks done: mm4ui36i-tbd7 (auto-scroll, patch run 22499730958), mm4v1ccl-hc8y (setCursor bounds, PR #18), mm4yjzgw-4zpn/mm4ui393-y4os (syntax highlight, PR #19). Issue #9 spool->TODO.md workflow: patch created (run 22499179459). Issue #4 features done (PRs #12-#15 open). Fixture switcher PR #17 open. Next: wire paste event in InputHandler (spool mm4ui37e-2yrw), cursor blink animation (mm4ui38a-b39o, p2), browser integration tests (mm4ztys8-ux7k, p1).",
+    "spool_done": [
+      "mm4ui36i-tbd7: Auto-scroll viewport (patch run 22499730958)",
       "mm4v1ccl-hc8y: Bug: setCursor allows cursor past end of line (p0) - PR #18",
       "mm4yjzgw-4zpn: Bug: Syntax highlighting breaks when characters inserted (p1) - PR #19",
       "mm4ui393-y4os: Re-parse buffer after edit for syntax highlighting - PR #19",
       "mm4f23aq-gjlr: Implement undo/redo system (p2) - PR #14",
-      "mm4f23gq-qmqn: Implement clipboard operations (p2) - PR #15",
+      "mm4f23gq-qmqn: Implement clipboard operations (p2) - PR #15"
+    ],
+    "spool_open_tasks": [
+      "mm4ui37e-2yrw: Wire paste event in InputHandler (p1)",
+      "mm4ui38a-b39o: Add cursor blink animation (p2)",
       "mm4ztys8-ux7k: Add browser integration tests for scroll+render interaction (p1)"
     ]
   }
