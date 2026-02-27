@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build demo (generates sources.gen.ts)
+        run: bun run build:demo
+
       - name: Typecheck
         run: bun run typecheck
 
