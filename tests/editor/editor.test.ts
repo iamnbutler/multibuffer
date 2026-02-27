@@ -693,6 +693,137 @@ describe("Editor - Multi-excerpt", () => {
   });
 });
 
+// ─── Clipboard ──────────────────────────────────────────────────
+
+describe("Editor - Clipboard", () => {
+  // ── getSelectedText ────────────────────────────────────────────
+
+  test("getSelectedText returns empty string when selection is collapsed", () => {
+    const { editor } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 5));
+    expect(editor.getSelectedText()).toBe("");
+  });
+
+  test("getSelectedText returns selected text on a single line", () => {
+    const { editor } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    expect(editor.getSelectedText()).toBe("Hello");
+  });
+
+  test("getSelectedText returns selected text at end of line", () => {
+    const { editor } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 6));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "line" });
+    expect(editor.getSelectedText()).toBe("World");
+  });
+
+  test("getSelectedText returns selected text across multiple lines", () => {
+    const { editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(editor.getSelectedText()).toBe("lo\nWor");
+  });
+
+  test("getSelectedText after selectAll returns full text", () => {
+    const { editor } = setup("Hello\nWorld");
+    editor.dispatch({ type: "selectAll" });
+    expect(editor.getSelectedText()).toBe("Hello\nWorld");
+  });
+
+  // ── paste ──────────────────────────────────────────────────────
+
+  test("paste inserts text at cursor", () => {
+    const { editor, mb } = setup("Hello");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "paste", text: " World" });
+    expect(getText(mb)).toBe("Hello World");
+    expectPoint(editor.cursor, 0, 11);
+  });
+
+  test("paste replaces non-collapsed selection", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    editor.dispatch({ type: "paste", text: "Goodbye" });
+    expect(getText(mb)).toBe("Goodbye World");
+    expectPoint(editor.cursor, 0, 7);
+  });
+
+  test("paste multi-line text", () => {
+    const { editor, mb } = setup("AB");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "paste", text: "X\nY" });
+    expect(getText(mb)).toBe("AX\nYB");
+    expectPoint(editor.cursor, 1, 1);
+  });
+
+  test("paste into empty buffer", () => {
+    const { editor, mb } = setup("");
+    editor.dispatch({ type: "paste", text: "Hello" });
+    expect(getText(mb)).toBe("Hello");
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  // ── cut ───────────────────────────────────────────────────────
+
+  test("cut deletes non-collapsed selection", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe(" World");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("cut with collapsed selection is a no-op", () => {
+    const { editor, mb } = setup("Hello");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe("Hello");
+    expectPoint(editor.cursor, 0, 3);
+  });
+
+  test("cut across lines deletes selection", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe("Helrld");
+  });
+
+  // ── copy ──────────────────────────────────────────────────────
+
+  test("copy is a no-op in the core (does not modify buffer or selection)", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    editor.dispatch({ type: "copy" });
+    expect(getText(mb)).toBe("Hello World");
+    expect(editor.getSelectedText()).toBe("Hello");
+  });
+
+  // ── combined workflow ─────────────────────────────────────────
+
+  test("getSelectedText before cut returns the text that will be deleted", () => {
+    const { editor, mb } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 6));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "line" });
+    const clipped = editor.getSelectedText();
+    editor.dispatch({ type: "cut" });
+    expect(clipped).toBe("World");
+    expect(getText(mb)).toBe("Hello ");
+  });
+});
+
 // ─── keyEventToCommand ──────────────────────────────────────────
 //
 // All tests use macOS conventions (Cmd=meta, Opt=alt).
