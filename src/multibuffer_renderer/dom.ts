@@ -319,12 +319,16 @@ export class DomRenderer implements Renderer {
     const lines = this._snapshot.lines(startRow, endRow);
     const excerptBoundaries = this._snapshot.excerptBoundaries(startRow, endRow);
 
-    const excerptHeaders = excerptBoundaries.map((b) => ({
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      row: (b.prev ? b.row - 1 : b.row) as MultiBufferRow,
-      path: b.next.bufferId,
-      label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
-    }));
+    // Skip header for the first excerpt (no trailing newline row before it).
+    // Subsequent excerpts use the previous excerpt's trailing newline row.
+    const excerptHeaders = excerptBoundaries
+      .filter((b) => b.prev !== undefined)
+      .map((b) => ({
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        row: (b.row - 1) as MultiBufferRow,
+        path: b.next.bufferId,
+        label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
+      }));
 
     this.render(
       {

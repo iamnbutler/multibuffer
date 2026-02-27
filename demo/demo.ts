@@ -97,14 +97,14 @@ async function main() {
     viewport.endRow,
   );
 
-  const excerptHeaders = boundaries.map((b) => ({
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    row: (b.prev
-      ? b.row - 1
-      : b.row) as import("../src/multibuffer/types.ts").MultiBufferRow,
-    path: b.next.bufferId,
-    label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
-  }));
+  const excerptHeaders = boundaries
+    .filter((b) => b.prev !== undefined)
+    .map((b) => ({
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      row: (b.row - 1) as import("../src/multibuffer/types.ts").MultiBufferRow,
+      path: b.next.bufferId,
+      label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
+    }));
 
   renderer.render(
     {
