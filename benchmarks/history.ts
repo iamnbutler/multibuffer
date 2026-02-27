@@ -42,6 +42,7 @@ export async function saveHistory(suites: SuiteResult[]): Promise<void> {
       // Replace any existing entry for this SHA
       .filter((l: string) => {
         try {
+          // biome-ignore lint/plugin/no-type-assertion: expect: JSON.parse returns unknown, need HistoryEntry shape
           return (JSON.parse(l) as HistoryEntry).sha !== sha;
         } catch {
           return true;
@@ -50,6 +51,6 @@ export async function saveHistory(suites: SuiteResult[]): Promise<void> {
   }
 
   lines.push(JSON.stringify(entry));
-  await writeFile(HISTORY_PATH, lines.join("\n") + "\n");
+  await writeFile(HISTORY_PATH, `${lines.join("\n")}\n`);
   console.log(`\nHistory saved → benchmarks/history.jsonl (sha: ${sha.slice(0, 8)})`);
 }
