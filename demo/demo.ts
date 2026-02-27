@@ -5,8 +5,13 @@
 
 import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
-import type { BufferId, BufferPoint, BufferRow } from "../src/multibuffer/types.ts";
+import type {
+  BufferId,
+  BufferPoint,
+  BufferRow,
+} from "../src/multibuffer/types.ts";
 import { createDomRenderer } from "../src/multibuffer_renderer/dom.ts";
+import { Highlighter } from "../src/multibuffer_renderer/highlighter.ts";
 import { createViewport } from "../src/multibuffer_renderer/measurement.ts";
 import type { Measurements } from "../src/multibuffer_renderer/types.ts";
 import { sources } from "./sources.gen.ts";
@@ -21,7 +26,7 @@ function range(startRow: number, endRow: number) {
   return { context, primary: context };
 }
 
-function main() {
+async function main() {
   const mb = createMultiBuffer();
 
   for (const src of sources) {
@@ -30,14 +35,11 @@ function main() {
     const lineCount = src.content.split("\n").length;
 
     if (src.path.includes("single-line")) {
-      // Single-line file: show the whole thing
       mb.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
     } else if (src.path.includes("large-file")) {
-      // Large file: show two separate excerpts (functions + data)
       mb.addExcerpt(buf, range(10, 28), { hasTrailingNewline: true });
       mb.addExcerpt(buf, range(80, 105), { hasTrailingNewline: true });
     } else {
-      // Default: show up to 20 lines from the top
       const end = Math.min(20, lineCount);
       mb.addExcerpt(buf, range(0, end), { hasTrailingNewline: true });
     }
@@ -47,7 +49,7 @@ function main() {
     lineHeight: 20,
     charWidth: 8.4,
     gutterWidth: 48,
-    wrapWidth: 60,
+    wrapWidth: 80,
   };
 
   const renderer = createDomRenderer(measurements);
@@ -58,6 +60,25 @@ function main() {
   }
 
   renderer.mount(container);
+
+  // Initialize syntax highlighting (async, non-blocking)
+  const highlighter = new Highlighter();
+  try {
+    await highlighter.init(
+      "/wasm/tree-sitter.wasm",
+      "/wasm/tree-sitter-typescript.wasm",
+    );
+
+    // Parse all buffers
+    for (const src of sources) {
+      highlighter.parseBuffer(src.path, src.content);
+    }
+
+    renderer.setHighlighter(highlighter);
+    console.log("Syntax highlighting initialized.");
+  } catch (e) {
+    console.warn("Syntax highlighting unavailable:", e);
+  }
 
   const snapshot = mb.snapshot();
   renderer.setSnapshot(snapshot);
@@ -71,11 +92,16 @@ function main() {
   );
 
   const lines = snapshot.lines(viewport.startRow, viewport.endRow);
-  const boundaries = snapshot.excerptBoundaries(viewport.startRow, viewport.endRow);
+  const boundaries = snapshot.excerptBoundaries(
+    viewport.startRow,
+    viewport.endRow,
+  );
 
   const excerptHeaders = boundaries.map((b) => ({
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    row: (b.prev ? b.row - 1 : b.row) as import("../src/multibuffer/types.ts").MultiBufferRow,
+    row: (b.prev
+      ? b.row - 1
+      : b.row) as import("../src/multibuffer/types.ts").MultiBufferRow,
     path: b.next.bufferId,
     label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
   }));

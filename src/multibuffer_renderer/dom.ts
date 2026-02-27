@@ -5,6 +5,8 @@
  */
 
 import type { MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
+import type { Highlighter, Token } from "./highlighter.ts";
+import { buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
   createViewport,
@@ -14,6 +16,20 @@ import {
 } from "./measurement.ts";
 import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
 import { WrapMap, wrapLine } from "./wrap-map.ts";
+
+/** Slice tokens to a column range, adjusting offsets to be segment-relative. */
+function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
+  const result: Token[] = [];
+  for (const t of tokens) {
+    if (t.endColumn <= segStart || t.startColumn >= segEnd) continue;
+    result.push({
+      startColumn: Math.max(0, t.startColumn - segStart),
+      endColumn: Math.min(segEnd - segStart, t.endColumn - segStart),
+      color: t.color,
+    });
+  }
+  return result;
+}
 
 interface RowElement {
   root: HTMLDivElement;
@@ -32,6 +48,7 @@ export class DomRenderer implements Renderer {
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
+  private _highlighter: Highlighter | null = null;
   private _onScroll: (() => void) | null = null;
 
   constructor(measurements: Measurements) {
@@ -101,6 +118,10 @@ export class DomRenderer implements Renderer {
     this._wrapMap = this._buildWrapMap(snapshot);
   }
 
+  setHighlighter(highlighter: Highlighter): void {
+    this._highlighter = highlighter;
+  }
+
   render(state: RenderState, lines: readonly string[]): void {
     if (!this._linesContainer || !this._spacer || !this._scrollContainer) return;
 
@@ -133,6 +154,7 @@ export class DomRenderer implements Renderer {
       isHeader: boolean;
       headerPath?: string;
       headerLabel?: string;
+      tokens?: Token[];
     }> = [];
 
     for (let i = 0; i < lines.length; i++) {
@@ -140,9 +162,28 @@ export class DomRenderer implements Renderer {
       const lineText = lines[i] ?? "";
       const header = headerMap.get(mbRow);
 
+      // Get syntax tokens for this line if highlighter is available
+      let lineTokens: Token[] | undefined;
+      if (this._highlighter?.ready && this._snapshot) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        const excerptInfo = this._snapshot.excerptAt(mbRow as MultiBufferRow);
+        if (excerptInfo) {
+          const bufferRow = excerptInfo.range.context.start.row + (mbRow - excerptInfo.startRow);
+          // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+          lineTokens = this._highlighter.getLineTokens(excerptInfo.bufferId as string, bufferRow);
+        }
+      }
+
       if (wrapWidth > 0) {
         const segments = wrapLine(lineText, wrapWidth);
         for (let s = 0; s < segments.length; s++) {
+          // Slice tokens to this segment's column range
+          const segStart = s * wrapWidth;
+          const segEnd = segStart + (segments[s]?.length ?? 0);
+          const segTokens = lineTokens
+            ? sliceTokensToRange(lineTokens, segStart, segEnd)
+            : undefined;
+
           visualRows.push({
             mbRow,
             segment: s,
@@ -150,6 +191,7 @@ export class DomRenderer implements Renderer {
             isHeader: s === 0 && header !== undefined,
             headerPath: header?.path,
             headerLabel: header?.label,
+            tokens: segTokens,
           });
         }
       } else {
@@ -160,6 +202,7 @@ export class DomRenderer implements Renderer {
           isHeader: header !== undefined,
           headerPath: header?.path,
           headerLabel: header?.label,
+          tokens: lineTokens,
         });
       }
     }
@@ -189,7 +232,7 @@ export class DomRenderer implements Renderer {
       } else {
         // Show line number only on the first segment of a buffer row
         const gutterText = vr.segment === 0 ? String(vr.mbRow + 1) : "";
-        this._renderAsLine(rowEl, gutterText, vr.text);
+        this._renderAsLine(rowEl, gutterText, vr.text, vr.tokens);
       }
     }
   }
@@ -314,16 +357,23 @@ export class DomRenderer implements Renderer {
     rowEl: RowElement,
     gutterText: string,
     text: string,
+    tokens?: Token[],
   ): void {
     rowEl.root.style.display = "flex";
     rowEl.root.style.background = "";
     rowEl.root.style.borderTop = "";
     rowEl.gutter.textContent = gutterText;
     rowEl.gutter.style.background = "";
-    rowEl.content.textContent = text;
     rowEl.content.style.color = "";
     rowEl.content.style.fontWeight = "";
     rowEl.content.style.fontSize = "";
+
+    if (tokens && tokens.length > 0) {
+      buildHighlightedSpans(rowEl.content, text, tokens);
+    } else {
+      rowEl.content.textContent = text;
+    }
+
     rowEl.kind = "line";
   }
 

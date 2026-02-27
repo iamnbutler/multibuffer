@@ -3,12 +3,13 @@
  * builds demo.ts, and serves on localhost.
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const demoDir = import.meta.dir;
 const srcDir = join(demoDir, "../src/multibuffer");
 const fixturesDir = join(demoDir, "fixtures");
+const nodeModules = join(demoDir, "../node_modules");
 
 // 1. Read source files and fixtures, generate sources.ts
 function readDir(dir: string, prefix: string): { path: string; content: string }[] {
@@ -38,12 +39,35 @@ generated += "];\n";
 writeFileSync(join(demoDir, "sources.gen.ts"), generated);
 console.log(`Generated sources.gen.ts with ${allSources.length} files.`);
 
-// 2. Build the demo bundle
+// 2. Copy WASM files for tree-sitter
+const wasmDir = join(demoDir, "wasm");
+if (!existsSync(wasmDir)) mkdirSync(wasmDir);
+
+const treeSitterWasm = join(nodeModules, "web-tree-sitter/web-tree-sitter.wasm");
+const tsGrammarWasm = join(nodeModules, "tree-sitter-typescript/tree-sitter-typescript.wasm");
+
+if (existsSync(treeSitterWasm)) {
+  copyFileSync(treeSitterWasm, join(wasmDir, "tree-sitter.wasm"));
+  console.log("Copied tree-sitter.wasm");
+}
+if (existsSync(tsGrammarWasm)) {
+  copyFileSync(tsGrammarWasm, join(wasmDir, "tree-sitter-typescript.wasm"));
+  console.log("Copied tree-sitter-typescript.wasm");
+}
+
+// Also copy the web-tree-sitter browser JS
+const treeSitterJs = join(nodeModules, "web-tree-sitter/web-tree-sitter.js");
+if (existsSync(treeSitterJs)) {
+  copyFileSync(treeSitterJs, join(wasmDir, "web-tree-sitter.js"));
+}
+
+// 3. Build the demo bundle (exclude web-tree-sitter — loaded via script tag)
 const buildResult = await Bun.build({
   entrypoints: [join(demoDir, "demo.ts")],
   outdir: join(demoDir, "dist"),
   target: "browser",
   format: "esm",
+  external: ["web-tree-sitter"],
 });
 
 if (!buildResult.success) {

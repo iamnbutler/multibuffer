@@ -18,5 +18,9 @@
     "@biomejs/biome": "^2.4.4",
     "@types/bun": "latest",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.6"
   }
 }
