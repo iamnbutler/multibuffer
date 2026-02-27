@@ -121,3 +121,53 @@ export function toExcerptInfo(
     hasTrailingNewline: excerpt.hasTrailingNewline,
   };
 }
+
+/**
+ * Merge overlapping or adjacent excerpt ranges.
+ * Sorts by start row, then merges ranges where one's end >= the next's start.
+ * Primary ranges are expanded to cover the merged context.
+ */
+export function mergeExcerptRanges(
+  ranges: readonly ExcerptRange[],
+): ExcerptRange[] {
+  if (ranges.length <= 1) return [...ranges];
+
+  // Sort by context start row
+  const sorted = [...ranges].sort(
+    (a, b) => a.context.start.row - b.context.start.row,
+  );
+
+  const result: ExcerptRange[] = [];
+  let current = sorted[0];
+  if (!current) return [];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+    if (!next) continue;
+
+    if (next.context.start.row <= current.context.end.row) {
+      // Overlapping or adjacent — merge
+      const endRow = Math.max(current.context.end.row, next.context.end.row);
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const mergedEnd = { row: endRow as import("./types.ts").BufferRow, column: 0 };
+      const primaryStart: import("./types.ts").BufferPoint =
+        current.primary.start.row < next.primary.start.row
+          ? current.primary.start
+          : next.primary.start;
+      const primaryEnd: import("./types.ts").BufferPoint =
+        current.primary.end.row > next.primary.end.row
+          ? current.primary.end
+          : next.primary.end;
+      current = {
+        context: { start: current.context.start, end: mergedEnd },
+        primary: { start: primaryStart, end: primaryEnd },
+      };
+    } else {
+      result.push(current);
+      current = next;
+    }
+  }
+  result.push(current);
+
+  return result;
+}

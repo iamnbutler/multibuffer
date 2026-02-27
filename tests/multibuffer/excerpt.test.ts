@@ -12,7 +12,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/multibuffer/buffer.ts";
-import { createExcerpt, toExcerptInfo } from "../../src/multibuffer/excerpt.ts";
+import { createExcerpt, mergeExcerptRanges, toExcerptInfo } from "../../src/multibuffer/excerpt.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type {
   ExcerptInfo,
@@ -276,20 +276,70 @@ describe("Excerpt Creation", () => {
 
 
 describe("Excerpt Range Merging", () => {
-  test.todo("adjacent ranges merge", () => {
-    // If range1.end.row + 1 == range2.start.row, they should merge
+  test("adjacent ranges merge", () => {
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5),
+      excerptRange(5, 10),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.context.start.row ?? row(0))).toBe(0);
+    expect(num(merged[0]?.context.end.row ?? row(0))).toBe(10);
   });
 
-  test.todo("overlapping ranges merge", () => {
-    // If range1.end >= range2.start, they should merge
+  test("overlapping ranges merge", () => {
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 8),
+      excerptRange(5, 15),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.context.start.row ?? row(0))).toBe(0);
+    expect(num(merged[0]?.context.end.row ?? row(0))).toBe(15);
   });
 
-  test.todo("non-adjacent ranges stay separate", () => {
-    // Gap of 2+ lines means separate excerpts
+  test("non-adjacent ranges stay separate", () => {
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5),
+      excerptRange(10, 15),
+    ]);
+    expect(merged.length).toBe(2);
+    expect(num(merged[0]?.context.end.row ?? row(0))).toBe(5);
+    expect(num(merged[1]?.context.start.row ?? row(0))).toBe(10);
   });
 
-  test.todo("merge tracking returns correct counts", () => {
-    // (merged_ranges, counts_per_original_range) ?
+  test("merge tracking returns correct counts", () => {
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5),
+      excerptRange(3, 8),
+      excerptRange(7, 12),
+      excerptRange(20, 25),
+    ]);
+    // First three overlap/are adjacent → merge into one (0-12)
+    // Last one is separate (20-25)
+    expect(merged.length).toBe(2);
+    expect(num(merged[0]?.context.start.row ?? row(0))).toBe(0);
+    expect(num(merged[0]?.context.end.row ?? row(0))).toBe(12);
+    expect(num(merged[1]?.context.start.row ?? row(0))).toBe(20);
+  });
+
+  test("unsorted ranges are sorted before merging", () => {
+    const merged = mergeExcerptRanges([
+      excerptRange(10, 15),
+      excerptRange(0, 5),
+      excerptRange(5, 10),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.context.start.row ?? row(0))).toBe(0);
+    expect(num(merged[0]?.context.end.row ?? row(0))).toBe(15);
+  });
+
+  test("empty input returns empty", () => {
+    expect(mergeExcerptRanges([]).length).toBe(0);
+  });
+
+  test("single range returned as-is", () => {
+    const merged = mergeExcerptRanges([excerptRange(5, 10)]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.context.start.row ?? row(0))).toBe(5);
   });
 });
 
