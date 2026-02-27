@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
@@ -22,8 +23,8 @@ import {
   yToRow,
   yToVisualRow,
 } from "../../src/multibuffer_renderer/measurement.ts";
-import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import type { Measurements } from "../../src/multibuffer_renderer/types.ts";
+import { num } from "../helpers.ts";
 
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
 const row = (n: number) => n as MultiBufferRow;
@@ -54,38 +55,38 @@ describe("calculateVisibleRows", () => {
 
   test("scrollTop=0 starts at row 0", () => {
     const { startRow, endRow } = calculateVisibleRows(0, VH, LH, 100);
-    expect(startRow).toBe(0); // max(0, 0 - OVERDRAW) = 0
-    expect(endRow).toBeGreaterThan(0);
+    expect(num(startRow)).toBe(0); // max(0, 0 - OVERDRAW) = 0
+    expect(num(endRow)).toBeGreaterThan(0);
   });
 
   test("endRow is clamped to totalLines", () => {
     const { endRow } = calculateVisibleRows(0, VH, LH, 5);
-    expect(endRow).toBe(5);
+    expect(num(endRow)).toBe(5);
   });
 
   test("scrollTop at exact line boundary", () => {
     // scrollTop = 200px → visibleStart = 10
     const { startRow } = calculateVisibleRows(200, VH, LH, 100);
     // visibleStart=10, startRow = max(0, 10-10) = 0 (overdraw is 10)
-    expect(startRow).toBe(0);
+    expect(num(startRow)).toBe(0);
   });
 
   test("scrolled well into content applies overdraw", () => {
     // scrollTop = 500px → visibleStart = 25
     // startRow = max(0, 25 - 10) = 15
     const { startRow } = calculateVisibleRows(500, VH, LH, 100);
-    expect(startRow).toBe(15);
+    expect(num(startRow)).toBe(15);
   });
 
   test("empty content returns row 0 to 0", () => {
     const { startRow, endRow } = calculateVisibleRows(0, VH, LH, 0);
-    expect(startRow).toBe(0);
-    expect(endRow).toBe(0);
+    expect(num(startRow)).toBe(0);
+    expect(num(endRow)).toBe(0);
   });
 
   test("viewport larger than content: endRow clamped to totalLines", () => {
     const { endRow } = calculateVisibleRows(0, 2000, LH, 3);
-    expect(endRow).toBe(3);
+    expect(num(endRow)).toBe(3);
   });
 
   test("scrollTop at maximum position", () => {
@@ -93,7 +94,7 @@ describe("calculateVisibleRows", () => {
     const contentHeight = totalLines * LH; // 1000
     const maxScroll = contentHeight - VH; // 800
     const { endRow } = calculateVisibleRows(maxScroll, VH, LH, totalLines);
-    expect(endRow).toBe(totalLines); // clamped
+    expect(num(endRow)).toBe(totalLines); // clamped
   });
 });
 
@@ -124,11 +125,11 @@ describe("yToVisualRow", () => {
 describe("yToRow", () => {
   test("without wrap map: equals yToVisualRow cast to MultiBufferRow", () => {
     const r = yToRow(60, 20);
-    expect(r).toBe(3);
+    expect(num(r)).toBe(3);
   });
 
   test("y=0 returns row 0", () => {
-    expect(yToRow(0, 20)).toBe(0);
+    expect(num(yToRow(0, 20))).toBe(0);
   });
 });
 

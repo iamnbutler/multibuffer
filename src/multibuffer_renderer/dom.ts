@@ -11,7 +11,6 @@ import {
   calculateContentHeight,
   calculateScrollTop,
   createViewport,
-  rowToY,
   xToColumn,
   yToVisualRow,
 } from "./measurement.ts";
