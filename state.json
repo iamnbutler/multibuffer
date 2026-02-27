@@ -1,6 +1,6 @@
 {
-  "last_run": "2026-02-27T19:00:00Z",
-  "last_run_id": "22497286771",
+  "last_run": "2026-02-27T20:00:00Z",
+  "last_run_id": "22497633874",
   "backlog_cursor": {
     "issues": 11,
     "note": "All issues through #11 have been seen. Issues #7, #10, #11 are proxy CI PR issues (patch artifacts); #8 is the monthly summary. Issues #3-#6 and #9 have Repo Assist comments."
@@ -30,36 +30,12 @@
   },
   "prs_created": [
     {
-      "pr_number": "patch-artifact-run-22493814428",
-      "branch": "repo-assist/improve-ci-setup",
-      "issue": 5,
-      "description": "CI workflow: typecheck, lint, tests",
-      "created": "2026-02-27",
-      "status": "patch-only - push failed"
-    },
-    {
-      "pr_number": "patch-artifact-run-22494218427",
-      "branch": "repo-assist/improve-ci-setup",
-      "issue": 5,
-      "description": "CI workflow: typecheck, lint, tests (retry 2)",
-      "created": "2026-02-27",
-      "status": "patch-only - push failed"
-    },
-    {
-      "pr_number": "patch-artifact-run-22494486270",
-      "branch": "repo-assist/fix-issue-5-ci-workflow",
-      "issue": 5,
-      "description": "CI workflow: typecheck, lint, tests (retry 3 - new branch name)",
-      "created": "2026-02-27",
-      "status": "patch-only - sandbox cannot push to GitHub; direct push not available"
-    },
-    {
       "pr_number": 12,
       "branch": "repo-assist/improve-goal-column-a09de9c94d66ac76",
       "issue": 4,
       "description": "Goal column tracking for vertical cursor navigation (feat(editor))",
       "created": "2026-02-27",
-      "status": "open draft PR - successfully created via safeoutputs tool"
+      "status": "open draft PR"
     },
     {
       "pr_number": 13,
@@ -67,7 +43,7 @@
       "issue": 4,
       "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
       "created": "2026-02-27",
-      "status": "open draft PR - confirmed visible on GitHub"
+      "status": "open draft PR"
     },
     {
       "pr_number": 14,
@@ -75,13 +51,21 @@
       "issue": 4,
       "description": "feat(editor): implement undo/redo with text-snapshot history stack",
       "created": "2026-02-27",
-      "status": "open draft PR - confirmed from list_pull_requests run 22497286771"
+      "status": "open draft PR"
     },
     {
-      "pr_number": "patch-artifact-run-22497286771",
+      "pr_number": 15,
       "branch": "repo-assist/feat-clipboard-operations-72214609",
       "issue": 4,
       "description": "feat(editor): clipboard cut/paste/getSelectedText() - 16 new tests",
+      "created": "2026-02-27",
+      "status": "open draft PR - confirmed in this run"
+    },
+    {
+      "pr_number": "patch-artifact-run-22497633874",
+      "branch": "repo-assist/feat-ci-workflow-2",
+      "issue": 5,
+      "description": "ci: add CI workflow for typecheck, lint, and tests",
       "created": "2026-02-27",
       "status": "patch-only - sandbox cannot push to GitHub; patch in agent-artifacts"
     }
@@ -120,7 +104,7 @@
     "9": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 7 (22497286771): Implemented clipboard (cut/paste/getSelectedText) as patch artifact on branch repo-assist/feat-clipboard-operations-72214609. PR #12 (goal column), PR #13 (Shift+PageUp/Down), PR #14 (undo/redo) are all confirmed real open draft PRs. Clipboard patch is only available as patch artifact from run 22497286771 (sandbox push blocked). Monthly summary issue #8 updated with this run. Tasks not yet done: task_4 (deps - no network to npm), task_6 (no open PRs from others), task_8 (only 1 commit on main), task_9 (no new contributors). Issue #4 feature gaps remaining: only undo/redo (PR #14) is not yet merged.",
+  "notes": "Run 8 (22497633874): CI workflow patch submitted again (branch repo-assist/feat-ci-workflow-2). PRs #12-#15 are all confirmed live open draft PRs. Monthly summary issue #8 updated. Tasks not yet done: task_4 (deps - no network), task_6 (no PRs from others), task_8 (only 1 commit on main), task_9 (no new contributors).",
   "monthly_summary_issue": {
     "month": "2026-02",
     "issue_number": 8
@@ -128,16 +112,13 @@
   "deps_last_checked": null,
   "open_issues_without_ra_comment": [],
   "ci_pr_push_blocked": true,
-  "ci_pr_patch_latest_run": "22494486270",
+  "ci_pr_patch_latest_run": "22497633874",
+  "ci_pr_branch_latest": "repo-assist/feat-ci-workflow-2",
   "goal_column_pr_number": 12,
-  "goal_column_pr_status": "open draft PR - confirmed",
   "shift_page_pr_number": 13,
-  "shift_page_pr_status": "open draft PR - confirmed",
   "undo_redo_pr_number": 14,
-  "undo_redo_pr_status": "open draft PR - confirmed",
-  "clipboard_branch": "repo-assist/feat-clipboard-operations-72214609",
-  "clipboard_patch_run": "22497286771",
+  "clipboard_pr_number": 15,
   "task_10_in_progress": {
-    "description": "Movement binding improvements for issue #4. Completed: goal column (PR #12), Shift+PageUp/Down (PR #13), undo/redo (PR #14), clipboard/cut/paste (patch run 22497286771). All core text editor operations from issue #4 are now implemented (as patches/PRs). Next: once CI and feature PRs land, benchmark-on-merge workflow (issue #3)."
+    "description": "All core issue #4 features implemented in PRs #12-#15 (goal column, Shift+PageUp/Down, undo/redo, clipboard). CI workflow patch submitted (run 22497633874). Next priority once any PRs merge: benchmark-on-merge workflow (issue #3)."
   }
 }
