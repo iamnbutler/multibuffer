@@ -30,15 +30,16 @@ describe("MultiBuffer Edit Proxy - Insert", () => {
     expect(mb.snapshot().lines(mbRow(0), mbRow(1))).toEqual(["Hello Beautiful World"]);
   });
 
-  test("insert newline splits line", () => {
+  test("insert newline splits line and grows excerpt", () => {
     const buf = createBuffer(createBufferId(), "HelloWorld\nExtra");
     const mb = createMultiBuffer();
     mb.addExcerpt(buf, excerptRange(0, 2));
 
     mb.edit(mbPoint(0, 5), mbPoint(0, 5), "\n");
     const snap = mb.snapshot();
-    expect(snap.lineCount).toBe(2);
-    expect(snap.lines(mbRow(0), mbRow(2))).toEqual(["Hello", "World"]);
+    // Excerpt grows by 1 line to include the new line from the split
+    expect(snap.lineCount).toBe(3);
+    expect(snap.lines(mbRow(0), mbRow(3))).toEqual(["Hello", "World", "Extra"]);
   });
 
   test("insert at start of excerpt", () => {

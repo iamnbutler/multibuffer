@@ -539,6 +539,10 @@ class MultiBufferImpl implements MultiBuffer {
     const startOffset = bufSnap.pointToOffset(startBuf.point);
     const endOffset = bufSnap.pointToOffset(endBuf.point);
 
+    // Track line count before edit to compute delta
+    const oldLineCount = bufSnap.lineCount;
+    const editRow = startBuf.point.row;
+
     // Apply the edit
     if (text.length === 0) {
       buffer.delete(startOffset, endOffset);
@@ -548,11 +552,18 @@ class MultiBufferImpl implements MultiBuffer {
       buffer.replace(startOffset, endOffset, text);
     }
 
+    const newLineCount = buffer.snapshot().lineCount;
+    const lineDelta = newLineCount - oldLineCount;
+
     // Refresh all excerpts from this buffer with new snapshots
-    this._refreshExcerptsForBuffer(buffer);
+    this._refreshExcerptsForBuffer(buffer, editRow, lineDelta);
   }
 
-  private _refreshExcerptsForBuffer(buffer: Buffer): void {
+  private _refreshExcerptsForBuffer(
+    buffer: Buffer,
+    editRow?: import("./types.ts").BufferRow,
+    lineDelta?: number,
+  ): void {
     const newSnap = buffer.snapshot();
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
     const bid = buffer.id as string;
@@ -562,10 +573,20 @@ class MultiBufferImpl implements MultiBuffer {
       // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
       if (!exc || (exc.bufferId as string) !== bid) continue;
 
-      // Clamp excerpt range to new buffer bounds (edits may change line count)
+      let endRow = exc.range.context.end.row;
+
+      // If the edit changed line count and falls within this excerpt, adjust end row
+      if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
+        if (editRow >= exc.range.context.start.row && editRow < exc.range.context.end.row) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          endRow = (endRow + lineDelta) as import("./types.ts").BufferRow;
+        }
+      }
+
+      // Clamp to new buffer bounds
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedEndRow = Math.min(
-        exc.range.context.end.row,
+        endRow,
         newSnap.lineCount,
       ) as import("./types.ts").BufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
