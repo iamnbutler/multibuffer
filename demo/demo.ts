@@ -10,12 +10,30 @@ import type {
   BufferId,
   BufferPoint,
   BufferRow,
+  MultiBuffer,
+  MultiBufferRow,
 } from "../src/multibuffer/types.ts";
 import { createDomRenderer } from "../src/multibuffer_renderer/dom.ts";
 import { Highlighter } from "../src/multibuffer_renderer/highlighter.ts";
 import { createViewport } from "../src/multibuffer_renderer/measurement.ts";
 import type { Measurements } from "../src/multibuffer_renderer/types.ts";
 import { sources } from "./sources.gen.ts";
+
+/** Identifies a named fixture scenario in the demo. */
+type ScenarioId =
+  | "all"
+  | "large-file"
+  | "many-excerpts"
+  | "unicode"
+  | "long-lines"
+  | "empty"
+  | "single-line";
+
+interface Scenario {
+  readonly id: ScenarioId;
+  readonly label: string;
+  build(m: MultiBuffer): void;
+}
 
 function point(row: number, col: number): BufferPoint {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
@@ -165,6 +183,203 @@ async function main() {
   // Initial render
   renderAll();
   inputHandler.focus();
+
+  // ── Fixture Scenario Switcher ──────────────────────────────────────────────────
+
+  const fixtureSrcs = sources.filter((s) => s.path.startsWith("demo/fixtures/"));
+
+  function buildDefault(m: MultiBuffer): void {
+    for (const src of sources) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+      const buf = createBuffer(src.path as BufferId, src.content);
+      const lineCount = src.content.split("\n").length;
+      if (src.path.includes("single-line")) {
+        m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+      } else if (src.path.includes("large-file")) {
+        m.addExcerpt(buf, range(10, 28), { hasTrailingNewline: true });
+        m.addExcerpt(buf, range(80, 105), { hasTrailingNewline: true });
+      } else {
+        m.addExcerpt(buf, range(0, Math.min(20, lineCount)), { hasTrailingNewline: true });
+      }
+    }
+  }
+
+  const scenarios: Scenario[] = [
+    { id: "all", label: "All files", build: buildDefault },
+    {
+      id: "large-file",
+      label: "Single large buffer",
+      build(m) {
+        const src = fixtureSrcs.find((s) => s.path.includes("large-file"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        const lineCount = src.content.split("\n").length;
+        m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+      },
+    },
+    {
+      id: "many-excerpts",
+      label: "Many excerpts",
+      build(m) {
+        // 3-line chunks stepping by 10 — exercises 100+ excerpts across all files
+        for (const src of sources) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+          const buf = createBuffer(src.path as BufferId, src.content);
+          const lineCount = src.content.split("\n").length;
+          for (let start = 0; start + 3 <= lineCount; start += 10) {
+            m.addExcerpt(buf, range(start, Math.min(start + 3, lineCount)), {
+              hasTrailingNewline: true,
+            });
+          }
+        }
+      },
+    },
+    {
+      id: "unicode",
+      label: "Unicode",
+      build(m) {
+        const src = fixtureSrcs.find((s) => s.path.includes("unicode"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+          hasTrailingNewline: true,
+        });
+      },
+    },
+    {
+      id: "long-lines",
+      label: "Long lines",
+      build(m) {
+        const src = fixtureSrcs.find((s) => s.path.includes("long-lines"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+          hasTrailingNewline: true,
+        });
+      },
+    },
+    {
+      id: "empty",
+      label: "Empty & whitespace",
+      build(m) {
+        const src = fixtureSrcs.find((s) =>
+          s.path.includes("empty-and-whitespace"),
+        );
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+          hasTrailingNewline: true,
+        });
+      },
+    },
+    {
+      id: "single-line",
+      label: "Single line",
+      build(m) {
+        const src = fixtureSrcs.find((s) => s.path.includes("single-line"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+          hasTrailingNewline: true,
+        });
+      },
+    },
+  ];
+
+  let activeScenarioId: ScenarioId = "all";
+
+  function switchScenario(id: ScenarioId): void {
+    if (id === activeScenarioId) return;
+    activeScenarioId = id;
+    // Remove all current excerpts, then build the new scenario
+    const toRemove = mb.excerpts.map((e) => e.id);
+    for (const excerptId of toRemove) {
+      mb.removeExcerpt(excerptId);
+    }
+    const scenario = scenarios.find((s) => s.id === id);
+    scenario?.build(mb);
+    // Reset cursor to top-left and trigger re-render via onChange
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+    editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
+  }
+
+  function createScenarioPicker(): HTMLElement {
+    const panel = document.createElement("div");
+    panel.style.cssText = [
+      "position:fixed",
+      "top:8px",
+      "right:8px",
+      "display:flex",
+      "flex-direction:column",
+      "gap:1px",
+      "background:#3c3836",
+      "border:1px solid #504945",
+      "border-radius:4px",
+      "padding:4px",
+      "z-index:1000",
+      "font-size:11px",
+      "font-family:inherit",
+    ].join(";");
+
+    const heading = document.createElement("div");
+    heading.textContent = "Fixture";
+    heading.style.cssText =
+      "color:#928374;padding:2px 6px 4px;text-transform:uppercase;letter-spacing:.05em;";
+    panel.appendChild(heading);
+
+    // Track buttons for highlight updates without needing querySelectorAll casts
+    const btns: Array<{ el: HTMLButtonElement; id: ScenarioId }> = [];
+
+    function refreshHighlight(): void {
+      for (const { el, id } of btns) {
+        el.style.fontWeight = id === activeScenarioId ? "bold" : "normal";
+        el.style.color = id === activeScenarioId ? "#fabd2f" : "#ebdbb2";
+      }
+    }
+
+    for (const scenario of scenarios) {
+      const btn = document.createElement("button");
+      btn.textContent = scenario.label;
+      btn.style.cssText = [
+        "display:block",
+        "background:none",
+        "border:none",
+        "text-align:left",
+        "color:#ebdbb2",
+        "padding:3px 8px",
+        "border-radius:3px",
+        "cursor:pointer",
+        "font-family:inherit",
+        "font-size:11px",
+        "white-space:nowrap",
+      ].join(";");
+      btns.push({ el: btn, id: scenario.id });
+      btn.addEventListener("mouseover", () => {
+        if (scenario.id !== activeScenarioId) btn.style.background = "#504945";
+      });
+      btn.addEventListener("mouseout", () => {
+        btn.style.background = "none";
+      });
+      // Prevent the click from stealing focus away from the editor
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => {
+        switchScenario(scenario.id);
+        refreshHighlight();
+        inputHandler.focus();
+      });
+      panel.appendChild(btn);
+    }
+
+    refreshHighlight();
+    return panel;
+  }
+
+  document.body.appendChild(createScenarioPicker());
 
   // ── Debug API ───────────────────────────────────────────────────
 
