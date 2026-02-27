@@ -1,8 +1,9 @@
 /**
- * Demo harness for the multibuffer DOM renderer.
- * Uses actual source files from src/multibuffer/ as excerpt content.
+ * Demo harness for the multibuffer DOM renderer with editing support.
  */
 
+import { Editor } from "../src/editor/editor.ts";
+import { InputHandler } from "../src/editor/input-handler.ts";
 import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type {
@@ -61,61 +62,100 @@ async function main() {
 
   renderer.mount(container);
 
-  // Initialize syntax highlighting (async, non-blocking)
+  // Initialize syntax highlighting
   const highlighter = new Highlighter();
   try {
     await highlighter.init(
       "./wasm/tree-sitter.wasm",
       "./wasm/tree-sitter-typescript.wasm",
     );
-
-    // Parse all buffers
     for (const src of sources) {
       highlighter.parseBuffer(src.path, src.content);
     }
-
     renderer.setHighlighter(highlighter);
-    console.log("Syntax highlighting initialized.");
   } catch (e) {
     console.warn("Syntax highlighting unavailable:", e);
   }
 
-  const snapshot = mb.snapshot();
-  renderer.setSnapshot(snapshot);
+  // Set up editor
+  const editor = new Editor(mb);
 
-  const viewport = createViewport(
-    0,
-    container.clientHeight,
-    container.clientWidth,
-    measurements,
-    snapshot.lineCount,
-  );
+  // Render function: refreshes the display from current state
+  function renderAll() {
+    if (!container) return;
+    const snapshot = mb.snapshot();
+    renderer.setSnapshot(snapshot);
 
-  const lines = snapshot.lines(viewport.startRow, viewport.endRow);
-  const boundaries = snapshot.excerptBoundaries(
-    viewport.startRow,
-    viewport.endRow,
-  );
+    const viewport = createViewport(
+      0,
+      container.clientHeight,
+      container.clientWidth,
+      measurements,
+      snapshot.lineCount,
+    );
 
-  const excerptHeaders = boundaries
-    .filter((b) => b.prev !== undefined)
-    .map((b) => ({
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      row: (b.row - 1) as import("../src/multibuffer/types.ts").MultiBufferRow,
-      path: b.next.bufferId,
-      label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
-    }));
+    const lines = snapshot.lines(viewport.startRow, viewport.endRow);
+    const boundaries = snapshot.excerptBoundaries(
+      viewport.startRow,
+      viewport.endRow,
+    );
 
-  renderer.render(
-    {
-      viewport,
-      selections: [],
-      decorations: [],
-      excerptHeaders,
-      focused: false,
-    },
-    lines,
-  );
+    const excerptHeaders = boundaries
+      .filter((b) => b.prev !== undefined)
+      .map((b) => ({
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        row: (b.row - 1) as import("../src/multibuffer/types.ts").MultiBufferRow,
+        path: b.next.bufferId,
+        label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
+      }));
+
+    renderer.render(
+      {
+        viewport,
+        selections: [],
+        decorations: [],
+        excerptHeaders,
+        focused: true,
+      },
+      lines,
+    );
+
+    // Render cursor and selection
+    const cursor = editor.cursor;
+    renderer.renderCursor(cursor);
+
+    const sel = editor.selection;
+    if (sel) {
+      const start = snapshot.resolveAnchor(sel.range.start);
+      const end = snapshot.resolveAnchor(sel.range.end);
+      renderer.renderSelection(start, end);
+    } else {
+      renderer.renderSelection(undefined, undefined);
+    }
+  }
+
+  // Wire editor state changes to re-render
+  editor.onChange(renderAll);
+
+  // Wire mouse clicks to cursor placement
+  renderer.onClickPosition((clickPoint) => {
+    editor.setCursor(clickPoint);
+  });
+
+  // Wire keyboard input
+  const inputHandler = new InputHandler((command) => {
+    editor.dispatch(command);
+  });
+  inputHandler.mount(container);
+
+  // Focus the input handler on container click
+  container.addEventListener("mousedown", () => {
+    inputHandler.focus();
+  });
+
+  // Initial render
+  renderAll();
+  inputHandler.focus();
 }
 
 main();

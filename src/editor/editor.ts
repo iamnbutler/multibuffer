@@ -51,6 +51,13 @@ export class Editor {
     return this._selection;
   }
 
+  /** Set cursor to a specific point (e.g. from mouse click). */
+  setCursor(point: MultiBufferPoint): void {
+    this._cursor = point;
+    this._selection = selectionAtPoint(this.multiBuffer, point);
+    this._onChange?.();
+  }
+
   /** Set a callback to be notified after any state change. */
   onChange(cb: () => void): void {
     this._onChange = cb;

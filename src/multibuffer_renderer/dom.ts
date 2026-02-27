@@ -4,7 +4,7 @@
  * Supports soft wrapping via WrapMap.
  */
 
-import type { MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
+import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 import type { Highlighter, Token } from "./highlighter.ts";
 import { buildHighlightedSpans } from "./highlighter.ts";
 import {
@@ -43,6 +43,8 @@ export class DomRenderer implements Renderer {
   private _scrollContainer: HTMLDivElement | null = null;
   private _spacer: HTMLDivElement | null = null;
   private _linesContainer: HTMLDivElement | null = null;
+  private _cursorEl: HTMLDivElement | null = null;
+  private _selectionLayer: HTMLDivElement | null = null;
   private _measurements: Measurements;
   private _rowPool: RowElement[] = [];
   private _viewport: Viewport;
@@ -50,6 +52,8 @@ export class DomRenderer implements Renderer {
   private _wrapMap: WrapMap | null = null;
   private _highlighter: Highlighter | null = null;
   private _onScroll: (() => void) | null = null;
+  private _onClick: ((e: MouseEvent) => void) | null = null;
+  private _onClickCallback: ((point: MultiBufferPoint) => void) | null = null;
 
   constructor(measurements: Measurements) {
     this._measurements = measurements;
@@ -80,17 +84,33 @@ export class DomRenderer implements Renderer {
     linesContainer.style.cssText = "position:absolute;top:0;left:0;right:0;";
     this._linesContainer = linesContainer;
 
+    // Selection highlight layer (behind text)
+    const selectionLayer = document.createElement("div");
+    selectionLayer.style.cssText = "position:absolute;top:0;left:0;right:0;pointer-events:none;";
+    this._selectionLayer = selectionLayer;
+
+    // Cursor element
+    const cursorEl = document.createElement("div");
+    cursorEl.style.cssText = `position:absolute;width:2px;background:#ebdbb2;display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
+    this._cursorEl = cursorEl;
+
     scrollContainer.appendChild(spacer);
+    scrollContainer.appendChild(selectionLayer);
     scrollContainer.appendChild(linesContainer);
+    scrollContainer.appendChild(cursorEl);
     container.appendChild(scrollContainer);
 
     this._onScroll = () => this._handleScroll();
     scrollContainer.addEventListener("scroll", this._onScroll, { passive: true });
+
+    this._onClick = (e: MouseEvent) => this._handleClick(e);
+    scrollContainer.addEventListener("mousedown", this._onClick);
   }
 
   unmount(): void {
-    if (this._scrollContainer && this._onScroll) {
-      this._scrollContainer.removeEventListener("scroll", this._onScroll);
+    if (this._scrollContainer) {
+      if (this._onScroll) this._scrollContainer.removeEventListener("scroll", this._onScroll);
+      if (this._onClick) this._scrollContainer.removeEventListener("mousedown", this._onClick);
     }
     if (this._container && this._scrollContainer) {
       this._container.removeChild(this._scrollContainer);
@@ -99,10 +119,13 @@ export class DomRenderer implements Renderer {
     this._scrollContainer = null;
     this._spacer = null;
     this._linesContainer = null;
+    this._cursorEl = null;
+    this._selectionLayer = null;
     this._rowPool = [];
     this._snapshot = null;
     this._wrapMap = null;
     this._onScroll = null;
+    this._onClick = null;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -412,6 +435,106 @@ export class DomRenderer implements Renderer {
         this._linesContainer.appendChild(root);
       }
       this._rowPool.push({ root, gutter, content, kind: "line" });
+    }
+  }
+
+  /** Register a callback for mouse clicks (cursor placement). */
+  onClickPosition(cb: (point: MultiBufferPoint) => void): void {
+    this._onClickCallback = cb;
+  }
+
+  /** Render cursor at a multibuffer point. */
+  renderCursor(point: MultiBufferPoint | undefined): void {
+    if (!this._cursorEl) return;
+    if (!point) {
+      this._cursorEl.style.display = "none";
+      return;
+    }
+
+    const { lineHeight, charWidth, gutterWidth } = this._measurements;
+    const visualRow = this._wrapMap
+      ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
+      : point.row;
+
+    // Account for wrapped segments
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
+    let displayRow = visualRow;
+    let displayCol = point.column;
+    if (wrapWidth > 0 && point.column > wrapWidth) {
+      const extraRows = Math.floor(point.column / wrapWidth);
+      displayRow = visualRow + extraRows;
+      displayCol = point.column - extraRows * wrapWidth;
+    }
+
+    const x = gutterWidth + displayCol * charWidth;
+    const y = displayRow * lineHeight;
+
+    this._cursorEl.style.display = "block";
+    this._cursorEl.style.left = `${x}px`;
+    this._cursorEl.style.top = `${y}px`;
+    this._cursorEl.style.height = `${lineHeight}px`;
+  }
+
+  /** Render selection highlight between two multibuffer points. */
+  renderSelection(
+    start: MultiBufferPoint | undefined,
+    end: MultiBufferPoint | undefined,
+  ): void {
+    if (!this._selectionLayer) return;
+
+    // Clear old selection highlights
+    this._selectionLayer.textContent = "";
+
+    if (!start || !end) return;
+    if (start.row === end.row && start.column === end.column) return;
+
+    const { lineHeight, charWidth, gutterWidth } = this._measurements;
+
+    // Ensure start is before end
+    let selStart = start;
+    let selEnd = end;
+    if (start.row > end.row || (start.row === end.row && start.column > end.column)) {
+      selStart = end;
+      selEnd = start;
+    }
+
+    for (let row = selStart.row; row <= selEnd.row; row++) {
+      const visualRow = this._wrapMap
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
+        : row;
+
+      // Get line length for this row
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const nextRow = Math.min(row + 1, this._snapshot?.lineCount ?? 0) as MultiBufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const lineText = this._snapshot?.lines(row as MultiBufferRow, nextRow);
+      const lineLen = lineText?.[0]?.length ?? 0;
+
+      const startCol = row === selStart.row ? selStart.column : 0;
+      const endCol = row === selEnd.row ? selEnd.column : lineLen + 1;
+
+      const x = gutterWidth + startCol * charWidth;
+      const width = (endCol - startCol) * charWidth;
+      const y = visualRow * lineHeight;
+
+      const highlight = document.createElement("div");
+      highlight.style.cssText =
+        `position:absolute;background:rgba(214,153,46,0.25);top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+      this._selectionLayer.appendChild(highlight);
+    }
+  }
+
+  private _handleClick(e: MouseEvent): void {
+    if (!this._scrollContainer || !this._onClickCallback) return;
+
+    const rect = this._scrollContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const result = this.hitTest(x, y);
+    if (result) {
+      this._onClickCallback(result);
     }
   }
 }
