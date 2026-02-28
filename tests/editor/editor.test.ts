@@ -849,7 +849,8 @@ describe("Editor - Clipboard", () => {
     editor.setCursor(mbPoint(0, 3));
     editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
     editor.dispatch({ type: "cut" });
-    expect(getText(mb)).toBe("Helrld");
+    // Selection from (0,3)→(1,3) = "lo\nWor", leaving "Hel" + "ld"
+    expect(getText(mb)).toBe("Helld");
   });
 
   // ── copy ──────────────────────────────────────────────────────
