@@ -507,6 +507,7 @@ export class DomRenderer implements Renderer {
     if (start.row === end.row && start.column === end.column) return;
 
     const { lineHeight, charWidth, gutterWidth } = this._measurements;
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
 
     // Ensure start is before end
     let selStart = start;
@@ -517,7 +518,7 @@ export class DomRenderer implements Renderer {
     }
 
     for (let row = selStart.row; row <= selEnd.row; row++) {
-      const visualRow = this._wrapMap
+      const firstVisualRow = this._wrapMap
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
         : row;
@@ -532,14 +533,38 @@ export class DomRenderer implements Renderer {
       const startCol = row === selStart.row ? selStart.column : 0;
       const endCol = row === selEnd.row ? selEnd.column : lineLen + 1;
 
-      const x = gutterWidth + startCol * charWidth;
-      const width = (endCol - startCol) * charWidth;
-      const y = visualRow * lineHeight;
+      if (wrapWidth > 0) {
+        // Split selection into per-segment rectangles for wrapped lines.
+        // A buffer row occupying multiple visual rows needs one highlight
+        // rectangle per visual segment, not one spanning the full buffer column range.
+        const startSeg = Math.floor(startCol / wrapWidth);
+        const lastSelectedCol = Math.max(startCol, endCol - 1);
+        const endSeg = Math.floor(lastSelectedCol / wrapWidth);
 
-      const highlight = document.createElement("div");
-      highlight.style.cssText =
-        `position:absolute;background:rgba(214,153,46,0.25);top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-      this._selectionLayer.appendChild(highlight);
+        for (let seg = startSeg; seg <= endSeg; seg++) {
+          const segStartCol = seg * wrapWidth;
+          const segSelStart = Math.max(startCol, segStartCol) - segStartCol;
+          const segSelEnd = Math.min(endCol, (seg + 1) * wrapWidth) - segStartCol;
+
+          const x = gutterWidth + segSelStart * charWidth;
+          const width = (segSelEnd - segSelStart) * charWidth;
+          const y = (firstVisualRow + seg) * lineHeight;
+
+          const highlight = document.createElement("div");
+          highlight.style.cssText =
+            `position:absolute;background:rgba(214,153,46,0.25);top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+          this._selectionLayer.appendChild(highlight);
+        }
+      } else {
+        const x = gutterWidth + startCol * charWidth;
+        const width = (endCol - startCol) * charWidth;
+        const y = firstVisualRow * lineHeight;
+
+        const highlight = document.createElement("div");
+        highlight.style.cssText =
+          `position:absolute;background:rgba(214,153,46,0.25);top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+        this._selectionLayer.appendChild(highlight);
+      }
     }
   }
 
