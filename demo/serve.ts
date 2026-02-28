@@ -11,7 +11,7 @@ const demoDir = import.meta.dir;
 // Run the build first
 await import("./build.ts");
 
-const PORT = 3000;
+const PORT = 1421;
 
 // Track connections by role
 let browserSocket: ServerWebSocket<{ role: string }> | null = null;
