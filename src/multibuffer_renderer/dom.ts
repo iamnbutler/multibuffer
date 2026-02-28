@@ -9,8 +9,8 @@ import type { Highlighter, Token } from "./highlighter.ts";
 import { buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
+  calculateScrollTop,
   createViewport,
-  rowToY,
   xToColumn,
   yToVisualRow,
 } from "./measurement.ts";
@@ -282,34 +282,20 @@ export class DomRenderer implements Renderer {
 
   scrollTo(target: ScrollTarget): void {
     if (!this._scrollContainer) return;
-    const y = rowToY(target.row, this._measurements.lineHeight, this._wrapMap ?? undefined);
-    const { height } = this._viewport;
-
-    let scrollTop: number;
-    switch (target.strategy) {
-      case "top":
-        scrollTop = y;
-        break;
-      case "center":
-        scrollTop = y - height / 2;
-        break;
-      case "bottom":
-        scrollTop = y - height + this._measurements.lineHeight;
-        break;
-      case "nearest": {
-        const currentTop = this._scrollContainer.scrollTop;
-        const currentBottom = currentTop + height;
-        if (y < currentTop) {
-          scrollTop = y;
-        } else if (y + this._measurements.lineHeight > currentBottom) {
-          scrollTop = y - height + this._measurements.lineHeight;
-        } else {
-          return;
-        }
-        break;
-      }
-    }
-    this._scrollContainer.scrollTop = Math.max(0, scrollTop);
+    const contentHeight = calculateContentHeight(
+      this._snapshot?.lineCount ?? 0,
+      this._measurements.lineHeight,
+      this._wrapMap ?? undefined,
+    );
+    this._scrollContainer.scrollTop = calculateScrollTop(
+      target.row,
+      target.strategy,
+      this._scrollContainer.scrollTop,
+      this._measurements.lineHeight,
+      this._viewport.height,
+      contentHeight,
+      this._wrapMap ?? undefined,
+    );
   }
 
   /** Get the current scroll position from the DOM element. */

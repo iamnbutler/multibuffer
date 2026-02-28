@@ -159,9 +159,11 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
       return { type: "moveCursor", direction: "right", granularity: mod ? "buffer" : "line" };
 
     case "PageUp":
+      if (shift) return { type: "extendSelection", direction: "up", granularity: "page" };
       return { type: "moveCursor", direction: "up", granularity: "page" };
 
     case "PageDown":
+      if (shift) return { type: "extendSelection", direction: "down", granularity: "page" };
       return { type: "moveCursor", direction: "down", granularity: "page" };
 
     // ── Editing ─────────────────────────────────────────────────
