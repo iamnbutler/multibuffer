@@ -193,6 +193,31 @@ export class Editor {
     this._onChange = cb;
   }
 
+  /**
+   * Return the text content of the current selection, or "" if the
+   * selection is collapsed or absent.  Callers use this to populate
+   * the platform clipboard before dispatching `copy` or `cut`.
+   */
+  getSelectedText(): string {
+    if (!this._selection) return "";
+    const snap = this.multiBuffer.snapshot();
+    if (isCollapsed(snap, this._selection)) return "";
+    const resolved = resolveAnchorRange(snap, this._selection.range);
+    if (!resolved) return "";
+
+    const { start, end } = resolved;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lines = snap.lines(start.row, (end.row + 1) as MultiBufferRow);
+    if (lines.length === 0) return "";
+    if (start.row === end.row) {
+      return (lines[0] ?? "").slice(start.column, end.column);
+    }
+    const firstLine = (lines[0] ?? "").slice(start.column);
+    const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
+    const middleLines = lines.slice(1, -1);
+    return [firstLine, ...middleLines, lastLine].join("\n");
+  }
+
   /** Execute a command. */
   dispatch(command: EditorCommand): void {
     const snap = this.multiBuffer.snapshot();
@@ -228,11 +253,18 @@ export class Editor {
       case "deleteLine":
         this._deleteLine(snap);
         break;
+      case "copy":
+        // No-op in the core — callers read the selection via getSelectedText()
+        // and write to the platform clipboard themselves.
+        break;
+      case "cut":
+        this._cut(snap);
+        break;
+      case "paste":
+        this._insertText(snap, command.text);
+        break;
       case "undo":
       case "redo":
-      case "copy":
-      case "cut":
-      case "paste":
         // TODO: implement
         break;
     }
@@ -492,6 +524,16 @@ export class Editor {
     const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+  }
+
+  private _cut(snap: MultiBufferSnapshot): void {
+    if (!this._selection || isCollapsed(snap, this._selection)) return;
+    const range = resolveAnchorRange(snap, this._selection.range);
+    if (range) {
+      this.multiBuffer.edit(range.start, range.end, "");
+      this._cursor = range.start;
+      this._selection = selectionAtPoint(this.multiBuffer, range.start);
+    }
   }
 
   /**
