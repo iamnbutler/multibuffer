@@ -8,7 +8,6 @@
 - [ ] Re-parse buffer after edit for syntax highlighting
 - [ ] Add browser integration tests for scroll+render interaction
 - [ ] Implement undo/redo system
-- [ ] Implement clipboard operations
 - [ ] Add cursor blink animation
 
 **multibuffer-v0**
