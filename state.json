@@ -1,22 +1,22 @@
 {
-  "last_run": "2026-02-28T00:00:00Z",
-  "last_run_id": "22530242364",
+  "last_run": "2026-03-01T00:00:00Z",
+  "last_run_id": "22554110009",
   "backlog_cursor": {
     "issues": 28,
-    "note": "All issues through #28 seen. #7, #10, #11, #16, #20 are proxy CI/patch issues (artifacts). #8 is monthly summary. #3-#6 and #9 have Repo Assist comments. #27 and #28 triaged this run."
+    "note": "All issues through #28 seen. Open issues: #3, #4, #6, #27, #28. #5 and #9 are closed. #7, #10, #11, #16, #20 are proxy CI/patch issues. Feb summary #8 closed (queued), March summary created (queued)."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-02-28",
-    "task_2_fix_issues": "2026-02-28",
+    "task_2_fix_issues": "2026-03-01",
     "task_3_improvements": "2026-02-27",
-    "task_4_deps": null,
-    "task_5_maintain_prs": "2026-02-27",
+    "task_4_deps": "2026-03-01",
+    "task_5_maintain_prs": "2026-03-01",
     "task_6_stale_pr_nudges": null,
     "task_7_labels": "2026-02-28",
     "task_8_release": null,
-    "task_9_welcome": null,
-    "task_10_forward": "2026-02-28",
-    "task_11_monthly_summary": "2026-02-28"
+    "task_9_welcome": "2026-03-01",
+    "task_10_forward": "2026-03-01",
+    "task_11_monthly_summary": "2026-03-01"
   },
   "comments_made": {
     "issues": {
@@ -26,18 +26,26 @@
       "6": "2026-02-27",
       "9": "2026-02-27",
       "27": "2026-02-28",
-      "28": "2026-02-28"
+      "28": "2026-03-01"
     },
     "prs": {}
   },
   "prs_created": [
     {
-      "pr_number": "patch-artifact-run-22530242364",
+      "pr_number": 30,
+      "branch": "repo-assist/fix-unicode-visual-width-28",
+      "issue": 28,
+      "description": "fix(renderer): correct cursor/selection positioning for wide chars (CJK/emoji)",
+      "created": "2026-03-01",
+      "status": "patch queued - will be created when workflow completes"
+    },
+    {
+      "pr_number": 29,
       "branch": "repo-assist/fix-selection-wrap-rendering-27",
       "issue": 27,
       "description": "fix(renderer): split selection highlights per visual segment for wrapped lines",
       "created": "2026-02-28",
-      "status": "patch-only - push blocked; patch in agent-artifacts for run 22530242364"
+      "status": "open draft PR on GitHub"
     },
     {
       "pr_number": 26,
@@ -81,113 +89,54 @@
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/improve-shift-page-nav-3ec1f2568d7bbad8",
-      "issue": 4,
       "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
-      "created": "2026-02-27",
-      "status": "closed/merged by maintainer (no longer in open PR list as of 2026-02-28)"
+      "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/feat-clipboard-operations-72214609-776f7cd0585d8762",
-      "issue": 4,
       "description": "feat(editor): clipboard cut/paste and getSelectedText() - 16 new tests",
-      "created": "2026-02-27",
       "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/fix-setCursor-bounds",
-      "issue": null,
-      "description": "fix(editor): clip setCursor point to valid multibuffer bounds (p0 bug mm4v1ccl-hc8y)",
-      "created": "2026-02-27",
+      "description": "fix(editor): clip setCursor point to valid multibuffer bounds",
       "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/fix-syntax-highlight-on-edit",
-      "issue": null,
       "description": "fix(demo): re-parse syntax highlighting tree after buffer edits",
-      "created": "2026-02-27",
       "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/feat-auto-scroll-cursor-mm4ui36i",
-      "issue": null,
       "description": "feat(demo): auto-scroll viewport to keep cursor visible on navigation",
-      "created": "2026-02-27",
       "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "merged/closed",
-      "branch": "repo-assist/feat-viewport-pure-fns-and-tests",
-      "issue": null,
       "description": "feat(renderer): pure scroll-target functions + viewport measurement tests (PR #24)",
-      "created": "2026-02-27",
       "status": "closed/merged by maintainer"
     },
     {
       "pr_number": "patch-artifact-run-22501375488",
       "branch": "repo-assist/feat-multi-excerpt-boundary-tests-mm3lh0xz",
-      "issue": null,
       "description": "test(multibuffer): excerpt boundary edit tests (spool mm3lh0xz-0duv) - 9 tests + 2 test.todo stubs",
-      "created": "2026-02-27",
       "status": "patch-only - push blocked; patch in agent-artifacts for run 22501375488"
-    },
-    {
-      "pr_number": "patch-artifact-run-22499179459",
-      "branch": "repo-assist/feat-spool-todo-workflow",
-      "issue": 9,
-      "description": "feat: spool -> TODO.md workflow (scripts/gen-todo.ts + .github/workflows/update-todo.yml)",
-      "created": "2026-02-27",
-      "status": "patch-only - push blocked; patch in agent-artifacts for run 22499179459"
-    },
-    {
-      "pr_number": "patch-artifact-run-22497633874",
-      "branch": "repo-assist/feat-ci-workflow-2",
-      "issue": 5,
-      "description": "ci: add CI workflow for typecheck, lint, and tests",
-      "created": "2026-02-27",
-      "status": "patch-only - push blocked; patch in agent-artifacts for run 22497633874"
     }
   ],
   "issues_created": [
     {
+      "title": "[Repo Assist] Monthly Activity 2026-03",
+      "number": "TBD-queued",
+      "note": "Created in run 22554110009 via safeoutputs (queued); will have a number after workflow completes",
+      "created": "2026-03-01",
+      "description": "March 2026 monthly activity summary"
+    },
+    {
       "title": "[Repo Assist] Monthly Activity 2026-02",
       "number": 8,
       "created": "2026-02-27",
-      "description": "Monthly activity summary"
-    },
-    {
-      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
-      "number": 7,
-      "created": "2026-02-27",
-      "description": "Proxy issue for CI PR - can be closed by maintainer"
-    },
-    {
-      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
-      "number": 10,
-      "created": "2026-02-27",
-      "description": "Proxy issue for CI PR - duplicate, can be closed by maintainer"
-    },
-    {
-      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
-      "number": 11,
-      "created": "2026-02-27",
-      "description": "Proxy issue for CI PR - duplicate, can be closed by maintainer"
-    },
-    {
-      "title": "[Repo Assist] ci: add CI workflow for typecheck, lint, and tests",
-      "number": 16,
-      "created": "2026-02-27",
-      "description": "Proxy issue for CI PR - duplicate, can be closed by maintainer"
-    },
-    {
-      "title": "[Repo Assist] feat(ci): generate TODO.md from spool events on push to main",
-      "number": 20,
-      "created": "2026-02-27",
-      "description": "Proxy issue for spool->TODO.md workflow patch - can be closed by maintainer"
+      "description": "February 2026 monthly summary - CLOSED in run 22554110009 (queued)"
     }
   ],
   "labels_applied": {
@@ -200,29 +149,35 @@
     "28": ["bug"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 18 (22530242364): Two new bugs #27 and #28 opened by iamnbutler on 2026-02-28. Labelled both as bug. Commented with root cause analysis on both. Created patch for #27 (renderSelection wrap fix in dom.ts). Many PRs were merged/closed by maintainer between runs 17 and 18 (PRs #13, #15, #18, #19, #21, #24, #25 no longer open). Remaining open PRs: #14, #17, #22, #23, #26. Patch PRs still pending: CI workflow, spool TODO workflow, boundary tests, resolveAnchors batch perf, selection-wrap-fix.",
+  "notes": "Run 22554110009 (2026-03-01): (1) Fixed #28 CJK/emoji visual width - PR #30 queued. (2) Commented on #28. (3) Closed Feb summary #8 (queued) + created March summary (queued). (4) Task 4 deps: @biomejs/biome@2.4.4, typescript@5.9.3, web-tree-sitter@0.26.6, tree-sitter-typescript@0.23.2 - no npm/bun in env so can't check for updates. (5) Task 5 PRs: CI exists (.github/workflows/ci.yml) and passes on main. Open draft PRs (#14,#17,#22,#23,#26,#29) all have 'pending' CI - CI was added after these PRs were created, no CI has run on them. Maintainer should push to each PR branch to trigger CI. (6) Task 9: No new contributors, only iamnbutler. (7) safeoutputs actions are deferred - March summary number unknown until next run.",
   "monthly_summary_issue": {
-    "month": "2026-02",
-    "issue_number": 8
+    "month": "2026-03",
+    "issue_number": "TBD",
+    "note": "Created in run 22554110009; check next run for actual number"
   },
-  "deps_last_checked": null,
+  "deps_last_checked": "2026-03-01",
+  "deps_findings": {
+    "checked": "2026-03-01",
+    "locked_versions": {
+      "@biomejs/biome": "2.4.4",
+      "typescript": "5.9.3",
+      "web-tree-sitter": "0.26.6",
+      "tree-sitter-typescript": "0.23.2",
+      "@types/bun": "1.3.9 (bun-types)"
+    },
+    "note": "No package manager (npm/bun) available in workflow env; cannot verify if newer versions exist. Versions appear current as of 2026-03-01."
+  },
   "open_issues_without_ra_comment": [],
-  "ci_pr_push_blocked": true,
-  "ci_pr_patch_latest_run": "22497633874",
-  "ci_pr_branch_latest": "repo-assist/feat-ci-workflow-2",
-  "todo_workflow_patch_run": "22499179459",
-  "todo_workflow_branch": "repo-assist/feat-spool-todo-workflow",
-  "cursor_blink_pr_number": 23,
-  "undo_redo_pr_number": 14,
-  "fixture_switcher_pr_number": 17,
-  "paste_focus_fix_pr_number": 22,
-  "resolveanchors_batch_pr_number": 26,
-  "boundary_tests_patch_run": "22501375488",
-  "boundary_tests_branch": "repo-assist/feat-multi-excerpt-boundary-tests-mm3lh0xz",
-  "selection_wrap_fix_patch_run": "22530242364",
-  "selection_wrap_fix_branch": "repo-assist/fix-selection-wrap-rendering-27",
+  "ci_status": {
+    "ci_yml_exists": true,
+    "ci_passing_on_main": true,
+    "open_prs_ci_status": "all 'pending' - CI was added after PR creation; no CI runs for PR branches yet",
+    "last_checked": "2026-03-01"
+  },
+  "unicode_visual_width_fix_pr_number": 30,
+  "selection_wrap_fix_pr_number": 29,
   "task_10_in_progress": {
-    "description": "Fixed #27 (wrapped line selection rendering) this run. Next: fix #28 (CJK/emoji unicode visual width). Implementation plan: visualWidth() helper with unicode East Asian Width ranges, update measureString/wrapLine/_visualRowsForLength/xToColumn.",
+    "description": "Both bugs #27 and #28 now have PRs (#29 and #30 respectively). Next: update March summary with actual issue number, then work on stale PR nudges (task 6, never run) or decoration range mapping (mm3lhpgn-mqnw p2).",
     "spool_remaining_open": [
       "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
       "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
