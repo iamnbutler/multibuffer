@@ -14,6 +14,8 @@ import type {
   Bias,
   Buffer,
   BufferPoint,
+  BufferSnapshot,
+  EditEntry,
   Excerpt,
   ExcerptBoundary,
   ExcerptId,
@@ -196,6 +198,88 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     if (!info) return undefined;
 
     return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, info);
+  }
+
+  resolveAnchors(anchors: readonly Anchor[]): (MultiBufferPoint | undefined)[] {
+    if (anchors.length === 0) return [];
+
+    // Build O(1) excerpt-data lookup: "index:generation" → Excerpt
+    const excerptDataCache = new Map<string, Excerpt>();
+    for (const exc of this._excerptData) {
+      excerptDataCache.set(`${exc.id.index}:${exc.id.generation}`, exc);
+    }
+
+    // Build O(1) excerpt-info lookup: "index:generation" → ExcerptInfo
+    const excerptInfoCache = new Map<string, ExcerptInfo>();
+    for (const info of this.excerpts) {
+      excerptInfoCache.set(`${info.id.index}:${info.id.generation}`, info);
+    }
+
+    // Cursor state: reuse buffer snapshots and edit-log slices across anchors
+    // from the same buffer and version so we don't call editsSince / snapshot
+    // more than once per (buffer, version) pair.
+    const snapshotCache = new Map<string, BufferSnapshot>();
+    const editsCache = new Map<string, readonly EditEntry[]>();
+
+    return anchors.map((anchor) => {
+      // 1. Follow replacement chain to current excerpt ID
+      let currentId = anchor.excerptId;
+      const maxChain = 100;
+      for (let i = 0; i < maxChain; i++) {
+        const key = `${currentId.index}:${currentId.generation}`;
+        const replacement = this._replacedExcerpts.get(key);
+        if (!replacement) break;
+        currentId = replacement;
+      }
+
+      // 2. Find excerpt data via cache (O(1) instead of O(n) find)
+      const excerptKey = `${currentId.index}:${currentId.generation}`;
+      const initialExcerpt = excerptDataCache.get(excerptKey);
+      if (!initialExcerpt) return undefined;
+
+      // 3. Resolve buffer point, reusing cached edit slice + snapshot
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+      const bid = initialExcerpt.bufferId as string;
+      const buffer = this._buffers.get(bid);
+
+      let bufferPoint: BufferPoint;
+      if (!buffer) {
+        bufferPoint = initialExcerpt.buffer.offsetToPoint(anchor.textAnchor.offset);
+      } else {
+        // Reuse the current-state snapshot for all anchors in this buffer
+        let snap = snapshotCache.get(bid);
+        if (!snap) {
+          snap = buffer.snapshot();
+          snapshotCache.set(bid, snap);
+        }
+
+        // Reuse the edit slice for this (buffer, anchor-version) pair
+        const editsKey = `${bid}@${anchor.textAnchor.version}`;
+        let edits = editsCache.get(editsKey);
+        if (!edits) {
+          edits = buffer.editsSince(anchor.textAnchor.version);
+          editsCache.set(editsKey, edits);
+        }
+
+        const adjustedOffset = adjustOffset(
+          anchor.textAnchor.offset,
+          anchor.textAnchor.bias,
+          edits,
+        );
+        const clampedOffset = snap.clipOffset(adjustedOffset, anchor.textAnchor.bias);
+        bufferPoint = snap.offsetToPoint(clampedOffset);
+      }
+
+      // 4. Find best excerpt for this buffer point
+      const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
+
+      // 5. Convert to multibuffer point via cache (O(1) instead of O(n) find)
+      const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
+      const info = excerptInfoCache.get(resolvedKey);
+      if (!info) return undefined;
+
+      return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, info);
+    });
   }
 
   private _bufferPointToMbPoint(

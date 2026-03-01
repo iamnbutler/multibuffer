@@ -308,6 +308,16 @@ export interface MultiBufferSnapshot {
   resolveAnchor(anchor: Anchor): MultiBufferPoint | undefined;
 
   /**
+   * Resolve multiple anchors in a single pass, reusing buffer state
+   * (edit log slices and snapshots) across anchors from the same buffer.
+   *
+   * Prefer this over calling resolveAnchor() in a loop when resolving
+   * many anchors at once (e.g. rendering selections or decorations).
+   * Returns results in the same order as the input array.
+   */
+  resolveAnchors(anchors: readonly Anchor[]): (MultiBufferPoint | undefined)[];
+
+  /**
    * Clip a point to valid multibuffer bounds, respecting bias.
    */
   clipPoint(point: MultiBufferPoint, bias: Bias): MultiBufferPoint;
