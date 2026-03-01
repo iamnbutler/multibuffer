@@ -12,4 +12,4 @@ export {
 } from "./measurement.ts";
 export { colorForNodeType } from "./theme.ts";
 export * from "./types.ts";
-export { WrapMap, wrapLine } from "./wrap-map.ts";
+export { WrapMap, wrapLine, visualWidth, charColToVisualCol, visualColToCharCol } from "./wrap-map.ts";
