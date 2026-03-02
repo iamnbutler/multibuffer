@@ -15,7 +15,7 @@ import {
   yToVisualRow,
 } from "./measurement.ts";
 import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
-import { WrapMap, wrapLine } from "./wrap-map.ts";
+import { WrapMap, charColToVisualCol, visualColToCharCol, visualWidth, wrapLine } from "./wrap-map.ts";
 
 /** Slice tokens to a column range, adjusting offsets to be segment-relative. */
 function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
@@ -220,9 +220,12 @@ export class DomRenderer implements Renderer {
 
       if (wrapWidth > 0) {
         const segments = wrapLine(lineText, wrapWidth);
+        let charOffset = 0;
         for (let s = 0; s < segments.length; s++) {
-          const segStart = s * wrapWidth;
-          const segEnd = segStart + (segments[s]?.length ?? 0);
+          const seg = segments[s] ?? "";
+          const segStart = charOffset;
+          charOffset += seg.length;
+          const segEnd = charOffset;
           const segTokens = lineTokens
             ? sliceTokensToRange(lineTokens, segStart, segEnd)
             : undefined;
@@ -230,7 +233,7 @@ export class DomRenderer implements Renderer {
           visualRows.push({
             mbRow,
             segment: s,
-            text: segments[s] ?? "",
+            text: seg,
             isHeader: s === 0 && header !== undefined,
             headerPath: header?.path,
             headerLabel: header?.label,
@@ -311,17 +314,28 @@ export class DomRenderer implements Renderer {
     if (!this._scrollContainer) return undefined;
     const scrollTop = this._scrollContainer.scrollTop;
     const visualRow = yToVisualRow(scrollTop + y, this._measurements.lineHeight);
-    const colInSegment = xToColumn(x, this._measurements);
+    const visualColInSegment = xToColumn(x, this._measurements);
 
     if (this._wrapMap) {
       const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
       const wrapWidth = this._measurements.wrapWidth ?? 0;
-      const column = segment * wrapWidth + colInSegment;
-      return { row: mbRow, column };
+      const lineText = this._getLineText(mbRow);
+      const segments = wrapLine(lineText, wrapWidth);
+      // Compute char offset of this segment by summing prior segment lengths
+      let charOffset = 0;
+      for (let s = 0; s < segment; s++) {
+        charOffset += segments[s]?.length ?? 0;
+      }
+      const segText = segments[segment] ?? "";
+      const charColInSeg = visualColToCharCol(segText, visualColInSegment);
+      return { row: mbRow, column: charOffset + charColInSeg };
     }
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    return { row: visualRow as MultiBufferRow, column: colInSegment };
+    const lineText = this._getLineText(visualRow as MultiBufferRow);
+    const column = visualColToCharCol(lineText, visualColInSegment);
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    return { row: visualRow as MultiBufferRow, column };
   }
 
   private _handleScroll(): void {
@@ -366,6 +380,13 @@ export class DomRenderer implements Renderer {
       },
       lines,
     );
+  }
+
+  private _getLineText(row: MultiBufferRow): string {
+    if (!this._snapshot) return "";
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const nextRow = Math.min(row + 1, this._snapshot.lineCount) as MultiBufferRow;
+    return this._snapshot.lines(row, nextRow)?.[0] ?? "";
   }
 
   private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
@@ -474,17 +495,30 @@ export class DomRenderer implements Renderer {
       ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
       : point.row;
 
-    // Account for wrapped segments
+    // Convert char column to visual position, accounting for wide chars and wrapping
     const wrapWidth = this._measurements.wrapWidth ?? 0;
+    const lineText = this._getLineText(point.row);
     let displayRow = visualRow;
-    let displayCol = point.column;
-    if (wrapWidth > 0 && point.column > wrapWidth) {
-      const extraRows = Math.floor(point.column / wrapWidth);
-      displayRow = visualRow + extraRows;
-      displayCol = point.column - extraRows * wrapWidth;
+    let displayVisualCol: number;
+    if (wrapWidth > 0) {
+      const segments = wrapLine(lineText, wrapWidth);
+      // Find which segment contains this char index
+      let charOffset = 0;
+      let segIdx = 0;
+      for (let s = 0; s < segments.length - 1; s++) {
+        const segLen = segments[s]?.length ?? 0;
+        if (charOffset + segLen > point.column) break;
+        charOffset += segLen;
+        segIdx = s + 1;
+      }
+      displayRow = visualRow + segIdx;
+      const segText = segments[segIdx] ?? "";
+      displayVisualCol = charColToVisualCol(segText, point.column - charOffset);
+    } else {
+      displayVisualCol = charColToVisualCol(lineText, point.column);
     }
 
-    const x = gutterWidth + displayCol * charWidth;
+    const x = gutterWidth + displayVisualCol * charWidth;
     const y = displayRow * lineHeight;
 
     this._cursorEl.style.display = "block";
@@ -529,11 +563,18 @@ export class DomRenderer implements Renderer {
       const lineText = this._snapshot?.lines(row as MultiBufferRow, nextRow);
       const lineLen = lineText?.[0]?.length ?? 0;
 
-      const startCol = row === selStart.row ? selStart.column : 0;
-      const endCol = row === selEnd.row ? selEnd.column : lineLen + 1;
+      const startCharCol = row === selStart.row ? selStart.column : 0;
+      const endCharCol = row === selEnd.row ? selEnd.column : lineLen + 1;
+      const lineTextStr = lineText?.[0] ?? "";
+      // Convert char columns to visual columns for pixel-accurate positioning
+      const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
+      const endVisualCol =
+        endCharCol > lineTextStr.length
+          ? visualWidth(lineTextStr) + 1
+          : charColToVisualCol(lineTextStr, endCharCol);
 
-      const x = gutterWidth + startCol * charWidth;
-      const width = (endCol - startCol) * charWidth;
+      const x = gutterWidth + startVisualCol * charWidth;
+      const width = Math.max(0, endVisualCol - startVisualCol) * charWidth;
       const y = visualRow * lineHeight;
 
       const highlight = document.createElement("div");

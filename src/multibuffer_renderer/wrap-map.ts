@@ -7,15 +7,109 @@
 
 import type { MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 
-/** Split a line into segments at a fixed character width. */
+/**
+ * Returns the display cell width (1 or 2) for a Unicode code point.
+ * Wide and fullwidth characters (CJK, emoji, fullwidth forms) occupy
+ * two cells in a fixed-width monospace font.
+ */
+function codePointWidth(cp: number): 1 | 2 {
+  if (
+    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
+    cp === 0x2329 ||
+    cp === 0x232a ||
+    (cp >= 0x2e80 && cp <= 0x303e) || // CJK Radicals, Bopomofo, etc.
+    (cp >= 0x3040 && cp <= 0x33ff) || // Hiragana, Katakana, CJK misc
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Unified Extension A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
+    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
+    (cp >= 0xac00 && cp <= 0xd7af) || // Hangul Syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK Compatibility Ideographs
+    (cp >= 0xfe10 && cp <= 0xfe1f) || // Vertical Forms
+    (cp >= 0xfe30 && cp <= 0xfe6f) || // CJK Compatibility Forms, Small Forms
+    (cp >= 0xff00 && cp <= 0xff60) || // Fullwidth Latin, Katakana, Hangul
+    (cp >= 0xffe0 && cp <= 0xffe6) || // Fullwidth Signs
+    (cp >= 0x1b000 && cp <= 0x1b0ff) || // Kana Supplement
+    (cp >= 0x1f004 && cp <= 0x1f0cf) || // Mahjong/Playing Card Symbols
+    (cp >= 0x1f200 && cp <= 0x1f2ff) || // Enclosed Ideographic Supplement
+    (cp >= 0x1f300 && cp <= 0x1f64f) || // Misc Symbols, Emoticons
+    (cp >= 0x1f900 && cp <= 0x1f9ff) || // Supplemental Symbols
+    (cp >= 0x20000 && cp <= 0x2ffff) || // CJK Extensions B–F
+    (cp >= 0x30000 && cp <= 0x3ffff) // CJK Extension G
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+/**
+ * Visual display width of a string in fixed-width monospace cells.
+ * Wide/fullwidth characters (CJK, emoji) count as 2 cells; all others as 1.
+ */
+export function visualWidth(text: string): number {
+  let w = 0;
+  for (const char of text) {
+    w += codePointWidth(char.codePointAt(0) ?? 0);
+  }
+  return w;
+}
+
+/**
+ * Convert a UTF-16 code-unit column index to a visual column
+ * (number of display cells from the start of the string).
+ */
+export function charColToVisualCol(text: string, charCol: number): number {
+  let visual = 0;
+  let i = 0;
+  for (const char of text) {
+    if (i >= charCol) break;
+    visual += codePointWidth(char.codePointAt(0) ?? 0);
+    i += char.length;
+  }
+  return visual;
+}
+
+/**
+ * Convert a visual column (display cell offset) to a UTF-16 code-unit
+ * column index. Snaps to the next character boundary when landing
+ * in the middle of a wide glyph. Clamps to the end of the string.
+ */
+export function visualColToCharCol(text: string, visualCol: number): number {
+  let visual = 0;
+  let i = 0;
+  for (const char of text) {
+    if (visual >= visualCol) break;
+    visual += codePointWidth(char.codePointAt(0) ?? 0);
+    i += char.length;
+  }
+  return i;
+}
+
+/**
+ * Split a line into visual-width segments at wrapWidth display cells.
+ * Correctly handles wide characters (CJK, emoji) that occupy 2 cells.
+ * Never splits in the middle of a wide glyph.
+ */
 export function wrapLine(text: string, wrapWidth: number): string[] {
-  if (wrapWidth <= 0 || text.length <= wrapWidth) {
+  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
     return [text];
   }
   const segments: string[] = [];
-  for (let i = 0; i < text.length; i += wrapWidth) {
-    segments.push(text.slice(i, i + wrapWidth));
+  let segStart = 0; // UTF-16 code-unit index of current segment start
+  let segVW = 0; // accumulated visual width of current segment
+  let i = 0; // current UTF-16 code-unit index
+  for (const char of text) {
+    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+    if (segVW + cw > wrapWidth && segVW > 0) {
+      // Adding this glyph would exceed the wrap width: cut before it
+      segments.push(text.slice(segStart, i));
+      segStart = i;
+      segVW = cw;
+    } else {
+      segVW += cw;
+    }
+    i += char.length; // char.length is 2 for surrogate pairs, 1 for BMP
   }
+  segments.push(text.slice(segStart));
   return segments;
 }
 
@@ -41,7 +135,7 @@ export class WrapMap {
 
     for (let i = 0; i < lineCount; i++) {
       const line = lines[i] ?? "";
-      const visualRows = this._visualRowsForLength(line.length);
+      const visualRows = wrapLine(line, wrapWidth).length;
       this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
     }
 
@@ -88,8 +182,4 @@ export class WrapMap {
     return this._wrapWidth;
   }
 
-  private _visualRowsForLength(length: number): number {
-    if (this._wrapWidth <= 0 || length <= this._wrapWidth) return 1;
-    return Math.ceil(length / this._wrapWidth);
-  }
 }
