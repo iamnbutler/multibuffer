@@ -1,35 +1,35 @@
 /**
- * Gruvbox dark color theme for syntax highlighting.
+ * One Dark color theme for syntax highlighting.
  * Maps tree-sitter node types to CSS colors.
  */
 
-const GRUVBOX = {
-  red: "#fb4934",
-  green: "#b8bb26",
-  yellow: "#fabd2f",
-  blue: "#83a598",
-  purple: "#d3869b",
-  aqua: "#8ec07c",
-  orange: "#fe8019",
-  gray: "#928374",
-  fg: "#ebdbb2",
-  fg3: "#a89984",
+const ONE_DARK = {
+  red: "#e06c75",
+  green: "#98c379",
+  yellow: "#e5c07b",
+  blue: "#61afef",
+  purple: "#c678dd",
+  cyan: "#56b6c2",
+  orange: "#d19a66",
+  gray: "#5c6370",
+  fg: "#abb2bf",
+  fg3: "#7f848e",
 } as const;
 
 /** Broad highlight categories. */
 const CATEGORY_COLORS: Record<string, string> = {
-  keyword: GRUVBOX.red,
-  string: GRUVBOX.green,
-  number: GRUVBOX.purple,
-  comment: GRUVBOX.gray,
-  type: GRUVBOX.yellow,
-  function: GRUVBOX.aqua,
-  property: GRUVBOX.blue,
-  operator: GRUVBOX.orange,
-  punctuation: GRUVBOX.fg3,
-  constant: GRUVBOX.purple,
-  variable_builtin: GRUVBOX.orange,
-  default: GRUVBOX.fg,
+  keyword: ONE_DARK.purple,
+  string: ONE_DARK.green,
+  number: ONE_DARK.orange,
+  comment: ONE_DARK.gray,
+  type: ONE_DARK.yellow,
+  function: ONE_DARK.blue,
+  property: ONE_DARK.red,
+  operator: ONE_DARK.cyan,
+  punctuation: ONE_DARK.fg3,
+  constant: ONE_DARK.orange,
+  variable_builtin: ONE_DARK.red,
+  default: ONE_DARK.fg,
 };
 
 /**
@@ -217,5 +217,5 @@ function nodeTypeToCategory(nodeType: string): string {
 /** Get the CSS color for a tree-sitter node type. */
 export function colorForNodeType(nodeType: string): string {
   const category = nodeTypeToCategory(nodeType);
-  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.default ?? GRUVBOX.fg;
+  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.default ?? ONE_DARK.fg;
 }
