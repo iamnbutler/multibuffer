@@ -1,27 +1,27 @@
 {
-  "last_run": "2026-03-02T00:00:00Z",
-  "last_run_id": "22598353474",
+  "last_run": "2026-03-03T00:00:00Z",
+  "last_run_id": "22645385943",
   "backlog_cursor": {
     "issues": 31,
-    "note": "All issues through #31 seen. Open issues: #3, #4, #6, #27, #31 (monthly summary). #28 closed (PR #30 merged). #5, #9 closed (old)."
+    "note": "All open issues seen: #3, #4, #6, #27, #31 (monthly summary). Closed issues #5,#7,#8,#9,#10,#11,#16,#20,#28 not revisited."
   },
   "tasks_last_run": {
-    "task_1_triage": "2026-02-28",
-    "task_2_fix_issues": "2026-03-02",
+    "task_1_triage": "2026-03-03",
+    "task_2_fix_issues": "2026-03-03",
     "task_3_improvements": "2026-02-27",
     "task_4_deps": "2026-03-01",
-    "task_5_maintain_prs": "2026-03-02",
-    "task_6_stale_pr_nudges": null,
+    "task_5_maintain_prs": "2026-03-03",
+    "task_6_stale_pr_nudges": "2026-03-03",
     "task_7_labels": "2026-02-28",
-    "task_8_release": null,
+    "task_8_release": "2026-03-03",
     "task_9_welcome": "2026-03-01",
-    "task_10_forward": "2026-03-01",
-    "task_11_monthly_summary": "2026-03-02"
+    "task_10_forward": "2026-03-03",
+    "task_11_monthly_summary": "2026-03-03"
   },
   "comments_made": {
     "issues": {
       "3": "2026-02-27",
-      "4": "2026-02-27",
+      "4": "2026-03-03",
       "5": "2026-02-27",
       "6": "2026-02-27",
       "9": "2026-02-27",
@@ -34,12 +34,12 @@
   },
   "prs_created": [
     {
-      "pr_number": "TBD-run-22598353474",
-      "branch": "fix-selection-wrap-v2",
+      "pr_number": "TBD-run-22645385943",
+      "branch": "repo-assist/fix-wrap-selection-27",
       "issue": 27,
-      "description": "fix(renderer): split wrapped-line selections per visual segment with CJK-aware columns — combines PR #29 intent + PR #30 CJK fix",
-      "created": "2026-03-02",
-      "status": "patch queued - will be created when workflow completes; supersedes PR #29"
+      "description": "fix(renderer): split wrapped-line selection highlights per visual segment",
+      "created": "2026-03-03",
+      "status": "patch queued - will be created when workflow completes; replaces PR #29 attempt"
     },
     {
       "pr_number": 30,
@@ -55,7 +55,7 @@
       "issue": 27,
       "description": "fix(renderer): split selection highlights per visual segment for wrapped lines",
       "created": "2026-02-28",
-      "status": "SUPERSEDED - unresolvable merge conflict (unrelated history); commented 2026-03-02 to explain; close this PR"
+      "status": "CLOSED by maintainer 2026-03-03"
     },
     {
       "pr_number": 26,
@@ -96,42 +96,6 @@
       "description": "feat(editor): implement undo/redo with text-snapshot history stack",
       "created": "2026-02-27",
       "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "Shift+PageUp/Down selection extension + Shift+Home/End test coverage",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "feat(editor): clipboard cut/paste and getSelectedText() - 16 new tests",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "fix(editor): clip setCursor point to valid multibuffer bounds",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "fix(demo): re-parse syntax highlighting tree after buffer edits",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "feat(demo): auto-scroll viewport to keep cursor visible on navigation",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "merged/closed",
-      "description": "feat(renderer): pure scroll-target functions + viewport measurement tests (PR #24)",
-      "status": "closed/merged by maintainer"
-    },
-    {
-      "pr_number": "patch-artifact-run-22501375488",
-      "branch": "repo-assist/feat-multi-excerpt-boundary-tests-mm3lh0xz",
-      "description": "test(multibuffer): excerpt boundary edit tests (spool mm3lh0xz-0duv) - 9 tests + 2 test.todo stubs",
-      "status": "patch-only - push blocked; patch in agent-artifacts for run 22501375488"
     }
   ],
   "issues_created": [
@@ -158,11 +122,11 @@
     "28": ["bug"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 22598353474 (2026-03-02): (1) Task 5: PR #29 has unrelated git history - cannot rebase/merge. Created new PR from main (fix-selection-wrap-v2) combining wrap-segment splitting + CJK-aware columns. Commented on PR #29 to explain; maintainer should close #29. (2) Task 11: Updated monthly summary #31, removed PR #30 (merged) and closed issues from Suggested Actions, added new PR info. (3) PR #30 was merged by maintainer - issue #28 closed. (4) Open issues without RA comment: none remaining. (5) Open draft PRs (#14, #17, #22, #23, #26) still pending review - no new activity since 2026-02-27.",
+  "notes": "Run 22645385943 (2026-03-03): (1) Task 2: Created PR for issue #27 on branch repo-assist/fix-wrap-selection-27. Fix: renderSelection() now emits per-segment highlight divs when wrapWidth>0, matching renderCursor() pattern. (2) Task 1: Maintainer replied to #4 on 2026-02-27 - responded with binding status summary and flagged isWordChar Unicode gap in cursor.ts. (3) Task 6: PRs all ~4 days old, no nudges needed. (4) Task 8: pre-release private project, no release. (5) Task 11: Updated monthly summary #31 - removed stale 'Apply patch' items (CI/update-todo already in repo), removed closed PR #29, removed closed issues #7-20, added new PR for #27. (6) PR #29 was closed by maintainer on 2026-03-03. (7) CI, update-todo.yml, gen-todo.ts are all already in the repo - old 'Apply patch' suggestions were stale.",
   "monthly_summary_issue": {
     "month": "2026-03",
     "issue_number": 31,
-    "note": "Updated in run 22598353474"
+    "note": "Updated in run 22645385943"
   },
   "deps_last_checked": "2026-03-01",
   "deps_findings": {
@@ -180,11 +144,11 @@
   "ci_status": {
     "ci_yml_exists": true,
     "ci_passing_on_main": true,
-    "open_prs_ci_status": "PRs #14,#17,#22,#23,#26 have pending CI - all created before CI was added; no CI runs on PR branches yet",
-    "last_checked": "2026-03-02"
+    "open_prs_ci_status": "PRs #14,#17,#22,#23,#26 have pending CI (0 checks) - created before CI was added; new PR fix-wrap-selection-27 will run CI via GitHub Actions",
+    "last_checked": "2026-03-03"
   },
   "task_10_in_progress": {
-    "description": "Issue #27 now has new clean PR from main. Next priorities: (1) task_6 stale PR nudges - PRs #14,#17,#22,#23,#26 will be 14+ days old around 2026-03-13. (2) task_8 release prep - no tags/releases yet, project pre-release. (3) task_3 improvements - decoration range mapping (mm3lhpgn-mqnw p2).",
+    "description": "Next priorities: (1) Unicode-aware word movement in cursor.ts - isWordChar is ASCII-only, needs Intl.Segmenter. (2) task_3 improvements - decoration range mapping (mm3lhpgn-mqnw p2). (3) task_6 stale PR nudges - PRs #14,#17,#22,#23,#26 will be 14+ days old around 2026-03-13.",
     "spool_remaining_open": [
       "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
       "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
