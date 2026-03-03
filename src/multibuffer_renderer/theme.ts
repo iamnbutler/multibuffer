@@ -1,35 +1,37 @@
 /**
- * One Dark color theme for syntax highlighting.
+ * Catppuccin Latte color theme for syntax highlighting.
  * Maps tree-sitter node types to CSS colors.
  */
 
-const ONE_DARK = {
-  red: "#e06c75",
-  green: "#98c379",
-  yellow: "#e5c07b",
-  blue: "#61afef",
-  purple: "#c678dd",
-  cyan: "#56b6c2",
-  orange: "#d19a66",
-  gray: "#5c6370",
-  fg: "#abb2bf",
-  fg3: "#828997",
+const CATPPUCCIN_LATTE = {
+  red: "#d20f39",
+  green: "#40a02b",
+  yellow: "#df8e1d",
+  blue: "#1e66f5",
+  purple: "#8839ef",
+  pink: "#ea76cb",
+  teal: "#179299",
+  peach: "#fe640b",
+  mauve: "#8839ef",
+  gray: "#9ca0b0",
+  fg: "#4c4f69",
+  fg3: "#6c6f85",
 } as const;
 
 /** Broad highlight categories. */
 const CATEGORY_COLORS: Record<string, string> = {
-  keyword: ONE_DARK.purple,
-  string: ONE_DARK.green,
-  number: ONE_DARK.orange,
-  comment: ONE_DARK.gray,
-  type: ONE_DARK.yellow,
-  function: ONE_DARK.blue,
-  property: ONE_DARK.red,
-  operator: ONE_DARK.cyan,
-  punctuation: ONE_DARK.fg3,
-  constant: ONE_DARK.orange,
-  variable_builtin: ONE_DARK.red,
-  default: ONE_DARK.fg,
+  keyword: CATPPUCCIN_LATTE.mauve,
+  string: CATPPUCCIN_LATTE.green,
+  number: CATPPUCCIN_LATTE.peach,
+  comment: CATPPUCCIN_LATTE.gray,
+  type: CATPPUCCIN_LATTE.yellow,
+  function: CATPPUCCIN_LATTE.blue,
+  property: CATPPUCCIN_LATTE.teal,
+  operator: CATPPUCCIN_LATTE.teal,
+  punctuation: CATPPUCCIN_LATTE.fg3,
+  constant: CATPPUCCIN_LATTE.peach,
+  variable_builtin: CATPPUCCIN_LATTE.red,
+  default: CATPPUCCIN_LATTE.fg,
 };
 
 /**
@@ -217,5 +219,5 @@ function nodeTypeToCategory(nodeType: string): string {
 /** Get the CSS color for a tree-sitter node type. */
 export function colorForNodeType(nodeType: string): string {
   const category = nodeTypeToCategory(nodeType);
-  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.default ?? ONE_DARK.fg;
+  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.default ?? CATPPUCCIN_LATTE.fg;
 }

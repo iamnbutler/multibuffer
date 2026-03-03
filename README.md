@@ -44,7 +44,7 @@ src/
     dom.ts                    Line pooling, viewport rendering, cursor/selection display
     wrap-map.ts               Soft wrap via prefix sum (buffer row ↔ visual row)
     highlighter.ts            Tree-sitter WASM syntax highlighting
-    theme.ts                  One Dark color mapping
+    theme.ts                  Catppuccin Latte color mapping
     measurement.ts            Fixed-height line calculations, viewport creation
     types.ts                  Renderer interface, Viewport, Measurements
 ```

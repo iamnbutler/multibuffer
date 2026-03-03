@@ -97,7 +97,7 @@ export class DomRenderer implements Renderer {
 
     // Cursor element
     const cursorEl = document.createElement("div");
-    cursorEl.style.cssText = `position:absolute;width:2px;background:#abb2bf;display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
+    cursorEl.style.cssText = `position:absolute;width:2px;background:#4c4f69;display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
     this._cursorEl = cursorEl;
 
     scrollContainer.appendChild(spacer);
@@ -402,11 +402,11 @@ export class DomRenderer implements Renderer {
   ): void {
     rowEl.root.style.display = "flex";
     rowEl.root.style.background = "#3c3836";
-    rowEl.root.style.borderTop = "1px solid #3e4451";
+    rowEl.root.style.borderTop = "1px solid #ccd0da";
     rowEl.gutter.textContent = "";
-    rowEl.gutter.style.background = "#21252b";
+    rowEl.gutter.style.background = "#e6e9ef";
     rowEl.content.textContent = path + (label ? `  ${label}` : "");
-    rowEl.content.style.color = "#828997";
+    rowEl.content.style.color = "#6c6f85";
     rowEl.content.style.fontWeight = "bold";
     rowEl.content.style.fontSize = "0.85em";
     rowEl.kind = "header";
@@ -447,7 +447,7 @@ export class DomRenderer implements Renderer {
 
       const gutter = document.createElement("span");
       gutter.style.cssText =
-        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:#495162;user-select:none;flex-shrink:0;`;
+        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:#9ca0b0;user-select:none;flex-shrink:0;`;
 
       const content = document.createElement("span");
       content.style.cssText = "flex:1;overflow:hidden;";
