@@ -97,24 +97,41 @@ function moveWord(
   current: MultiBufferPoint,
   direction: Direction,
 ): MultiBufferPoint {
-  // Simplified word movement — skip to next/prev word boundary
   if (direction === "right" || direction === "left") {
     const lineText = snapshot.lines(current.row, nextRow(current.row, snapshot.lineCount));
     const text = lineText[0] ?? "";
     const col = current.column;
 
     if (direction === "right") {
-      // Skip current word chars, then skip whitespace
+      // Skip current word chars, then skip non-word chars
       let pos = col;
-      while (pos < text.length && isWordChar(text.charCodeAt(pos))) pos++;
-      while (pos < text.length && !isWordChar(text.charCodeAt(pos))) pos++;
+      while (pos < text.length) {
+        const cp = text.codePointAt(pos) ?? 0;
+        if (!isWordChar(String.fromCodePoint(cp))) break;
+        pos += cp > 0xffff ? 2 : 1;
+      }
+      while (pos < text.length) {
+        const cp = text.codePointAt(pos) ?? 0;
+        if (isWordChar(String.fromCodePoint(cp))) break;
+        pos += cp > 0xffff ? 2 : 1;
+      }
       return { row: current.row, column: pos };
     }
 
-    // left: skip whitespace, then skip word chars
+    // left: skip non-word chars, then skip word chars
     let pos = col;
-    while (pos > 0 && !isWordChar(text.charCodeAt(pos - 1))) pos--;
-    while (pos > 0 && isWordChar(text.charCodeAt(pos - 1))) pos--;
+    while (pos > 0) {
+      const prev = prevCpStart(text, pos);
+      const cp = text.codePointAt(prev) ?? 0;
+      if (isWordChar(String.fromCodePoint(cp))) break;
+      pos = prev;
+    }
+    while (pos > 0) {
+      const prev = prevCpStart(text, pos);
+      const cp = text.codePointAt(prev) ?? 0;
+      if (!isWordChar(String.fromCodePoint(cp))) break;
+      pos = prev;
+    }
     return { row: current.row, column: pos };
   }
 
@@ -188,11 +205,21 @@ function nextRow(row: MultiBufferRow, lineCount: number): MultiBufferRow {
   return Math.min(row + 1, lineCount) as MultiBufferRow;
 }
 
-export function isWordChar(charCode: number): boolean {
-  return (
-    (charCode >= 48 && charCode <= 57) || // 0-9
-    (charCode >= 65 && charCode <= 90) || // A-Z
-    (charCode >= 97 && charCode <= 122) || // a-z
-    charCode === 95 // _
-  );
+/** Return the UTF-16 offset at which the code point immediately before pos begins. */
+function prevCpStart(text: string, pos: number): number {
+  const lo = text.charCodeAt(pos - 1);
+  if (lo >= 0xdc00 && lo <= 0xdfff && pos >= 2) {
+    const hi = text.charCodeAt(pos - 2);
+    if (hi >= 0xd800 && hi <= 0xdbff) return pos - 2;
+  }
+  return pos - 1;
+}
+
+/**
+ * Returns true if the given character is a word character.
+ * Recognises Unicode letters (\\p{L}), Unicode digits (\\p{N}), and underscore.
+ * This covers Latin, CJK, Cyrillic, Arabic, and all other Unicode script letters.
+ */
+export function isWordChar(char: string): boolean {
+  return /^[\p{L}\p{N}_]$/u.test(char);
 }
