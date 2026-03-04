@@ -1,22 +1,22 @@
 {
-  "last_run": "2026-03-03T00:00:00Z",
-  "last_run_id": "22645385943",
+  "last_run": "2026-03-04T00:00:00Z",
+  "last_run_id": "22692130773",
   "backlog_cursor": {
     "issues": 31,
     "note": "All open issues seen: #3, #4, #6, #27, #31 (monthly summary). Closed issues #5,#7,#8,#9,#10,#11,#16,#20,#28 not revisited."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-03-03",
-    "task_2_fix_issues": "2026-03-03",
+    "task_2_fix_issues": "2026-03-04",
     "task_3_improvements": "2026-02-27",
     "task_4_deps": "2026-03-01",
-    "task_5_maintain_prs": "2026-03-03",
-    "task_6_stale_pr_nudges": "2026-03-03",
+    "task_5_maintain_prs": "2026-03-04",
+    "task_6_stale_pr_nudges": "2026-03-04",
     "task_7_labels": "2026-02-28",
     "task_8_release": "2026-03-03",
     "task_9_welcome": "2026-03-01",
-    "task_10_forward": "2026-03-03",
-    "task_11_monthly_summary": "2026-03-03"
+    "task_10_forward": "2026-03-04",
+    "task_11_monthly_summary": "2026-03-04"
   },
   "comments_made": {
     "issues": {
@@ -34,12 +34,20 @@
   },
   "prs_created": [
     {
-      "pr_number": "TBD-run-22645385943",
-      "branch": "repo-assist/fix-wrap-selection-27",
+      "pr_number": "TBD-run-22692130773",
+      "branch": "repo-assist/fix-unicode-word-movement",
+      "issue": 4,
+      "description": "fix(editor): Unicode-aware word movement for CJK, Cyrillic, and all scripts",
+      "created": "2026-03-04",
+      "status": "patch queued - will be pushed when workflow completes"
+    },
+    {
+      "pr_number": 32,
+      "branch": "repo-assist/fix-wrap-selection-27-63798408c32b80c7",
       "issue": 27,
       "description": "fix(renderer): split wrapped-line selection highlights per visual segment",
       "created": "2026-03-03",
-      "status": "patch queued - will be created when workflow completes; replaces PR #29 attempt"
+      "status": "open draft PR on GitHub"
     },
     {
       "pr_number": 30,
@@ -122,11 +130,11 @@
     "28": ["bug"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 22645385943 (2026-03-03): (1) Task 2: Created PR for issue #27 on branch repo-assist/fix-wrap-selection-27. Fix: renderSelection() now emits per-segment highlight divs when wrapWidth>0, matching renderCursor() pattern. (2) Task 1: Maintainer replied to #4 on 2026-02-27 - responded with binding status summary and flagged isWordChar Unicode gap in cursor.ts. (3) Task 6: PRs all ~4 days old, no nudges needed. (4) Task 8: pre-release private project, no release. (5) Task 11: Updated monthly summary #31 - removed stale 'Apply patch' items (CI/update-todo already in repo), removed closed PR #29, removed closed issues #7-20, added new PR for #27. (6) PR #29 was closed by maintainer on 2026-03-03. (7) CI, update-todo.yml, gen-todo.ts are all already in the repo - old 'Apply patch' suggestions were stale.",
+  "notes": "Run 22692130773 (2026-03-04): (1) Task 10/2: Created PR for issue #4 (partial) on branch repo-assist/fix-unicode-word-movement. Fix: isWordChar now uses /^[\\p{L}\\p{N}_]$/u, moveWord uses codePointAt+prevCpStart for surrogate-safe iteration, selectWordAt updated similarly. Added 13 new tests (ASCII word movement suite + Unicode word movement suite). (2) Task 5: PR #32 CI status = pending/0 checks; consistent with infrastructure limitation. (3) Task 6: all PRs < 14 days old, stale nudges eligible 2026-03-13. (4) Task 11: Updated monthly summary #31.",
   "monthly_summary_issue": {
     "month": "2026-03",
     "issue_number": 31,
-    "note": "Updated in run 22645385943"
+    "note": "Updated in run 22692130773"
   },
   "deps_last_checked": "2026-03-01",
   "deps_findings": {
@@ -144,11 +152,11 @@
   "ci_status": {
     "ci_yml_exists": true,
     "ci_passing_on_main": true,
-    "open_prs_ci_status": "PRs #14,#17,#22,#23,#26 have pending CI (0 checks) - created before CI was added; new PR fix-wrap-selection-27 will run CI via GitHub Actions",
-    "last_checked": "2026-03-03"
+    "open_prs_ci_status": "PR #32 pending CI (0 checks, infrastructure); PRs #14,#17,#22,#23,#26 pre-CI creation",
+    "last_checked": "2026-03-04"
   },
   "task_10_in_progress": {
-    "description": "Next priorities: (1) Unicode-aware word movement in cursor.ts - isWordChar is ASCII-only, needs Intl.Segmenter. (2) task_3 improvements - decoration range mapping (mm3lhpgn-mqnw p2). (3) task_6 stale PR nudges - PRs #14,#17,#22,#23,#26 will be 14+ days old around 2026-03-13.",
+    "description": "Completed: Unicode word movement (isWordChar fix). Next priorities: (1) decoration range mapping to pixel coords (mm3lhpgn-mqnw p2). (2) stale PR nudges for #14,#17,#22,#23,#26 eligible 2026-03-13. (3) task_3 codebase improvements.",
     "spool_remaining_open": [
       "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
       "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
