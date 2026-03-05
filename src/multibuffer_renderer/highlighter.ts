@@ -3,7 +3,12 @@
  * Parses buffers once, then extracts tokens for visible lines on demand.
  */
 
-import type { Language, Node, Parser as ParserType, Tree } from "web-tree-sitter";
+import type {
+  Language,
+  Node,
+  Parser as ParserType,
+  Tree,
+} from "web-tree-sitter";
 import { colorForNodeType } from "./theme.ts";
 
 export interface Token {
@@ -31,8 +36,10 @@ export class Highlighter {
       locateFile: () => treeSitterWasmUrl,
     });
     this._parser = new Parser();
-    // biome-ignore lint/plugin/no-type-assertion: expect: Language is exported at module level but also accessible via Parser
-    const LangClass = (mod.Language ?? (Parser as unknown as { Language: typeof Language }).Language);
+    const LangClass =
+      mod.Language ??
+      // biome-ignore lint/plugin/no-type-assertion: expect: Language is exported at module level but also accessible via Parser
+      (Parser as unknown as { Language: typeof Language }).Language;
     const language = await LangClass.load(languageWasmUrl);
     this._parser.setLanguage(language);
     this._ready = true;
@@ -55,20 +62,72 @@ export class Highlighter {
     if (!tree) return [];
 
     const tokens: Token[] = [];
-    this._collectLeafTokens(tree.rootNode, row, tokens);
+    this._collectTokens(tree.rootNode, row, tokens, null);
     tokens.sort((a, b) => a.startColumn - b.startColumn);
     return tokens;
   }
 
-  private _collectLeafTokens(
+  /** Node types that should not have their children highlighted (code injections). */
+  private static readonly SKIP_CHILDREN = new Set([
+    "fenced_code_block",
+    "indented_code_block",
+    "code_span",
+  ]);
+
+  /** Node types that propagate their styling to all children. */
+  private static readonly STYLED_PARENTS = new Set([
+    "atx_heading",
+    "setext_heading",
+    "emphasis",
+    "strong_emphasis",
+    "strikethrough",
+    "link_text",
+    "inline_link",
+    "shortcut_link",
+  ]);
+
+  private _collectTokens(
     node: Node,
     targetRow: number,
     tokens: Token[],
+    inheritedColor: string | null,
   ): void {
-    if (node.endPosition.row < targetRow || node.startPosition.row > targetRow) {
+    if (
+      node.endPosition.row < targetRow ||
+      node.startPosition.row > targetRow
+    ) {
       return;
     }
 
+    const nodeType = node.type;
+
+    // Skip highlighting inside code blocks - just use default color for the whole range
+    // TODO: Use proper treesitter grammar/package to highlight injections
+    if (Highlighter.SKIP_CHILDREN.has(nodeType)) {
+      const startCol =
+        node.startPosition.row === targetRow ? node.startPosition.column : 0;
+      const endCol =
+        node.endPosition.row === targetRow
+          ? node.endPosition.column
+          : Number.MAX_SAFE_INTEGER;
+      if (startCol < endCol) {
+        // Use comment color for code blocks to differentiate them
+        tokens.push({
+          startColumn: startCol,
+          endColumn: endCol,
+          color: colorForNodeType("fenced_code_block_delimiter"),
+        });
+      }
+      return;
+    }
+
+    // Determine if this node should propagate its color to children
+    let colorToPropagate = inheritedColor;
+    if (Highlighter.STYLED_PARENTS.has(nodeType)) {
+      colorToPropagate = colorForNodeType(nodeType);
+    }
+
+    // Leaf node - apply color
     if (node.childCount === 0) {
       const startCol =
         node.startPosition.row === targetRow ? node.startPosition.column : 0;
@@ -78,19 +137,22 @@ export class Highlighter {
           : Number.MAX_SAFE_INTEGER;
 
       if (startCol < endCol) {
+        // Use inherited color if available, otherwise determine from node type
+        const color = colorToPropagate ?? colorForNodeType(nodeType);
         tokens.push({
           startColumn: startCol,
           endColumn: endCol,
-          color: colorForNodeType(node.type),
+          color,
         });
       }
       return;
     }
 
+    // Recurse into children
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
       if (child) {
-        this._collectLeafTokens(child, targetRow, tokens);
+        this._collectTokens(child, targetRow, tokens, colorToPropagate);
       }
     }
   }
