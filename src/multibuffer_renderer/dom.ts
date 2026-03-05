@@ -15,7 +15,7 @@ import {
   yToVisualRow,
 } from "./measurement.ts";
 import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
-import { WrapMap, charColToVisualCol, visualColToCharCol, visualWidth, wrapLine } from "./wrap-map.ts";
+import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
 
 /** Slice tokens to a column range, adjusting offsets to be segment-relative. */
 function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {

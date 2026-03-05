@@ -3,6 +3,14 @@
   "version": "0.0.1",
   "description": "Lightweight, high-performance text editor component for TypeScript",
   "module": "src/index.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
   "type": "module",
   "private": true,
   "scripts": {
