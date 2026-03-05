@@ -5,7 +5,7 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import type { Highlighter, Token } from "./highlighter.ts";
+import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import { buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
@@ -50,7 +50,7 @@ export class DomRenderer implements Renderer {
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
-  private _highlighter: Highlighter | null = null;
+  private _highlighter: SyntaxHighlighter | null = null;
   private _onScroll: (() => void) | null = null;
   private _onClick: ((e: MouseEvent) => void) | null = null;
   private _onMouseMove: ((e: MouseEvent) => void) | null = null;
@@ -153,7 +153,7 @@ export class DomRenderer implements Renderer {
     this._wrapMap = this._buildWrapMap(snapshot);
   }
 
-  setHighlighter(highlighter: Highlighter): void {
+  setHighlighter(highlighter: SyntaxHighlighter): void {
     this._highlighter = highlighter;
   }
 

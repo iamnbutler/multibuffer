@@ -349,11 +349,59 @@ function nodeTypeToCategory(nodeType: string): string {
     return "variable_builtin";
   }
 
-  // Front matter (yaml/toml)
+  // Front matter delimiters (yaml/toml)
   if (
     nodeType === "minus_metadata" ||
     nodeType === "plus_metadata"
   ) {
+    return "comment";
+  }
+
+  // ── YAML ─────────────────────────────────────────────────────────────
+  // Based on tree-sitter-yaml node types
+
+  // YAML strings (keys and string values)
+  if (
+    nodeType === "string_scalar" ||
+    nodeType === "double_quote_scalar" ||
+    nodeType === "single_quote_scalar" ||
+    nodeType === "block_scalar"
+  ) {
+    return "string";
+  }
+
+  // YAML numbers
+  if (
+    nodeType === "integer_scalar" ||
+    nodeType === "float_scalar"
+  ) {
+    return "number";
+  }
+
+  // YAML booleans and null
+  if (
+    nodeType === "boolean_scalar" ||
+    nodeType === "null_scalar"
+  ) {
+    return "constant";
+  }
+
+  // YAML anchors, aliases, tags (type-like)
+  if (
+    nodeType === "anchor_name" ||
+    nodeType === "alias_name" ||
+    nodeType === "tag"
+  ) {
+    return "type";
+  }
+
+  // YAML escape sequences
+  if (nodeType === "escape_sequence") {
+    return "operator";
+  }
+
+  // YAML comments
+  if (nodeType === "comment" && nodeType === "comment") {
     return "comment";
   }
 

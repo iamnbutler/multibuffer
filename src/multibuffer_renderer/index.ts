@@ -1,6 +1,10 @@
 export { createDomRenderer, DomRenderer } from "./dom.ts";
-export type { Token } from "./highlighter.ts";
+export type { SyntaxHighlighter, Token } from "./highlighter.ts";
 export { buildHighlightedSpans, Highlighter } from "./highlighter.ts";
+export {
+  buildHighlightedSpans as buildHighlightedSpansWithInjection,
+  InjectionHighlighter,
+} from "./injection-highlighter.ts";
 export {
   calculateContentHeight,
   calculateVisibleRows,
