@@ -25,3 +25,12 @@
 **viewport-rendering**
 
 - [ ] Implement decoration range mapping
+
+**syntax-highlighting**
+
+- [ ] Support language injection highlighting (treesitter grammars)
+
+**input-handling**
+
+- [ ] Handle IME composition events for CJK input
+- [ ] Add double-click word selection and triple-click line selection
