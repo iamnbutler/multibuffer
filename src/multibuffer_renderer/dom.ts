@@ -97,7 +97,7 @@ export class DomRenderer implements Renderer {
 
     // Cursor element
     const cursorEl = document.createElement("div");
-    cursorEl.style.cssText = `position:absolute;width:2px;background:#ebdbb2;display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
+    cursorEl.style.cssText = `position:absolute;width:2px;background:var(--editor-cursor, #ebdbb2);display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
     this._cursorEl = cursorEl;
 
     scrollContainer.appendChild(spacer);
@@ -401,12 +401,12 @@ export class DomRenderer implements Renderer {
     label?: string,
   ): void {
     rowEl.root.style.display = "flex";
-    rowEl.root.style.background = "#3c3836";
-    rowEl.root.style.borderTop = "1px solid #504945";
+    rowEl.root.style.background = "var(--editor-header-bg, #3c3836)";
+    rowEl.root.style.borderTop = "1px solid var(--editor-header-border, #504945)";
     rowEl.gutter.textContent = "";
-    rowEl.gutter.style.background = "#3c3836";
+    rowEl.gutter.style.background = "var(--editor-header-bg, #3c3836)";
     rowEl.content.textContent = path + (label ? `  ${label}` : "");
-    rowEl.content.style.color = "#a89984";
+    rowEl.content.style.color = "var(--editor-header-text, #a89984)";
     rowEl.content.style.fontWeight = "bold";
     rowEl.content.style.fontSize = "0.85em";
     rowEl.kind = "header";
@@ -419,10 +419,10 @@ export class DomRenderer implements Renderer {
     tokens?: Token[],
   ): void {
     rowEl.root.style.display = "flex";
-    rowEl.root.style.background = "";
+    rowEl.root.style.background = "var(--editor-line-bg, transparent)";
     rowEl.root.style.borderTop = "";
     rowEl.gutter.textContent = gutterText;
-    rowEl.gutter.style.background = "";
+    rowEl.gutter.style.background = "var(--editor-line-bg, transparent)";
     rowEl.content.style.color = "";
     rowEl.content.style.fontWeight = "";
     rowEl.content.style.fontSize = "";
@@ -447,7 +447,7 @@ export class DomRenderer implements Renderer {
 
       const gutter = document.createElement("span");
       gutter.style.cssText =
-        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:#665c54;user-select:none;flex-shrink:0;`;
+        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;`;
 
       const content = document.createElement("span");
       content.style.cssText = "flex:1;overflow:hidden;";
@@ -579,7 +579,7 @@ export class DomRenderer implements Renderer {
 
       const highlight = document.createElement("div");
       highlight.style.cssText =
-        `position:absolute;background:rgba(214,153,46,0.25);top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+        `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
       this._selectionLayer.appendChild(highlight);
     }
   }

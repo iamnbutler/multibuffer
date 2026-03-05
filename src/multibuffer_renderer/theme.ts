@@ -1,6 +1,31 @@
 /**
- * Gruvbox dark color theme for syntax highlighting.
+ * Theme configuration for syntax highlighting.
  * Maps tree-sitter node types to CSS colors.
+ *
+ * Supports theming via CSS custom properties with Gruvbox dark fallbacks.
+ *
+ * CSS Variables for syntax highlighting:
+ *   --syntax-keyword     - Keywords (const, let, function, if, etc.)
+ *   --syntax-string      - String literals
+ *   --syntax-number      - Numeric literals
+ *   --syntax-comment     - Comments
+ *   --syntax-type        - Type identifiers
+ *   --syntax-function    - Function names
+ *   --syntax-property    - Property identifiers
+ *   --syntax-operator    - Operators (+, -, =, etc.)
+ *   --syntax-punctuation - Punctuation (brackets, semicolons, etc.)
+ *   --syntax-constant    - Constants (true, false, null)
+ *   --syntax-variable-builtin - Built-in variables (this, super)
+ *   --syntax-default     - Default text color
+ *
+ * CSS Variables for editor chrome:
+ *   --editor-cursor       - Cursor color
+ *   --editor-selection    - Selection background
+ *   --editor-gutter       - Gutter text color
+ *   --editor-header-bg    - Excerpt header background
+ *   --editor-header-border - Excerpt header border
+ *   --editor-header-text  - Excerpt header text
+ *   --editor-line-bg      - Line background (default: transparent)
  */
 
 const GRUVBOX = {
@@ -16,8 +41,24 @@ const GRUVBOX = {
   fg3: "#a89984",
 } as const;
 
-/** Broad highlight categories. */
-const CATEGORY_COLORS: Record<string, string> = {
+/** CSS variable names for each highlight category. */
+const CATEGORY_CSS_VARS: Record<string, string> = {
+  keyword: "--syntax-keyword",
+  string: "--syntax-string",
+  number: "--syntax-number",
+  comment: "--syntax-comment",
+  type: "--syntax-type",
+  function: "--syntax-function",
+  property: "--syntax-property",
+  operator: "--syntax-operator",
+  punctuation: "--syntax-punctuation",
+  constant: "--syntax-constant",
+  variable_builtin: "--syntax-variable-builtin",
+  default: "--syntax-default",
+};
+
+/** Fallback colors (Gruvbox dark) for each highlight category. */
+const CATEGORY_FALLBACKS: Record<string, string> = {
   keyword: GRUVBOX.red,
   string: GRUVBOX.green,
   number: GRUVBOX.purple,
@@ -214,8 +255,66 @@ function nodeTypeToCategory(nodeType: string): string {
   return "default";
 }
 
-/** Get the CSS color for a tree-sitter node type. */
+/** Get the CSS color for a tree-sitter node type. Uses CSS variables with Gruvbox fallbacks. */
 export function colorForNodeType(nodeType: string): string {
   const category = nodeTypeToCategory(nodeType);
-  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.default ?? GRUVBOX.fg;
+  const cssVar = CATEGORY_CSS_VARS[category] ?? CATEGORY_CSS_VARS.default;
+  const fallback = CATEGORY_FALLBACKS[category] ?? CATEGORY_FALLBACKS.default ?? GRUVBOX.fg;
+  return `var(${cssVar}, ${fallback})`;
 }
+
+/**
+ * All available CSS variables for theming the editor.
+ * Consumers can use this list to know which variables to set.
+ */
+export const THEME_CSS_VARIABLES = {
+  // Editor chrome
+  cursor: "--editor-cursor",
+  selection: "--editor-selection",
+  gutter: "--editor-gutter",
+  headerBg: "--editor-header-bg",
+  headerBorder: "--editor-header-border",
+  headerText: "--editor-header-text",
+  lineBg: "--editor-line-bg",
+  // Syntax highlighting
+  syntaxKeyword: "--syntax-keyword",
+  syntaxString: "--syntax-string",
+  syntaxNumber: "--syntax-number",
+  syntaxComment: "--syntax-comment",
+  syntaxType: "--syntax-type",
+  syntaxFunction: "--syntax-function",
+  syntaxProperty: "--syntax-property",
+  syntaxOperator: "--syntax-operator",
+  syntaxPunctuation: "--syntax-punctuation",
+  syntaxConstant: "--syntax-constant",
+  syntaxVariableBuiltin: "--syntax-variable-builtin",
+  syntaxDefault: "--syntax-default",
+} as const;
+
+/**
+ * Default Gruvbox dark theme values. Consumers can use this as a reference
+ * or to apply the default theme programmatically.
+ */
+export const GRUVBOX_THEME = {
+  // Editor chrome
+  "--editor-cursor": "#ebdbb2",
+  "--editor-selection": "rgba(214,153,46,0.25)",
+  "--editor-gutter": "#665c54",
+  "--editor-header-bg": "#3c3836",
+  "--editor-header-border": "#504945",
+  "--editor-header-text": "#a89984",
+  "--editor-line-bg": "transparent",
+  // Syntax highlighting
+  "--syntax-keyword": GRUVBOX.red,
+  "--syntax-string": GRUVBOX.green,
+  "--syntax-number": GRUVBOX.purple,
+  "--syntax-comment": GRUVBOX.gray,
+  "--syntax-type": GRUVBOX.yellow,
+  "--syntax-function": GRUVBOX.aqua,
+  "--syntax-property": GRUVBOX.blue,
+  "--syntax-operator": GRUVBOX.orange,
+  "--syntax-punctuation": GRUVBOX.fg3,
+  "--syntax-constant": GRUVBOX.purple,
+  "--syntax-variable-builtin": GRUVBOX.orange,
+  "--syntax-default": GRUVBOX.fg,
+} as const;

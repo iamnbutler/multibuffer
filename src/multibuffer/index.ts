@@ -9,10 +9,8 @@ export {
   resolveAnchorRange,
   reverseSelection,
 } from "./anchor.ts";
+// Implementation exports
+export { createBuffer } from "./buffer.ts";
+export { createMultiBuffer } from "./multibuffer.ts";
 export { keysCompare, keysEqual, type SlotKey, SlotMap } from "./slot_map.ts";
 export * from "./types.ts";
-
-// Implementation exports will go here as they're created
-// export { createBuffer } from "./buffer.ts";
-// export { createExcerpt } from "./excerpt.ts";
-// export { createMultiBuffer } from "./multibuffer.ts";
