@@ -26,6 +26,8 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
     "@types/bun": "latest",
+    "@vscode/tree-sitter-wasm": "^0.3.0",
+    "tree-sitter-wasms": "^0.1.13",
     "typescript": "^5"
   },
   "dependencies": {

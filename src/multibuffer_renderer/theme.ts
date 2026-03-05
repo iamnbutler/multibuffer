@@ -252,6 +252,106 @@ function nodeTypeToCategory(nodeType: string): string {
     return "variable_builtin";
   }
 
+  // ── Markdown ────────────────────────────────────────────────────────
+
+  // Headings
+  if (
+    nodeType === "atx_heading" ||
+    nodeType === "setext_heading" ||
+    nodeType === "atx_h1_marker" ||
+    nodeType === "atx_h2_marker" ||
+    nodeType === "atx_h3_marker" ||
+    nodeType === "atx_h4_marker" ||
+    nodeType === "atx_h5_marker" ||
+    nodeType === "atx_h6_marker" ||
+    nodeType === "heading_content"
+  ) {
+    return "keyword";
+  }
+
+  // Code (inline and blocks)
+  if (
+    nodeType === "code_span" ||
+    nodeType === "fenced_code_block" ||
+    nodeType === "indented_code_block" ||
+    nodeType === "code_fence_content" ||
+    nodeType === "info_string" ||
+    nodeType === "language"
+  ) {
+    return "string";
+  }
+
+  // Links and images
+  if (
+    nodeType === "link" ||
+    nodeType === "image" ||
+    nodeType === "link_destination" ||
+    nodeType === "link_text" ||
+    nodeType === "link_label" ||
+    nodeType === "link_title" ||
+    nodeType === "uri_autolink" ||
+    nodeType === "email_autolink"
+  ) {
+    return "function";
+  }
+
+  // Emphasis
+  if (
+    nodeType === "emphasis" ||
+    nodeType === "strong_emphasis" ||
+    nodeType === "strikethrough"
+  ) {
+    return "type";
+  }
+
+  // Block quotes
+  if (nodeType === "block_quote" || nodeType === "block_quote_marker") {
+    return "comment";
+  }
+
+  // Lists
+  if (
+    nodeType === "list" ||
+    nodeType === "list_item" ||
+    nodeType === "list_marker_minus" ||
+    nodeType === "list_marker_plus" ||
+    nodeType === "list_marker_star" ||
+    nodeType === "list_marker_dot" ||
+    nodeType === "list_marker_parenthesis" ||
+    nodeType === "task_list_marker_checked" ||
+    nodeType === "task_list_marker_unchecked"
+  ) {
+    return "operator";
+  }
+
+  // Tables
+  if (
+    nodeType === "pipe_table" ||
+    nodeType === "pipe_table_header" ||
+    nodeType === "pipe_table_row" ||
+    nodeType === "pipe_table_cell"
+  ) {
+    return "property";
+  }
+
+  // Thematic breaks (---, ***, etc.)
+  if (nodeType === "thematic_break") {
+    return "punctuation";
+  }
+
+  // HTML in markdown
+  if (nodeType === "html_block" || nodeType === "html_tag") {
+    return "constant";
+  }
+
+  // Front matter
+  if (
+    nodeType === "minus_metadata" ||
+    nodeType === "plus_metadata"
+  ) {
+    return "comment";
+  }
+
   return "default";
 }
 
