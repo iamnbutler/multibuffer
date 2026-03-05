@@ -1,22 +1,22 @@
 {
-  "last_run": "2026-03-04T00:00:00Z",
-  "last_run_id": "22692130773",
+  "last_run": "2026-03-05T00:00:00Z",
+  "last_run_id": "22739507391",
   "backlog_cursor": {
-    "issues": 31,
-    "note": "All open issues seen: #3, #4, #6, #27, #31 (monthly summary). Closed issues #5,#7,#8,#9,#10,#11,#16,#20,#28 not revisited."
+    "issues": 36,
+    "note": "All open issues seen: #3, #4, #6, #27, #31, #34, #35, #36. Closed issues #5,#7,#8,#9,#10,#11,#16,#20,#28,#29(pr),#30(pr merged) not revisited."
   },
   "tasks_last_run": {
-    "task_1_triage": "2026-03-03",
-    "task_2_fix_issues": "2026-03-04",
+    "task_1_triage": "2026-03-05",
+    "task_2_fix_issues": "2026-03-05",
     "task_3_improvements": "2026-02-27",
     "task_4_deps": "2026-03-01",
     "task_5_maintain_prs": "2026-03-04",
     "task_6_stale_pr_nudges": "2026-03-04",
-    "task_7_labels": "2026-02-28",
+    "task_7_labels": "2026-03-05",
     "task_8_release": "2026-03-03",
     "task_9_welcome": "2026-03-01",
     "task_10_forward": "2026-03-04",
-    "task_11_monthly_summary": "2026-03-04"
+    "task_11_monthly_summary": "2026-03-05"
   },
   "comments_made": {
     "issues": {
@@ -26,7 +26,10 @@
       "6": "2026-02-27",
       "9": "2026-02-27",
       "27": "2026-02-28",
-      "28": "2026-03-01"
+      "28": "2026-03-01",
+      "34": "2026-03-05",
+      "35": "2026-03-05",
+      "36": "2026-03-05"
     },
     "prs": {
       "29": "2026-03-02"
@@ -34,12 +37,20 @@
   },
   "prs_created": [
     {
-      "pr_number": "TBD-run-22692130773",
-      "branch": "repo-assist/fix-unicode-word-movement",
-      "issue": 4,
-      "description": "fix(editor): Unicode-aware word movement for CJK, Cyrillic, and all scripts",
-      "created": "2026-03-04",
+      "pr_number": "pending-run-22739507391",
+      "branch": "repo-assist/fix-cursor-clamp-36",
+      "issue": 36,
+      "description": "fix(editor): clip cursor in extendSelectionTo to prevent past-end-of-line position",
+      "created": "2026-03-05",
       "status": "patch queued - will be pushed when workflow completes"
+    },
+    {
+      "pr_number": 33,
+      "branch": "repo-assist/fix-unicode-word-movement-3ba8e9cefc9d5725",
+      "issue": 4,
+      "description": "fix(editor): Unicode-aware word movement and double-click selection",
+      "created": "2026-03-04",
+      "status": "open draft PR on GitHub"
     },
     {
       "pr_number": 32,
@@ -114,6 +125,12 @@
       "description": "March 2026 monthly activity summary"
     },
     {
+      "title": "[Repo Assist] fix(editor): Unicode-aware word movement (artifact issue)",
+      "number": 34,
+      "created": "2026-03-04",
+      "description": "Artifact from failed PR creation step - PR #33 was actually created. Maintainer notified via comment to close this."
+    },
+    {
       "title": "[Repo Assist] Monthly Activity 2026-02",
       "number": 8,
       "created": "2026-02-27",
@@ -127,14 +144,15 @@
     "6": ["enhancement"],
     "9": ["enhancement"],
     "27": ["bug"],
-    "28": ["bug"]
+    "28": ["bug"],
+    "35": ["enhancement", "refactor"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 22692130773 (2026-03-04): (1) Task 10/2: Created PR for issue #4 (partial) on branch repo-assist/fix-unicode-word-movement. Fix: isWordChar now uses /^[\\p{L}\\p{N}_]$/u, moveWord uses codePointAt+prevCpStart for surrogate-safe iteration, selectWordAt updated similarly. Added 13 new tests (ASCII word movement suite + Unicode word movement suite). (2) Task 5: PR #32 CI status = pending/0 checks; consistent with infrastructure limitation. (3) Task 6: all PRs < 14 days old, stale nudges eligible 2026-03-13. (4) Task 11: Updated monthly summary #31.",
+  "notes": "Run 22739507391 (2026-03-05): (1) Task 1/7: New issues #35 (lang queries in themes - commented + labelled) and #36 (setCursor bug - commented). (2) Task 2: Created fix PR for #36 on branch repo-assist/fix-cursor-clamp-36. Root cause: extendSelectionTo stored unclipped this._cursor; when selection collapses (col 1000 on 5-char line both map to offset 5), editor.cursor returns this._cursor directly -> exposed out-of-bounds column. Fix: snap.clipPoint at start of extendSelectionTo, use clipped for anchor + cursor + ordering. 2 regression tests added. (3) Commented on issue #34 (artifact from run 22692130773) noting PR #33 was successfully created. (4) Task 11: Updated monthly summary #31.",
   "monthly_summary_issue": {
     "month": "2026-03",
     "issue_number": 31,
-    "note": "Updated in run 22692130773"
+    "note": "Updated in run 22739507391"
   },
   "deps_last_checked": "2026-03-01",
   "deps_findings": {
@@ -152,11 +170,11 @@
   "ci_status": {
     "ci_yml_exists": true,
     "ci_passing_on_main": true,
-    "open_prs_ci_status": "PR #32 pending CI (0 checks, infrastructure); PRs #14,#17,#22,#23,#26 pre-CI creation",
-    "last_checked": "2026-03-04"
+    "open_prs_ci_status": "PR #33 pending CI; PR #32 pending CI (0 checks, infrastructure); PRs #14,#17,#22,#23,#26 pre-CI creation",
+    "last_checked": "2026-03-05"
   },
   "task_10_in_progress": {
-    "description": "Completed: Unicode word movement (isWordChar fix). Next priorities: (1) decoration range mapping to pixel coords (mm3lhpgn-mqnw p2). (2) stale PR nudges for #14,#17,#22,#23,#26 eligible 2026-03-13. (3) task_3 codebase improvements.",
+    "description": "Completed: Unicode word movement (PR #33). Completed: cursor clamping in extendSelectionTo (PR queued, closes #36). Next priorities: (1) decoration range mapping to pixel coords (mm3lhpgn-mqnw p2). (2) stale PR nudges for #14,#17,#22,#23,#26 eligible 2026-03-13. (3) task_3 codebase improvements.",
     "spool_remaining_open": [
       "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
       "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
