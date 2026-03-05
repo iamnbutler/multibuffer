@@ -253,8 +253,9 @@ function nodeTypeToCategory(nodeType: string): string {
   }
 
   // ── Markdown ────────────────────────────────────────────────────────
+  // Based on Zed's markdown highlighting queries
 
-  // Headings
+  // Headings (title.markup)
   if (
     nodeType === "atx_heading" ||
     nodeType === "setext_heading" ||
@@ -264,55 +265,66 @@ function nodeTypeToCategory(nodeType: string): string {
     nodeType === "atx_h4_marker" ||
     nodeType === "atx_h5_marker" ||
     nodeType === "atx_h6_marker" ||
-    nodeType === "heading_content"
+    nodeType === "heading_content" ||
+    nodeType === "thematic_break"
   ) {
     return "keyword";
   }
 
-  // Code (inline and blocks)
-  if (
-    nodeType === "code_span" ||
-    nodeType === "fenced_code_block" ||
-    nodeType === "indented_code_block" ||
-    nodeType === "code_fence_content" ||
-    nodeType === "info_string" ||
-    nodeType === "language"
-  ) {
+  // Code spans (text.literal.markup)
+  if (nodeType === "code_span") {
     return "string";
   }
 
-  // Links and images
+  // Code fence delimiters and info (punctuation.embedded.markup)
   if (
-    nodeType === "link" ||
+    nodeType === "fenced_code_block_delimiter" ||
+    nodeType === "info_string" ||
+    nodeType === "language"
+  ) {
+    return "comment";
+  }
+
+  // Link text (link_text.markup)
+  if (
+    nodeType === "inline_link" ||
+    nodeType === "shortcut_link" ||
+    nodeType === "collapsed_reference_link" ||
+    nodeType === "full_reference_link" ||
     nodeType === "image" ||
-    nodeType === "link_destination" ||
     nodeType === "link_text" ||
     nodeType === "link_label" ||
-    nodeType === "link_title" ||
-    nodeType === "uri_autolink" ||
-    nodeType === "email_autolink"
+    nodeType === "link_reference_definition"
   ) {
     return "function";
   }
 
-  // Emphasis
+  // Link URIs (link_uri.markup)
   if (
-    nodeType === "emphasis" ||
-    nodeType === "strong_emphasis" ||
-    nodeType === "strikethrough"
+    nodeType === "link_destination" ||
+    nodeType === "uri_autolink" ||
+    nodeType === "email_autolink"
   ) {
+    return "property";
+  }
+
+  // Emphasis (emphasis.markup)
+  if (nodeType === "emphasis") {
     return "type";
   }
 
-  // Block quotes
-  if (nodeType === "block_quote" || nodeType === "block_quote_marker") {
+  // Strong emphasis (emphasis.strong.markup)
+  if (nodeType === "strong_emphasis") {
+    return "constant";
+  }
+
+  // Strikethrough
+  if (nodeType === "strikethrough") {
     return "comment";
   }
 
-  // Lists
+  // List markers (punctuation.list_marker.markup)
   if (
-    nodeType === "list" ||
-    nodeType === "list_item" ||
     nodeType === "list_marker_minus" ||
     nodeType === "list_marker_plus" ||
     nodeType === "list_marker_star" ||
@@ -324,27 +336,20 @@ function nodeTypeToCategory(nodeType: string): string {
     return "operator";
   }
 
-  // Tables
+  // Block quote and table punctuation (punctuation.markup)
   if (
-    nodeType === "pipe_table" ||
-    nodeType === "pipe_table_header" ||
-    nodeType === "pipe_table_row" ||
-    nodeType === "pipe_table_cell"
+    nodeType === "block_quote_marker" ||
+    nodeType === "pipe_table_delimiter_cell"
   ) {
-    return "property";
-  }
-
-  // Thematic breaks (---, ***, etc.)
-  if (nodeType === "thematic_break") {
     return "punctuation";
   }
 
   // HTML in markdown
   if (nodeType === "html_block" || nodeType === "html_tag") {
-    return "constant";
+    return "variable_builtin";
   }
 
-  // Front matter
+  // Front matter (yaml/toml)
   if (
     nodeType === "minus_metadata" ||
     nodeType === "plus_metadata"
