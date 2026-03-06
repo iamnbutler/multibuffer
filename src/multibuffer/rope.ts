@@ -112,10 +112,12 @@ export class Rope {
     let currentLine = 0;
     let lineStart = 0;
 
-    for (const chunk of this._chunks) {
+    for (let chunkIdx = 0; chunkIdx < this._chunks.length; chunkIdx++) {
+      const chunk = this._chunks[chunkIdx];
+      if (!chunk) continue;
       const chunkEnd = lineStart + chunk.text.length;
 
-      if (currentLine + chunk.newlines >= row || chunk === this._chunks[this._chunks.length - 1]) {
+      if (currentLine + chunk.newlines >= row || chunkIdx === this._chunks.length - 1) {
         // The target line starts or is contained in this chunk
         let pos = 0;
         const text = chunk.text;
@@ -130,9 +132,9 @@ export class Rope {
           // Find end of this line
           const endPos = text.indexOf("\n", pos);
           if (endPos === -1) {
-            // Line spans into next chunk(s)
+            // Line spans into next chunk(s) — use chunkIdx directly to avoid O(n) indexOf
             let result = text.slice(pos);
-            let ci = this._chunks.indexOf(chunk) + 1;
+            let ci = chunkIdx + 1;
             while (ci < this._chunks.length) {
               const nextChunk = this._chunks[ci];
               if (!nextChunk) break;
