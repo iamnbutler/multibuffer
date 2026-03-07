@@ -141,13 +141,21 @@ export const multibufferBenchmarks: BenchmarkSuite = {
       },
     },
     {
-      name: "Anchor resolution - batch 100",
+      name: "Anchor resolution - batch 100 (loop)",
       iterations: 100,
       targetMs: 1,
       fn: () => {
         for (const a of anchors) {
           snap100.resolveAnchor(a);
         }
+      },
+    },
+    {
+      name: "Anchor resolution - batch 100 (resolveAnchors)",
+      iterations: 100,
+      targetMs: 1,
+      fn: () => {
+        snap100.resolveAnchors(anchors);
       },
     },
     {
