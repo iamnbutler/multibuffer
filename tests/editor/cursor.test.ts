@@ -2,8 +2,8 @@
  * Cursor movement tests.
  */
 
-import { beforeEach, describe, test } from "bun:test";
-import { moveCursor } from "../../src/editor/cursor.ts";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { isWordChar, moveCursor } from "../../src/editor/cursor.ts";
 import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import {
@@ -98,6 +98,98 @@ describe("Cursor - Line Granularity", () => {
   test("move to line end", () => {
     const snap = setup("Hello World").snapshot();
     expectPoint(moveCursor(snap, mbPoint(0, 3), "right", "line"), 0, 11);
+  });
+});
+
+describe("Cursor - Word Movement (ASCII)", () => {
+  test("move right past ASCII word", () => {
+    const snap = setup("hello world").snapshot();
+    // skip "hello" then skip " " → land at start of "world"
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "word"), 0, 6);
+  });
+
+  test("move right from whitespace", () => {
+    const snap = setup("hello world").snapshot();
+    // at space (5), skip " " → land at "world" (6)
+    expectPoint(moveCursor(snap, mbPoint(0, 5), "right", "word"), 0, 6);
+  });
+
+  test("move right at end of word stays at end of line", () => {
+    const snap = setup("hello").snapshot();
+    // already past all word chars; skip nothing non-word → stay at 5
+    expectPoint(moveCursor(snap, mbPoint(0, 5), "right", "word"), 0, 5);
+  });
+
+  test("move left past ASCII word", () => {
+    const snap = setup("hello world").snapshot();
+    // from end (11): look back, skip "world" → land at 6
+    expectPoint(moveCursor(snap, mbPoint(0, 11), "left", "word"), 0, 6);
+  });
+
+  test("move left skips whitespace then word", () => {
+    const snap = setup("hello world").snapshot();
+    // from 6 (start of "world"): skip " " backward, then skip "hello" → 0
+    expectPoint(moveCursor(snap, mbPoint(0, 6), "left", "word"), 0, 0);
+  });
+
+  test("move left at start of line stays put", () => {
+    const snap = setup("hello").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "left", "word"), 0, 0);
+  });
+});
+
+describe("Cursor - Word Movement (Unicode)", () => {
+  test("isWordChar recognises ASCII letters", () => {
+    expect(isWordChar("a")).toBe(true);
+    expect(isWordChar("Z")).toBe(true);
+    expect(isWordChar("9")).toBe(true);
+    expect(isWordChar("_")).toBe(true);
+    expect(isWordChar(" ")).toBe(false);
+    expect(isWordChar(".")).toBe(false);
+  });
+
+  test("isWordChar recognises CJK ideographs", () => {
+    expect(isWordChar("你")).toBe(true);
+    expect(isWordChar("世")).toBe(true);
+  });
+
+  test("isWordChar recognises Cyrillic letters", () => {
+    expect(isWordChar("п")).toBe(true);
+    expect(isWordChar("р")).toBe(true);
+  });
+
+  test("isWordChar rejects emoji (Symbol category)", () => {
+    // emoji are category So, not L or N
+    expect(isWordChar("😀")).toBe(false);
+  });
+
+  test("move right through CJK word", () => {
+    // All 4 CJK chars are word chars → skip all, no trailing non-word → col 4
+    const snap = setup("你好世界").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "word"), 0, 4);
+  });
+
+  test("move right past ASCII into CJK", () => {
+    // "hello "(0-5) then "你好"(6-7)
+    const snap = setup("hello 你好 world").snapshot();
+    // from 0: skip "hello" → 5; skip " " → 6; land at '你'
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "word"), 0, 6);
+    // from 6: skip "你好" → 8; skip " " → 9; land at 'w'
+    expectPoint(moveCursor(snap, mbPoint(0, 6), "right", "word"), 0, 9);
+  });
+
+  test("move left past CJK word", () => {
+    // "hello 你好" — '你'=6, '好'=7, end=8
+    const snap = setup("hello 你好").snapshot();
+    // from 8: skip non-word → none; skip "你好" → 6
+    expectPoint(moveCursor(snap, mbPoint(0, 8), "left", "word"), 0, 6);
+  });
+
+  test("move right through Cyrillic word", () => {
+    // "привет мир": "привет"=6, " "=1, "мир"=3
+    const snap = setup("привет мир").snapshot();
+    // from 0: skip "привет" → 6; skip " " → 7; land at 'м'
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "word"), 0, 7);
   });
 });
 
