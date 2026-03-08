@@ -766,7 +766,9 @@ describe("Batch Anchor Resolution", () => {
 
     // Each batch result must match the single-anchor result
     for (let i = 0; i < anchors.length; i++) {
-      const individual = snap.resolveAnchor(anchors[i] as Anchor);
+      const anchor = anchors[i];
+      if (!anchor) continue;
+      const individual = snap.resolveAnchor(anchor);
       const batch = batchResults[i];
       if (individual === undefined) {
         expect(batch).toBeUndefined();
