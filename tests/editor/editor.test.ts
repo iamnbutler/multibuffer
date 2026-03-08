@@ -853,12 +853,20 @@ describe("Editor - Clipboard", () => {
     expectPoint(editor.cursor, 0, 0);
   });
 
-  test("cut with collapsed selection is a no-op", () => {
+  test("cut with no selection cuts the entire line", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe("World");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("cut with no selection on only line clears buffer", () => {
     const { editor, mb } = setup("Hello");
     editor.setCursor(mbPoint(0, 3));
     editor.dispatch({ type: "cut" });
-    expect(getText(mb)).toBe("Hello");
-    expectPoint(editor.cursor, 0, 3);
+    expect(getText(mb)).toBe("");
+    expectPoint(editor.cursor, 0, 0);
   });
 
   test("cut across lines deletes selection", () => {

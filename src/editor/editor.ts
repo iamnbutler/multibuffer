@@ -234,7 +234,7 @@ export class Editor {
   /**
    * Return the text content of the current selection, or "" if the
    * selection is collapsed or absent.  Callers use this to populate
-   * the platform clipboard before dispatching `copy` or `cut`.
+   * the platform clipboard before dispatching `copy`.
    */
   getSelectedText(): string {
     if (!this._selection) return "";
@@ -254,6 +254,28 @@ export class Editor {
     const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
     const middleLines = lines.slice(1, -1);
     return [firstLine, ...middleLines, lastLine].join("\n");
+  }
+
+  /**
+   * Return the text that `cut` will remove. If there's a selection,
+   * returns the selected text. Otherwise returns the full current line
+   * (including its trailing newline when present).
+   */
+  getCutText(): string {
+    const snap = this.multiBuffer.snapshot();
+    if (this._selection && !isCollapsed(snap, this._selection)) {
+      return this.getSelectedText();
+    }
+    // No selection — cut targets the entire line
+    const cursor = this.cursor;
+    const row = cursor.row;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
+    // Include the trailing newline if this isn't the last line
+    if (row + 1 < snap.lineCount) {
+      return `${lineText}\n`;
+    }
+    return lineText;
   }
 
   /** Execute a command. */
@@ -570,13 +592,17 @@ export class Editor {
   }
 
   private _cut(snap: MultiBufferSnapshot): void {
-    if (!this._selection || isCollapsed(snap, this._selection)) return;
-    const range = resolveAnchorRange(snap, this._selection.range);
-    if (range) {
-      this._edit(snap, range.start, range.end, "");
-      this._cursor = range.start;
-      this._selection = selectionAtPoint(this.multiBuffer, range.start);
+    if (this._selection && !isCollapsed(snap, this._selection)) {
+      const range = resolveAnchorRange(snap, this._selection.range);
+      if (range) {
+        this._edit(snap, range.start, range.end, "");
+        this._cursor = range.start;
+        this._selection = selectionAtPoint(this.multiBuffer, range.start);
+      }
+      return;
     }
+    // No selection — cut the entire line (same behavior as Cmd+X in VS Code)
+    this._deleteLine(snap);
   }
 
   /** Extract the text content between two multibuffer points. */
