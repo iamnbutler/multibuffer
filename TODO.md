@@ -13,6 +13,16 @@
 **multibuffer-v0**
 
 - [ ] Syntax highlighting breaks when characters are inserted
+- [ ] Line operations: move, duplicate, insert above/below
+- [ ] Indentation: indent/dedent selections, auto-indent on newline
+- [ ] Find & Replace: Cmd+F, Cmd+H, find next/prev, go to line
+- [ ] Comment toggling: Cmd+/ to toggle line comments
+- [ ] Multi-cursor editing: Cmd+D, Cmd+Shift+L, Opt+Click
+- [ ] Bracket pair handling: auto-close, match navigation, surround
+- [ ] macOS text system bindings: Ctrl+A/E/K/T/O (Emacs-style)
+- [ ] Scroll commands: scroll viewport without moving cursor
+- [ ] Text transformation: uppercase, lowercase, title case
+- [ ] Selection expansion: Cmd+L select line, expand/shrink selection
 
 **excerpt-management**
 
