@@ -26,11 +26,22 @@ import {
 } from "./selection.ts";
 import type { EditorCommand } from "./types.ts";
 
+/** A snapshot of the editor's text and cursor state for undo/redo. */
+interface HistoryEntry {
+  /** Full text of the multibuffer at this point in time. */
+  readonly text: string;
+  /** Cursor position at this point in time. */
+  readonly cursor: MultiBufferPoint;
+}
+
 export class Editor {
   readonly multiBuffer: MultiBuffer;
   private _cursor: MultiBufferPoint;
   private _selection: Selection | undefined;
   private _onChange: (() => void) | null = null;
+  private _undoStack: HistoryEntry[] = [];
+  private _redoStack: HistoryEntry[] = [];
+  private static readonly _MAX_HISTORY = 100;
   /**
    * Remembered column for vertical navigation.
    * Set when vertical movement begins; cleared by horizontal movement or edits.
@@ -245,18 +256,23 @@ export class Editor {
 
     switch (command.type) {
       case "insertText":
+        this._pushHistory(snap);
         this._insertText(snap, command.text);
         break;
       case "insertNewline":
+        this._pushHistory(snap);
         this._insertText(snap, "\n");
         break;
       case "insertTab":
+        this._pushHistory(snap);
         this._insertText(snap, "  ");
         break;
       case "deleteBackward":
+        this._pushHistory(snap);
         this._deleteBackward(snap, command.granularity);
         break;
       case "deleteForward":
+        this._pushHistory(snap);
         this._deleteForward(snap, command.granularity);
         break;
       case "moveCursor":
@@ -272,6 +288,7 @@ export class Editor {
         this._collapseSelection(snap, command.to);
         break;
       case "deleteLine":
+        this._pushHistory(snap);
         this._deleteLine(snap);
         break;
       case "copy":
@@ -282,12 +299,25 @@ export class Editor {
         this._cut(snap);
         break;
       case "paste":
+        this._pushHistory(snap);
         this._insertText(snap, command.text);
         break;
-      case "undo":
-      case "redo":
-        // TODO: implement
+      case "undo": {
+        const prev = this._undoStack.pop();
+        if (prev) {
+          this._redoStack.push(this._captureEntry(snap));
+          this._applyEntry(prev);
+        }
         break;
+      }
+      case "redo": {
+        const next = this._redoStack.pop();
+        if (next) {
+          this._undoStack.push(this._captureEntry(snap));
+          this._applyEntry(next);
+        }
+        break;
+      }
     }
 
     this._onChange?.();
@@ -555,6 +585,43 @@ export class Editor {
       this._cursor = range.start;
       this._selection = selectionAtPoint(this.multiBuffer, range.start);
     }
+  }
+
+  /** Capture the current text and cursor as a history entry. */
+  private _captureEntry(snap: MultiBufferSnapshot): HistoryEntry {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for snapshot bounds
+    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
+    return { text: lines.join("\n"), cursor: this._cursor };
+  }
+
+  /**
+   * Push the current state onto the undo stack and clear the redo stack.
+   * Called before every mutating command.
+   */
+  private _pushHistory(snap: MultiBufferSnapshot): void {
+    this._undoStack.push(this._captureEntry(snap));
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+  }
+
+  /**
+   * Apply a history entry by replacing the buffer content and restoring the cursor.
+   */
+  private _applyEntry(entry: HistoryEntry): void {
+    const snap = this.multiBuffer.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for last row
+    const lastRow = Math.max(0, snap.lineCount - 1) as MultiBufferRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for snapshot bounds
+    const lastLineArr = snap.lines(lastRow, snap.lineCount as MultiBufferRow);
+    const lastLineLen = lastLineArr[0]?.length ?? 0;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for start of buffer
+    const startPoint: MultiBufferPoint = { row: 0 as MultiBufferRow, column: 0 };
+    const endPoint: MultiBufferPoint = { row: lastRow, column: lastLineLen };
+    this.multiBuffer.edit(startPoint, endPoint, entry.text);
+    this._cursor = entry.cursor;
+    this._selection = selectionAtPoint(this.multiBuffer, entry.cursor);
   }
 
   /**
