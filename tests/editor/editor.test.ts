@@ -274,6 +274,23 @@ describe("Editor - extendSelectionTo (drag)", () => {
     if (start) expectPoint(start, 0, 0);
     if (end) expectPoint(end, 0, 8);
   });
+
+  test("extendSelectionTo clips past-end column (collapsed case)", () => {
+    // Bug: when cursor is at end of line and extends to a past-end column, both
+    // anchors map to the same offset → selection is collapsed → editor.cursor
+    // returns this._cursor directly, which must be clipped not the raw input.
+    const { editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 5)); // cursor at end of "Hello"
+    editor.extendSelectionTo(mbPoint(0, 1000)); // 1000 clips to 5 → collapsed selection
+    expectPoint(editor.cursor, 0, 5); // must be 5, not 1000
+  });
+
+  test("extendSelectionTo clips past-end column (non-collapsed case)", () => {
+    const { editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.extendSelectionTo(mbPoint(0, 1000)); // clips to end of "Hello" (col 5)
+    expectPoint(editor.cursor, 0, 5);
+  });
 });
 
 describe("Editor - selectWordAt (double-click)", () => {
