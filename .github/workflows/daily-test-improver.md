@@ -59,6 +59,7 @@ tools:
   github:
     toolsets: [all]
   repo-memory: true
+engine: claude
 
 ---
 
