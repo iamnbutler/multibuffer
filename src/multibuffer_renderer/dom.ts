@@ -11,7 +11,6 @@ import {
   calculateContentHeight,
   calculateScrollTop,
   createViewport,
-  xToColumn,
   yToVisualRow,
 } from "./measurement.ts";
 import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
@@ -62,9 +61,15 @@ export class DomRenderer implements Renderer {
   private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  /** Measured character width from actual font rendering */
+  private _charWidth: number = 8; // Default, will be measured on mount
 
   constructor(measurements: Measurements) {
     this._measurements = measurements;
+    // Use provided charWidth as initial value if given
+    if (measurements.charWidth !== undefined) {
+      this._charWidth = measurements.charWidth;
+    }
     this._viewport = {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for initial zero viewport
       startRow: 0 as MultiBufferRow,
@@ -78,6 +83,9 @@ export class DomRenderer implements Renderer {
 
   mount(container: HTMLElement): void {
     this._container = container;
+
+    // Measure actual character width from the font
+    this._charWidth = this._measureCharWidth(container);
 
     // Inject blink animation keyframes (once per document)
     const blinkStyle = document.createElement("style");
@@ -327,7 +335,8 @@ export class DomRenderer implements Renderer {
     if (!this._scrollContainer) return undefined;
     const scrollTop = this._scrollContainer.scrollTop;
     const visualRow = yToVisualRow(scrollTop + y, this._measurements.lineHeight);
-    const visualColInSegment = xToColumn(x, this._measurements);
+    // Convert pixel X to visual column using measured charWidth
+    const visualColInSegment = Math.max(0, Math.floor((x - this._measurements.gutterWidth) / this._charWidth));
 
     if (this._wrapMap) {
       const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
@@ -406,6 +415,20 @@ export class DomRenderer implements Renderer {
     const wrapWidth = this._measurements.wrapWidth;
     if (!wrapWidth || wrapWidth <= 0) return null;
     return new WrapMap(snapshot, wrapWidth);
+  }
+
+  /**
+   * Measure the actual character width from the container's font.
+   * Uses a test string to get accurate width for monospace fonts.
+   */
+  private _measureCharWidth(container: HTMLElement): number {
+    const span = document.createElement("span");
+    span.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:inherit;";
+    span.textContent = "MMMMMMMMMM"; // 10 wide chars for accuracy
+    container.appendChild(span);
+    const width = span.getBoundingClientRect().width / 10;
+    container.removeChild(span);
+    return width;
   }
 
   private _renderAsHeader(
@@ -503,7 +526,8 @@ export class DomRenderer implements Renderer {
       return;
     }
 
-    const { lineHeight, charWidth, gutterWidth } = this._measurements;
+    const { lineHeight, gutterWidth } = this._measurements;
+    const charWidth = this._charWidth;
     const visualRow = this._wrapMap
       ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
       : point.row;
@@ -565,7 +589,8 @@ export class DomRenderer implements Renderer {
     if (!start || !end) return;
     if (start.row === end.row && start.column === end.column) return;
 
-    const { lineHeight, charWidth, gutterWidth } = this._measurements;
+    const { lineHeight, gutterWidth } = this._measurements;
+    const charWidth = this._charWidth;
 
     // Ensure start is before end
     let selStart = start;
@@ -613,8 +638,8 @@ export class DomRenderer implements Renderer {
           const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
           let segEndVisualCol: number;
           if (endCharCol > lineLen && s === segments.length - 1) {
-            // Row-spanning selection: extend one cell past the last segment
-            segEndVisualCol = visualWidth(segText) + 1;
+            // Row-spanning selection: extend slightly past end to indicate newline
+            segEndVisualCol = visualWidth(segText) + 0.3;
           } else {
             segEndVisualCol = charColToVisualCol(segText, Math.min(segSelCharEnd, segText.length));
           }
@@ -633,7 +658,7 @@ export class DomRenderer implements Renderer {
         const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
         const endVisualCol =
           endCharCol > lineTextStr.length
-            ? visualWidth(lineTextStr) + 1
+            ? visualWidth(lineTextStr) + 0.3 // Small extension for newline indicator
             : charColToVisualCol(lineTextStr, endCharCol);
 
         const x = gutterWidth + startVisualCol * charWidth;

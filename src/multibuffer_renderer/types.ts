@@ -16,8 +16,11 @@ import type { MultiBufferRange, MultiBufferRow, Selection } from "../multibuffer
 export interface Measurements {
   /** Height of each line in pixels */
   readonly lineHeight: number;
-  /** Width of a single character in pixels (monospace assumed) */
-  readonly charWidth: number;
+  /**
+   * Width of a single character in pixels (monospace assumed).
+   * For DOM renderers, this is auto-measured from the font if omitted.
+   */
+  readonly charWidth?: number;
   /** Padding at the start of each line (for line numbers, etc.) */
   readonly gutterWidth: number;
   /** Character column limit for soft wrapping. Undefined or 0 = no wrap. */
