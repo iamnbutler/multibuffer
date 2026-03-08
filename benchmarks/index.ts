@@ -14,11 +14,13 @@ import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { saveHistory } from "./history.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { viewportBenchmarks } from "./viewport.bench.ts";
+import { wrapMapBenchmarks } from "./wrapmap.bench.ts";
 
 const suites: BenchmarkSuite[] = [
   bufferBenchmarks,
   multibufferBenchmarks,
   viewportBenchmarks,
+  wrapMapBenchmarks,
 ];
 
 console.log("=".repeat(60));
