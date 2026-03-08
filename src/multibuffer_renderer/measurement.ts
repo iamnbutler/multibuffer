@@ -109,12 +109,19 @@ export function createViewport(
   };
 }
 
-/** Convert pixel X coordinate to a column number. */
+/**
+ * Convert pixel X coordinate to a column number.
+ * Requires charWidth to be defined in measurements.
+ */
 export function xToColumn(
   x: number,
   measurements: Measurements,
 ): number {
-  return Math.max(0, Math.floor((x - measurements.gutterWidth) / measurements.charWidth));
+  const charWidth = measurements.charWidth;
+  if (charWidth === undefined) {
+    throw new Error("xToColumn requires charWidth to be defined in measurements");
+  }
+  return Math.max(0, Math.floor((x - measurements.gutterWidth) / charWidth));
 }
 
 /**

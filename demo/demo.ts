@@ -71,7 +71,7 @@ async function main() {
 
   const measurements: Measurements = {
     lineHeight: 20,
-    charWidth: 8.4,
+    // charWidth is auto-measured by the renderer from the actual font
     gutterWidth: 48,
     wrapWidth: 120,
   };
