@@ -129,24 +129,44 @@ export class Editor {
     const lineText = snap.lines(point.row, nextRow)[0] ?? "";
     const col = point.column;
 
-    // Find word boundaries
+    // Find word boundaries (Unicode-aware: handles CJK, Cyrillic, emoji, etc.)
     let wordStart = col;
     let wordEnd = col;
 
-    if (col < lineText.length && isWordChar(lineText.charCodeAt(col))) {
+    /** Character at UTF-16 position pos, decoded as a full Unicode code point. */
+    const charAt = (pos: number) =>
+      String.fromCodePoint(lineText.codePointAt(pos) ?? 0);
+    /** Number of UTF-16 code units occupied by the code point at pos (1 or 2). */
+    const stride = (pos: number) =>
+      (lineText.codePointAt(pos) ?? 0) > 0xffff ? 2 : 1;
+    /**
+     * UTF-16 offset at which the code point immediately before pos begins.
+     * Returns pos-2 when pos-1 is a low surrogate and pos-2 is a high surrogate;
+     * otherwise returns pos-1.
+     */
+    const prevStart = (pos: number) => {
+      const lo = lineText.charCodeAt(pos - 1);
+      if (lo >= 0xdc00 && lo <= 0xdfff && pos >= 2) {
+        const hi = lineText.charCodeAt(pos - 2);
+        if (hi >= 0xd800 && hi <= 0xdbff) return pos - 2;
+      }
+      return pos - 1;
+    };
+
+    if (col < lineText.length && isWordChar(charAt(col))) {
       // On a word character — expand to word boundaries
-      while (wordStart > 0 && isWordChar(lineText.charCodeAt(wordStart - 1)))
-        wordStart--;
-      while (wordEnd < lineText.length && isWordChar(lineText.charCodeAt(wordEnd)))
-        wordEnd++;
+      while (wordStart > 0 && isWordChar(charAt(prevStart(wordStart))))
+        wordStart = prevStart(wordStart);
+      while (wordEnd < lineText.length && isWordChar(charAt(wordEnd)))
+        wordEnd += stride(wordEnd);
     } else {
       // On non-word (whitespace/punctuation) — expand to non-word boundaries
-      while (wordStart > 0 && !isWordChar(lineText.charCodeAt(wordStart - 1)))
-        wordStart--;
-      while (wordEnd < lineText.length && !isWordChar(lineText.charCodeAt(wordEnd)))
-        wordEnd++;
+      while (wordStart > 0 && !isWordChar(charAt(prevStart(wordStart))))
+        wordStart = prevStart(wordStart);
+      while (wordEnd < lineText.length && !isWordChar(charAt(wordEnd)))
+        wordEnd += stride(wordEnd);
       // If we backed into word chars, reset start
-      if (wordStart < col && isWordChar(lineText.charCodeAt(wordStart))) {
+      if (wordStart < col && isWordChar(charAt(wordStart))) {
         wordStart = col;
       }
     }

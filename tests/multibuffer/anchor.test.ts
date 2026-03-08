@@ -19,7 +19,7 @@ import {
 } from "../../src/multibuffer/anchor.ts";
 import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
-import type { BufferOffset, EditEntry } from "../../src/multibuffer/types.ts";
+import type { Anchor, BufferOffset, EditEntry } from "../../src/multibuffer/types.ts";
 import {
   anchor,
   Bias,
@@ -708,11 +708,116 @@ describe("Selection", () => {
 
 
 describe("Batch Anchor Resolution", () => {
-  test.todo("batch resolution reuses cursor state", () => {
-    // Optimization: sequential anchors should use seek_forward
+  test("resolveAnchors returns same results as individual resolveAnchor calls", () => {
+    const buf = createBuffer(createBufferId(), "Hello\nWorld\nFoo\nBar\nBaz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 5));
+
+    const anchors: Anchor[] = [];
+    for (let col = 0; col <= 5; col++) {
+      const a = mb.createAnchor(mbPoint(0, col), Bias.Right);
+      if (a) anchors.push(a);
+      const b = mb.createAnchor(mbPoint(1, col), Bias.Left);
+      if (b) anchors.push(b);
+    }
+
+    // Apply edits to exercise the edit replay path
+    buf.insert(offset(0), "PRE");
+    buf.insert(offset(20), "MID");
+
+    const snap = mb.snapshot();
+    const batchResults = snap.resolveAnchors(anchors);
+    const individualResults = anchors.map((a) => snap.resolveAnchor(a));
+
+    expect(batchResults).toHaveLength(anchors.length);
+    for (let i = 0; i < anchors.length; i++) {
+      const batch = batchResults[i];
+      const individual = individualResults[i];
+      if (individual === undefined) {
+        expect(batch).toBeUndefined();
+      } else {
+        expect(batch).toBeDefined();
+        if (batch) expectPoint(batch, individual.row, individual.column);
+      }
+    }
   });
 
-  test.todo("batch resolution groups by excerpt", () => {
-    // Optimization: anchors from same excerpt resolved together
+  test("resolveAnchors groups by excerpt — anchors from multiple buffers resolved correctly", () => {
+    const buf1 = createBuffer(createBufferId(), "Buffer One Content Here");
+    const buf2 = createBuffer(createBufferId(), "Buffer Two Content Here");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 1));
+    mb.addExcerpt(buf2, excerptRange(0, 1));
+
+    const a1 = mb.createAnchor(mbPoint(0, 3), Bias.Left);
+    const a2 = mb.createAnchor(mbPoint(1, 5), Bias.Right);
+    const a3 = mb.createAnchor(mbPoint(0, 7), Bias.Right);
+    const a4 = mb.createAnchor(mbPoint(1, 2), Bias.Left);
+
+    const anchors = [a1, a2, a3, a4].filter((a): a is Anchor => a !== undefined);
+    expect(anchors).toHaveLength(4);
+
+    // Edit each buffer independently
+    buf1.insert(offset(3), "XX");
+    buf2.insert(offset(5), "YY");
+
+    const snap = mb.snapshot();
+    const batchResults = snap.resolveAnchors(anchors);
+
+    // Each batch result must match the single-anchor result
+    for (let i = 0; i < anchors.length; i++) {
+      const individual = snap.resolveAnchor(anchors[i] as Anchor);
+      const batch = batchResults[i];
+      if (individual === undefined) {
+        expect(batch).toBeUndefined();
+      } else {
+        expect(batch).toBeDefined();
+        if (batch) expectPoint(batch, individual.row, individual.column);
+      }
+    }
+  });
+
+  test("resolveAnchors handles empty input", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const result = mb.snapshot().resolveAnchors([]);
+    expect(result).toEqual([]);
+  });
+
+  test("resolveAnchors returns undefined for stale anchors in batch", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const validAnchor = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(validAnchor).toBeDefined();
+    if (!validAnchor) return;
+
+    // Remove excerpt — anchor becomes stale
+    mb.removeExcerpt(eid);
+
+    const results = mb.snapshot().resolveAnchors([validAnchor]);
+    expect(results[0]).toBeUndefined();
+  });
+
+  test("resolveAnchors with anchors from same buffer at different versions", () => {
+    const buf = createBuffer(createBufferId(), "ABCDE");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const a1 = mb.createAnchor(mbPoint(0, 2), Bias.Right); // version 0
+    buf.insert(offset(1), "X"); // bump version to 1
+    const a2 = mb.createAnchor(mbPoint(0, 4), Bias.Right); // version 1
+
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    if (!a1 || !a2) return;
+
+    const snap = mb.snapshot();
+    const batchResults = snap.resolveAnchors([a1, a2]);
+    expect(batchResults[0]).toEqual(snap.resolveAnchor(a1));
+    expect(batchResults[1]).toEqual(snap.resolveAnchor(a2));
   });
 });
