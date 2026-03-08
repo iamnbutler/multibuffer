@@ -5,7 +5,7 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import type { Highlighter, Token } from "./highlighter.ts";
+import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import { buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
@@ -51,7 +51,7 @@ export class DomRenderer implements Renderer {
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
-  private _highlighter: Highlighter | null = null;
+  private _highlighter: SyntaxHighlighter | null = null;
   private _onScroll: (() => void) | null = null;
   private _onClick: ((e: MouseEvent) => void) | null = null;
   private _onMouseMove: ((e: MouseEvent) => void) | null = null;
@@ -166,7 +166,7 @@ export class DomRenderer implements Renderer {
     this._wrapMap = this._buildWrapMap(snapshot);
   }
 
-  setHighlighter(highlighter: Highlighter): void {
+  setHighlighter(highlighter: SyntaxHighlighter): void {
     this._highlighter = highlighter;
   }
 
@@ -576,7 +576,7 @@ export class DomRenderer implements Renderer {
     }
 
     for (let row = selStart.row; row <= selEnd.row; row++) {
-      const visualRow = this._wrapMap
+      const visualRowBase = this._wrapMap
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
         : row;
@@ -591,21 +591,60 @@ export class DomRenderer implements Renderer {
       const startCharCol = row === selStart.row ? selStart.column : 0;
       const endCharCol = row === selEnd.row ? selEnd.column : lineLen + 1;
       const lineTextStr = lineText?.[0] ?? "";
-      // Convert char columns to visual columns for pixel-accurate positioning
-      const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
-      const endVisualCol =
-        endCharCol > lineTextStr.length
-          ? visualWidth(lineTextStr) + 1
-          : charColToVisualCol(lineTextStr, endCharCol);
+      const wrapWidth = this._measurements.wrapWidth ?? 0;
 
-      const x = gutterWidth + startVisualCol * charWidth;
-      const width = Math.max(0, endVisualCol - startVisualCol) * charWidth;
-      const y = visualRow * lineHeight;
+      if (wrapWidth > 0) {
+        // Emit one highlight rect per wrap segment that the selection overlaps.
+        const segments = wrapLine(lineTextStr, wrapWidth);
+        let charOffset = 0;
+        for (let s = 0; s < segments.length; s++) {
+          const segText = segments[s] ?? "";
+          const segCharStart = charOffset;
+          const segCharEnd = charOffset + segText.length;
+          charOffset = segCharEnd;
 
-      const highlight = document.createElement("div");
-      highlight.style.cssText =
-        `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-      this._selectionLayer.appendChild(highlight);
+          // Skip segments fully outside [startCharCol, endCharCol)
+          if (startCharCol >= segCharEnd) continue;
+          if (endCharCol <= segCharStart) continue;
+
+          const segSelCharStart = Math.max(startCharCol, segCharStart) - segCharStart;
+          const segSelCharEnd = Math.min(endCharCol, segCharEnd) - segCharStart;
+
+          const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
+          let segEndVisualCol: number;
+          if (endCharCol > lineLen && s === segments.length - 1) {
+            // Row-spanning selection: extend one cell past the last segment
+            segEndVisualCol = visualWidth(segText) + 1;
+          } else {
+            segEndVisualCol = charColToVisualCol(segText, Math.min(segSelCharEnd, segText.length));
+          }
+
+          const x = gutterWidth + segStartVisualCol * charWidth;
+          const width = Math.max(0, segEndVisualCol - segStartVisualCol) * charWidth;
+          const y = (visualRowBase + s) * lineHeight;
+
+          const highlight = document.createElement("div");
+          highlight.style.cssText =
+            `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+          this._selectionLayer.appendChild(highlight);
+        }
+      } else {
+        // Non-wrapped path
+        const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
+        const endVisualCol =
+          endCharCol > lineTextStr.length
+            ? visualWidth(lineTextStr) + 1
+            : charColToVisualCol(lineTextStr, endCharCol);
+
+        const x = gutterWidth + startVisualCol * charWidth;
+        const width = Math.max(0, endVisualCol - startVisualCol) * charWidth;
+        const y = visualRowBase * lineHeight;
+
+        const highlight = document.createElement("div");
+        highlight.style.cssText =
+          `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
+        this._selectionLayer.appendChild(highlight);
+      }
     }
   }
 

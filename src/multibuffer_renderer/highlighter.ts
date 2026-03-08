@@ -17,7 +17,14 @@ export interface Token {
   color: string;
 }
 
-export class Highlighter {
+/** Common interface for syntax highlighters. */
+export interface SyntaxHighlighter {
+  readonly ready: boolean;
+  parseBuffer(bufferId: string, text: string): void;
+  getLineTokens(bufferId: string, row: number): Token[];
+}
+
+export class Highlighter implements SyntaxHighlighter {
   private _parser: ParserType | null = null;
   private _trees = new Map<string, Tree>();
   private _ready = false;
