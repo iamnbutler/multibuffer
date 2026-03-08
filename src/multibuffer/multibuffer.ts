@@ -140,11 +140,20 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       const offsetEnd = rowEnd - info.startRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       const bufStartRow = (info.range.context.start.row + offsetStart) as import("./types.ts").BufferRow;
+      // Clamp to the excerpt's actual buffer range to avoid requesting rows
+      // past the buffer's line count (hasTrailingNewline extends endRow beyond
+      // the buffer range, but those rows should produce empty strings).
+      const rangeLines = info.range.context.end.row - info.range.context.start.row;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const bufEndRow = (info.range.context.start.row + offsetEnd) as import("./types.ts").BufferRow;
+      const bufEndRow = (info.range.context.start.row + Math.min(offsetEnd, rangeLines)) as import("./types.ts").BufferRow;
       const excerptLines = data.buffer.lines(bufStartRow, bufEndRow);
       for (const line of excerptLines) {
         result.push(line);
+      }
+      // Pad trailing newline rows that fall outside the buffer range
+      const expected = rowEnd - rowStart;
+      for (let p = excerptLines.length; p < expected; p++) {
+        result.push("");
       }
     }
     return result;
