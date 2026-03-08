@@ -269,6 +269,12 @@ export class Rope {
       }
     }
 
+    // Trailing empty lines after the last newline (e.g. "Hello\n" has line 1 = "").
+    // count is clamped to lineCount, so any remaining lines must be empty.
+    while (result.length < count) {
+      result.push("");
+    }
+
     return result;
   }
 
