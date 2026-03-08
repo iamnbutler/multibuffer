@@ -113,6 +113,30 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
   return segments;
 }
 
+/**
+ * Count how many visual-width segments a line wraps into at wrapWidth display cells.
+ * Equivalent to `wrapLine(text, wrapWidth).length` but avoids building the
+ * intermediate `string[]`, eliminating O(segments) slice allocations per line.
+ * Used in WrapMap construction where only the count is needed.
+ */
+export function wrapLineCount(text: string, wrapWidth: number): number {
+  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
+    return 1;
+  }
+  let count = 1;
+  let segVW = 0;
+  for (const char of text) {
+    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+    if (segVW + cw > wrapWidth && segVW > 0) {
+      count++;
+      segVW = cw;
+    } else {
+      segVW += cw;
+    }
+  }
+  return count;
+}
+
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
@@ -135,7 +159,7 @@ export class WrapMap {
 
     for (let i = 0; i < lineCount; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLine(line, wrapWidth).length;
+      const visualRows = wrapLineCount(line, wrapWidth);
       this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
     }
 
