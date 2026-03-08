@@ -174,12 +174,101 @@ export class Rope {
     return startChunk.text.slice(startPos, endPos);
   }
 
-  /** Get lines in range [startRow, endRow). */
+  /** Get lines in range [startRow, endRow).
+   *
+   * Single-pass forward scan: binary-searches once to find where startRow
+   * begins, then advances chunk-by-chunk without further binary searches.
+   * O(n_chars_in_range) vs the naive O(k · log n_chunks) of calling line() k times.
+   */
   lines(startRow: number, endRow: number): string[] {
+    const clampedEnd = Math.min(endRow, this.lineCount);
+    if (startRow >= clampedEnd) return [];
+
+    const count = clampedEnd - startRow;
     const result: string[] = [];
-    for (let row = startRow; row < endRow; row++) {
-      result.push(this.line(row));
+
+    // ── Step 1: locate where startRow begins ──────────────────────────────
+    let ci: number; // current chunk index
+    let pos: number; // position within that chunk
+
+    if (startRow === 0) {
+      ci = 0;
+      pos = 0;
+    } else {
+      // Binary search for the chunk containing the (startRow-1)th newline.
+      const startCi = this._findChunkByLine(startRow - 1);
+      const startChunk = this._chunks[startCi];
+      if (!startChunk) return result;
+
+      const nlsBefore = this._chunkNewlinePrefixes[startCi] ?? 0;
+      const targetNl = startRow - 1 - nlsBefore;
+
+      let nlFound = 0;
+      let searchFrom = 0;
+      let nlPos = -1;
+      while (nlFound <= targetNl) {
+        const found = startChunk.text.indexOf("\n", searchFrom);
+        if (found === -1) break;
+        nlPos = found;
+        nlFound++;
+        searchFrom = found + 1;
+      }
+
+      pos = nlPos + 1;
+      ci = startCi;
+      if (pos >= startChunk.text.length) {
+        ci = startCi + 1;
+        pos = 0;
+      }
     }
+
+    // ── Step 2: forward scan — collect `count` lines without binary search ─
+    while (result.length < count) {
+      if (ci >= this._chunks.length) break;
+      const chunk = this._chunks[ci];
+      if (!chunk) {
+        ci++;
+        pos = 0;
+        continue;
+      }
+
+      const nl = chunk.text.indexOf("\n", pos);
+      if (nl !== -1) {
+        // Line ends within this chunk.
+        result.push(chunk.text.slice(pos, nl));
+        pos = nl + 1;
+        if (pos >= chunk.text.length) {
+          ci++;
+          pos = 0;
+        }
+      } else {
+        // Line continues into following chunk(s).
+        let line = chunk.text.slice(pos);
+        ci++;
+        pos = 0;
+        while (ci < this._chunks.length) {
+          const next = this._chunks[ci];
+          if (!next) {
+            ci++;
+            continue;
+          }
+          const nextNl = next.text.indexOf("\n");
+          if (nextNl !== -1) {
+            line += next.text.slice(0, nextNl);
+            pos = nextNl + 1;
+            if (pos >= next.text.length) {
+              ci++;
+              pos = 0;
+            }
+            break;
+          }
+          line += next.text;
+          ci++;
+        }
+        result.push(line);
+      }
+    }
+
     return result;
   }
 

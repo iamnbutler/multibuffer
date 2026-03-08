@@ -182,5 +182,23 @@ export const bufferBenchmarks: BenchmarkSuite = {
         mutableBuf10k.insert(500 as BufferOffset, "X");
       },
     },
+    {
+      name: "lines() bulk - 50 lines (viewport slice)",
+      iterations: 10000,
+      targetMs: 0.01,
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snapshot10k.lines(5000 as BufferRow, 5050 as BufferRow);
+      },
+    },
+    {
+      name: "lines() bulk - all 10K lines (WrapMap build)",
+      iterations: 100,
+      targetMs: 5,
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snapshot10k.lines(0 as BufferRow, 10000 as BufferRow);
+      },
+    },
   ],
 };
