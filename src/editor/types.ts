@@ -36,6 +36,8 @@ export type EditorCommand =
   | { type: "duplicateLine"; direction: "up" | "down" }
   | { type: "insertLineBelow" }
   | { type: "insertLineAbove" }
+  | { type: "indentLines" }
+  | { type: "dedentLines" }
   | { type: "undo" }
   | { type: "redo" }
   | { type: "copy" }

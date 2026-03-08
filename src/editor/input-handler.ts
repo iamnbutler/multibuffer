@@ -209,6 +209,7 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
       return { type: "insertNewline" };
 
     case "Tab":
+      if (shift) return { type: "dedentLines" };
       return { type: "insertTab" };
 
     // ── Shortcuts ───────────────────────────────────────────────
@@ -236,6 +237,14 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
 
     case "v":
       // Paste is handled via the paste event, not keydown
+      return undefined;
+
+    case "]":
+      if (mod) return { type: "indentLines" };
+      return undefined;
+
+    case "[":
+      if (mod) return { type: "dedentLines" };
       return undefined;
 
     default:
