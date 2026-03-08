@@ -14,10 +14,10 @@ import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import {
-  WrapMap,
   charColToVisualCol,
   visualColToCharCol,
   visualWidth,
+  WrapMap,
   wrapLine,
 } from "../../src/multibuffer_renderer/wrap-map.ts";
 import { createBufferId, excerptRange, num, resetCounters } from "../helpers.ts";

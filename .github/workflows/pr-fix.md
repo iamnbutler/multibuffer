@@ -29,6 +29,14 @@ tools:
 timeout-minutes: 20
 engine: claude
 
+steps:
+  - name: Install bun
+    run: |
+      curl -fsSL https://bun.sh/install | bash
+      echo "$HOME/.bun/bin" >> $GITHUB_PATH
+  - name: Install dependencies
+    run: bun install --frozen-lockfile
+
 ---
 
 # PR Fix
