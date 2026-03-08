@@ -88,6 +88,7 @@ export class Editor {
     }
 
     const snap = this.multiBuffer.snapshot();
+    const clipped = snap.clipPoint(point, Bias.Left);
 
     // The anchor end is the non-head end of the current selection
     const anchorEnd =
@@ -97,13 +98,13 @@ export class Editor {
     const anchorPoint = snap.resolveAnchor(anchorEnd);
     if (!anchorPoint) return;
 
-    const newHeadAnchor = this.multiBuffer.createAnchor(point, Bias.Right);
+    const newHeadAnchor = this.multiBuffer.createAnchor(clipped, Bias.Right);
     if (!newHeadAnchor) return;
 
     // Determine ordering
     if (
-      point.row < anchorPoint.row ||
-      (point.row === anchorPoint.row && point.column <= anchorPoint.column)
+      clipped.row < anchorPoint.row ||
+      (clipped.row === anchorPoint.row && clipped.column <= anchorPoint.column)
     ) {
       this._selection = createSelection(
         createAnchorRange(newHeadAnchor, anchorEnd),
@@ -115,7 +116,7 @@ export class Editor {
         "end",
       );
     }
-    this._cursor = point;
+    this._cursor = clipped;
     this._onChange?.();
   }
 

@@ -70,6 +70,17 @@ describe("Rope - Line Access", () => {
     const r = Rope.from("Hello");
     expect(r.line(5)).toBe("");
   });
+
+  test("line spanning multiple chunks", () => {
+    // Build a line that is longer than TARGET_CHUNK_SIZE (1024) so it spans chunks
+    const longLine = "x".repeat(2048);
+    const text = `before\n${longLine}\nafter`;
+    const r = Rope.from(text);
+    expect(r.lineCount).toBe(3);
+    expect(r.line(0)).toBe("before");
+    expect(r.line(1)).toBe(longLine);
+    expect(r.line(2)).toBe("after");
+  });
 });
 
 describe("Rope - Insert", () => {
