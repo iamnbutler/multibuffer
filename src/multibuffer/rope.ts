@@ -290,19 +290,16 @@ export class Rope {
     const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
     const targetLineInChunk = line - linesBeforeChunk;
 
-    // Scan within the chunk for the target line
-    let lineInChunk = 0;
-    for (let i = 0; i < chunk.text.length; i++) {
-      if (lineInChunk === targetLineInChunk) {
-        return chunkStart + i + col;
-      }
-      if (chunk.text.charCodeAt(i) === 10) {
-        lineInChunk++;
-      }
+    // Skip targetLineInChunk newlines using indexOf: O(targetLineInChunk) native calls
+    // instead of O(chars_before_target_line) JS iterations.
+    let lineStart = 0;
+    for (let n = 0; n < targetLineInChunk; n++) {
+      const nlPos = chunk.text.indexOf("\n", lineStart);
+      if (nlPos === -1) break;
+      lineStart = nlPos + 1;
     }
 
-    // Target line starts after this chunk's content (shouldn't happen with correct binary search)
-    return chunkStart + chunk.text.length + col;
+    return chunkStart + lineStart + col;
   }
 
   /** Binary search: find chunk index containing the given byte offset. */
@@ -346,15 +343,13 @@ export class Rope {
     const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
     const targetLineInChunk = line - linesBeforeChunk;
 
-    let lineInChunk = 0;
-    for (let i = 0; i < chunk.text.length; i++) {
-      if (chunk.text.charCodeAt(i) === 10) {
-        lineInChunk++;
-        if (lineInChunk === targetLineInChunk) {
-          return chunkStart + i + 1;
-        }
-      }
+    // Skip targetLineInChunk newlines using indexOf (same pattern as lineColToOffset).
+    let searchFrom = 0;
+    for (let n = 0; n < targetLineInChunk; n++) {
+      const nlPos = chunk.text.indexOf("\n", searchFrom);
+      if (nlPos === -1) return chunkStart + chunk.text.length;
+      searchFrom = nlPos + 1;
     }
-    return chunkStart + chunk.text.length;
+    return chunkStart + searchFrom;
   }
 }

@@ -88,12 +88,30 @@ export const bufferBenchmarks: BenchmarkSuite = {
       },
     },
     {
-      name: "pointToOffset (O(1) via prefix sum)",
+      name: "pointToOffset - early (row 10)",
+      iterations: 10000,
+      targetMs: 0.001,
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snapshot10k.pointToOffset({ row: 10 as BufferRow, column: 10 });
+      },
+    },
+    {
+      name: "pointToOffset - mid (row 5000)",
       iterations: 10000,
       targetMs: 0.001,
       fn: () => {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         snapshot10k.pointToOffset({ row: 5000 as BufferRow, column: 10 });
+      },
+    },
+    {
+      name: "pointToOffset - late (row 9990)",
+      iterations: 10000,
+      targetMs: 0.001,
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snapshot10k.pointToOffset({ row: 9990 as BufferRow, column: 10 });
       },
     },
     {
