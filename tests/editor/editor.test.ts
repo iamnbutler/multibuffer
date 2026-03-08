@@ -853,12 +853,20 @@ describe("Editor - Clipboard", () => {
     expectPoint(editor.cursor, 0, 0);
   });
 
-  test("cut with collapsed selection is a no-op", () => {
+  test("cut with no selection cuts the entire line", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe("World");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("cut with no selection on only line clears buffer", () => {
     const { editor, mb } = setup("Hello");
     editor.setCursor(mbPoint(0, 3));
     editor.dispatch({ type: "cut" });
-    expect(getText(mb)).toBe("Hello");
-    expectPoint(editor.cursor, 0, 3);
+    expect(getText(mb)).toBe("");
+    expectPoint(editor.cursor, 0, 0);
   });
 
   test("cut across lines deletes selection", () => {
@@ -1353,5 +1361,177 @@ describe("Editor - Undo/Redo", () => {
     expect(getText(mb)).toBe("Hi");
     editor.dispatch({ type: "undo" });
     expect(getText(mb)).toBe("Hello World");
+  });
+});
+
+// ─── Cross-excerpt editing ─────────────────────────────────────────
+//
+// Operations that span excerpt boundaries: delete, cut, type-over,
+// paste-over, and their undo/redo.
+
+/** Create a multibuffer with two excerpts from different buffers. */
+function setupTwoExcerpts(
+  textA: string,
+  textB: string,
+): { mb: MultiBuffer; editor: Editor } {
+  const bufA = createBuffer(createBufferId(), textA);
+  const bufB = createBuffer(createBufferId(), textB);
+  const mb = createMultiBuffer();
+  mb.addExcerpt(bufA, excerptRange(0, textA.split("\n").length), { hasTrailingNewline: true });
+  mb.addExcerpt(bufB, excerptRange(0, textB.split("\n").length));
+  const editor = new Editor(mb);
+  return { mb, editor };
+}
+
+/** Select from (startRow, startCol) to (endRow, endCol) by setting cursor + extending. */
+function selectRange(
+  editor: Editor,
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+): void {
+  editor.setCursor(mbPoint(startRow, startCol));
+  editor.extendSelectionTo(mbPoint(endRow, endCol));
+}
+
+describe("Editor - Cross-excerpt editing", () => {
+  test("delete across two excerpts removes selected text from both buffers", () => {
+    // Excerpt A: "AAA\nBBB" (rows 0-1), trailing newline (row 2)
+    // Excerpt B: "CCC\nDDD" (rows 3-4)
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(5); // 2 content + 1 trailing + 2 content
+
+    // Select from middle of excerpt A to middle of excerpt B
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+
+    // A has "A" remaining, B has "CC\nDDD", trailing newline persists (synthetic)
+    expect(getText(mb)).toBe("A\n\nCC\nDDD");
+  });
+
+  test("cut across two excerpts removes text from both buffers", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "cut" });
+
+    expect(getText(mb)).toBe("A\n\nCC\nDDD");
+  });
+
+  test("type over cross-excerpt selection replaces with new text", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "insertText", text: "X" });
+
+    expect(getText(mb)).toBe("AX\n\nCC\nDDD");
+  });
+
+  test("paste over cross-excerpt selection replaces with pasted text", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "paste", text: "PASTED" });
+
+    expect(getText(mb)).toBe("APASTED\n\nCC\nDDD");
+  });
+
+  test("delete entire content of both excerpts via select-all", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA", "BBB");
+    editor.dispatch({ type: "selectAll" });
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+
+    // Both buffers empty, but excerpt A's trailing newline persists (synthetic)
+    expect(getText(mb)).toBe("\n\n");
+  });
+
+  test("undo cross-excerpt delete restores both buffers", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    const originalText = getText(mb);
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "cut" });
+
+    expect(getText(mb)).not.toBe(originalText);
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe(originalText);
+  });
+
+  test("redo after undo of cross-excerpt delete", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "cut" });
+    const afterCut = getText(mb);
+
+    editor.dispatch({ type: "undo" });
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe(afterCut);
+  });
+
+  test("undo cross-excerpt type-over restores original text", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    const originalText = getText(mb);
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "insertText", text: "REPLACEMENT" });
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe(originalText);
+  });
+
+  test("delete forward across excerpts", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 1, 0, 3, 2);
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+
+    // Deletes "BBB" from A (leaving "AAA\n" = 2 lines) and "CC" from B
+    // Trailing newline persists between excerpts
+    expect(getText(mb)).toBe("AAA\n\n\nC\nDDD");
+  });
+
+  test("cursor position after cross-excerpt delete", () => {
+    const { editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 2, 3, 1);
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+
+    expectPoint(editor.cursor, 0, 2);
+  });
+
+  test("cursor position after cross-excerpt type-over", () => {
+    const { editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    selectRange(editor, 0, 2, 3, 1);
+    editor.dispatch({ type: "insertText", text: "XY" });
+
+    expectPoint(editor.cursor, 0, 4);
+  });
+
+  test("multiple undo/redo cycles on cross-excerpt edits", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    const originalText = getText(mb);
+
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "insertText", text: "Z" });
+    const afterEdit = getText(mb);
+
+    for (let i = 0; i < 3; i++) {
+      editor.dispatch({ type: "undo" });
+      expect(getText(mb)).toBe(originalText);
+      editor.dispatch({ type: "redo" });
+      expect(getText(mb)).toBe(afterEdit);
+    }
+  });
+
+  test("cross-excerpt delete followed by same-excerpt edit then undo both", () => {
+    const { mb, editor } = setupTwoExcerpts("AAA\nBBB", "CCC\nDDD");
+    const originalText = getText(mb);
+
+    selectRange(editor, 0, 1, 3, 1);
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    const afterCrossDelete = getText(mb);
+
+    editor.dispatch({ type: "insertText", text: "Q" });
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe(afterCrossDelete);
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe(originalText);
   });
 });

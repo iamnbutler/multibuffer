@@ -9,6 +9,7 @@ import {
   resolveAnchorRange,
 } from "../multibuffer/anchor.ts";
 import type {
+  ExcerptInfo,
   MultiBuffer,
   MultiBufferPoint,
   MultiBufferRow,
@@ -26,12 +27,22 @@ import {
 } from "./selection.ts";
 import type { EditorCommand } from "./types.ts";
 
-/** A snapshot of the editor's text and cursor state for undo/redo. */
+/** A single atomic edit within one excerpt/buffer. */
+interface EditOp {
+  readonly editStart: MultiBufferPoint;
+  readonly removedText: string;
+  readonly insertedText: string;
+}
+
+/**
+ * A history entry for undo/redo. Contains one or more edit operations
+ * stored in application order. Cross-excerpt edits produce multiple ops
+ * (applied bottom-to-top so higher excerpts' rows aren't shifted).
+ */
 interface HistoryEntry {
-  /** Full text of the multibuffer at this point in time. */
-  readonly text: string;
-  /** Cursor position at this point in time. */
-  readonly cursor: MultiBufferPoint;
+  readonly edits: ReadonlyArray<EditOp>;
+  readonly cursorBefore: MultiBufferPoint;
+  readonly selectionBefore: Selection | undefined;
 }
 
 export class Editor {
@@ -228,7 +239,7 @@ export class Editor {
   /**
    * Return the text content of the current selection, or "" if the
    * selection is collapsed or absent.  Callers use this to populate
-   * the platform clipboard before dispatching `copy` or `cut`.
+   * the platform clipboard before dispatching `copy`.
    */
   getSelectedText(): string {
     if (!this._selection) return "";
@@ -250,29 +261,46 @@ export class Editor {
     return [firstLine, ...middleLines, lastLine].join("\n");
   }
 
+  /**
+   * Return the text that `cut` will remove. If there's a selection,
+   * returns the selected text. Otherwise returns the full current line
+   * (including its trailing newline when present).
+   */
+  getCutText(): string {
+    const snap = this.multiBuffer.snapshot();
+    if (this._selection && !isCollapsed(snap, this._selection)) {
+      return this.getSelectedText();
+    }
+    // No selection — cut targets the entire line
+    const cursor = this.cursor;
+    const row = cursor.row;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
+    // Include the trailing newline if this isn't the last line
+    if (row + 1 < snap.lineCount) {
+      return `${lineText}\n`;
+    }
+    return lineText;
+  }
+
   /** Execute a command. */
   dispatch(command: EditorCommand): void {
     const snap = this.multiBuffer.snapshot();
 
     switch (command.type) {
       case "insertText":
-        this._pushHistory(snap);
         this._insertText(snap, command.text);
         break;
       case "insertNewline":
-        this._pushHistory(snap);
         this._insertText(snap, "\n");
         break;
       case "insertTab":
-        this._pushHistory(snap);
         this._insertText(snap, "  ");
         break;
       case "deleteBackward":
-        this._pushHistory(snap);
         this._deleteBackward(snap, command.granularity);
         break;
       case "deleteForward":
-        this._pushHistory(snap);
         this._deleteForward(snap, command.granularity);
         break;
       case "moveCursor":
@@ -288,7 +316,6 @@ export class Editor {
         this._collapseSelection(snap, command.to);
         break;
       case "deleteLine":
-        this._pushHistory(snap);
         this._deleteLine(snap);
         break;
       case "copy":
@@ -299,22 +326,19 @@ export class Editor {
         this._cut(snap);
         break;
       case "paste":
-        this._pushHistory(snap);
         this._insertText(snap, command.text);
         break;
       case "undo": {
-        const prev = this._undoStack.pop();
-        if (prev) {
-          this._redoStack.push(this._captureEntry(snap));
-          this._applyEntry(prev);
+        const entry = this._undoStack.pop();
+        if (entry) {
+          this._redoStack.push(this._applyInverse(entry));
         }
         break;
       }
       case "redo": {
-        const next = this._redoStack.pop();
-        if (next) {
-          this._undoStack.push(this._captureEntry(snap));
-          this._applyEntry(next);
+        const entry = this._redoStack.pop();
+        if (entry) {
+          this._undoStack.push(this._applyInverse(entry));
         }
         break;
       }
@@ -329,10 +353,8 @@ export class Editor {
       // Replace selection with text
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this.multiBuffer.edit(range.start, range.end, text);
-        // Place cursor at end of inserted text
+        this._edit(snap, range.start, range.end, text);
         const newSnap = this.multiBuffer.snapshot();
-        // Estimate new cursor position: start + text length
         const newCursor = this._advancePoint(range.start, text, newSnap);
         this._cursor = newCursor;
         this._selection = selectionAtPoint(this.multiBuffer, newCursor);
@@ -342,7 +364,7 @@ export class Editor {
 
     // Insert at cursor
     const cursor = this.cursor;
-    this.multiBuffer.edit(cursor, cursor, text);
+    this._edit(snap, cursor, cursor, text);
     const newSnap = this.multiBuffer.snapshot();
     const newCursor = this._advancePoint(cursor, text, newSnap);
     this._cursor = newCursor;
@@ -352,21 +374,19 @@ export class Editor {
   private _deleteBackward(snap: MultiBufferSnapshot, granularity: import("./types.ts").Granularity): void {
     this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
-      // Delete selection
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this.multiBuffer.edit(range.start, range.end, "");
+        this._edit(snap, range.start, range.end, "");
         this._cursor = range.start;
         this._selection = selectionAtPoint(this.multiBuffer, range.start);
       }
       return;
     }
 
-    // Delete backward from cursor
     const cursor = this.cursor;
     const target = moveCursor(snap, cursor, "left", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
-      this.multiBuffer.edit(target, cursor, "");
+      this._edit(snap, target, cursor, "");
       this._cursor = target;
       this._selection = selectionAtPoint(this.multiBuffer, target);
     }
@@ -377,7 +397,7 @@ export class Editor {
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this.multiBuffer.edit(range.start, range.end, "");
+        this._edit(snap, range.start, range.end, "");
         this._cursor = range.start;
         this._selection = selectionAtPoint(this.multiBuffer, range.start);
       }
@@ -387,8 +407,7 @@ export class Editor {
     const cursor = this.cursor;
     const target = moveCursor(snap, cursor, "right", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
-      this.multiBuffer.edit(cursor, target, "");
-      // Cursor stays in place
+      this._edit(snap, cursor, target, "");
       this._selection = selectionAtPoint(this.multiBuffer, cursor);
     }
   }
@@ -571,35 +590,101 @@ export class Editor {
       newCursorRow = prevRow;
     }
 
-    this.multiBuffer.edit(deleteStart, deleteEnd, "");
+    this._edit(snap, deleteStart, deleteEnd, "");
     const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
 
   private _cut(snap: MultiBufferSnapshot): void {
-    if (!this._selection || isCollapsed(snap, this._selection)) return;
-    const range = resolveAnchorRange(snap, this._selection.range);
-    if (range) {
-      this.multiBuffer.edit(range.start, range.end, "");
-      this._cursor = range.start;
-      this._selection = selectionAtPoint(this.multiBuffer, range.start);
+    if (this._selection && !isCollapsed(snap, this._selection)) {
+      const range = resolveAnchorRange(snap, this._selection.range);
+      if (range) {
+        this._edit(snap, range.start, range.end, "");
+        this._cursor = range.start;
+        this._selection = selectionAtPoint(this.multiBuffer, range.start);
+      }
+      return;
     }
+    // No selection — cut the entire line (same behavior as Cmd+X in VS Code)
+    this._deleteLine(snap);
   }
 
-  /** Capture the current text and cursor as a history entry. */
-  private _captureEntry(snap: MultiBufferSnapshot): HistoryEntry {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for snapshot bounds
-    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
-    return { text: lines.join("\n"), cursor: this._cursor };
+  /** Extract the text content between two multibuffer points. */
+  private _getTextInRange(
+    snap: MultiBufferSnapshot,
+    start: MultiBufferPoint,
+    end: MultiBufferPoint,
+  ): string {
+    if (start.row === end.row && start.column === end.column) return "";
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lines = snap.lines(start.row, (end.row + 1) as MultiBufferRow);
+    if (lines.length === 0) return "";
+    if (start.row === end.row) {
+      return (lines[0] ?? "").slice(start.column, end.column);
+    }
+    const firstLine = (lines[0] ?? "").slice(start.column);
+    const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
+    const middleLines = lines.slice(1, -1);
+    return [firstLine, ...middleLines, lastLine].join("\n");
   }
 
   /**
-   * Push the current state onto the undo stack and clear the redo stack.
-   * Called before every mutating command.
+   * Record an edit to the undo stack and apply it.
+   * Handles cross-excerpt ranges by splitting into per-excerpt edits
+   * applied bottom-to-top so that row numbers for higher excerpts
+   * aren't shifted during processing.
    */
-  private _pushHistory(snap: MultiBufferSnapshot): void {
-    this._undoStack.push(this._captureEntry(snap));
+  private _edit(
+    snap: MultiBufferSnapshot,
+    start: MultiBufferPoint,
+    end: MultiBufferPoint,
+    newText: string,
+  ): void {
+    const startBuf = snap.toBufferPoint(start);
+    const endBuf = snap.toBufferPoint(end);
+
+    // Same excerpt (or same point) — single edit
+    if (
+      !startBuf || !endBuf ||
+      (start.row === end.row && start.column === end.column) ||
+      startBuf.excerpt.id.index === endBuf.excerpt.id.index
+    ) {
+      const removedText = this._getTextInRange(snap, start, end);
+      this._undoStack.push({
+        edits: [{ editStart: start, removedText, insertedText: newText }],
+        cursorBefore: this._cursor,
+        selectionBefore: this._selection,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
+      }
+      this._redoStack = [];
+      this.multiBuffer.edit(start, end, newText);
+      return;
+    }
+
+    // Cross-excerpt: split into per-excerpt edits, applied bottom-to-top
+    const subEdits = this._splitCrossExcerptRange(snap, start, end, startBuf.excerpt, endBuf.excerpt, newText);
+    const editOps: EditOp[] = [];
+
+    // Apply bottom-to-top (subEdits is already in that order)
+    for (const sub of subEdits) {
+      const currentSnap = this.multiBuffer.snapshot();
+      const removedText = this._getTextInRange(currentSnap, sub.start, sub.end);
+      editOps.push({
+        editStart: sub.start,
+        removedText,
+        insertedText: sub.text,
+      });
+      this.multiBuffer.edit(sub.start, sub.end, sub.text);
+    }
+
+    this._undoStack.push({
+      edits: editOps,
+      cursorBefore: this._cursor,
+      selectionBefore: this._selection,
+    });
     if (this._undoStack.length > Editor._MAX_HISTORY) {
       this._undoStack.shift();
     }
@@ -607,21 +692,100 @@ export class Editor {
   }
 
   /**
-   * Apply a history entry by replacing the buffer content and restoring the cursor.
+   * Split a cross-excerpt range into per-excerpt sub-edits.
+   * Returns edits in bottom-to-top order (end excerpt first).
+   * Only the top-most (start) excerpt receives the replacement text;
+   * all others just delete their portion.
    */
-  private _applyEntry(entry: HistoryEntry): void {
-    const snap = this.multiBuffer.snapshot();
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for last row
-    const lastRow = Math.max(0, snap.lineCount - 1) as MultiBufferRow;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for snapshot bounds
-    const lastLineArr = snap.lines(lastRow, snap.lineCount as MultiBufferRow);
-    const lastLineLen = lastLineArr[0]?.length ?? 0;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for start of buffer
-    const startPoint: MultiBufferPoint = { row: 0 as MultiBufferRow, column: 0 };
-    const endPoint: MultiBufferPoint = { row: lastRow, column: lastLineLen };
-    this.multiBuffer.edit(startPoint, endPoint, entry.text);
-    this._cursor = entry.cursor;
-    this._selection = selectionAtPoint(this.multiBuffer, entry.cursor);
+  private _splitCrossExcerptRange(
+    snap: MultiBufferSnapshot,
+    start: MultiBufferPoint,
+    end: MultiBufferPoint,
+    startExcerpt: ExcerptInfo,
+    endExcerpt: ExcerptInfo,
+    newText: string,
+  ): Array<{ start: MultiBufferPoint; end: MultiBufferPoint; text: string }> {
+    const result: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; text: string }> = [];
+
+    // Collect all excerpts between start and end (inclusive)
+    const spanned: ExcerptInfo[] = [];
+    for (const exc of snap.excerpts) {
+      if (exc.startRow >= startExcerpt.startRow && exc.startRow <= endExcerpt.startRow) {
+        spanned.push(exc);
+      }
+    }
+
+    // Process in reverse order (bottom-to-top)
+    for (let i = spanned.length - 1; i >= 0; i--) {
+      const exc = spanned[i];
+      if (!exc) continue;
+
+      // Last content row of this excerpt (exclude trailing newline)
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for excerpt row bounds
+      const excContentEnd = (exc.endRow - (exc.hasTrailingNewline ? 2 : 1)) as MultiBufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lastLineText = snap.lines(excContentEnd, (excContentEnd + 1) as MultiBufferRow)[0] ?? "";
+
+      let subStart: MultiBufferPoint;
+      let subEnd: MultiBufferPoint;
+
+      if (exc === startExcerpt && exc === endExcerpt) {
+        // Shouldn't happen (same-excerpt case handled above), but be safe
+        subStart = start;
+        subEnd = end;
+      } else if (exc === endExcerpt) {
+        // End excerpt: from its first content row to the selection end
+        subStart = { row: exc.startRow, column: 0 };
+        subEnd = end;
+      } else if (exc === startExcerpt) {
+        // Start excerpt: from selection start to end of content
+        subStart = start;
+        subEnd = { row: excContentEnd, column: lastLineText.length };
+      } else {
+        // Middle excerpt: delete all content
+        subStart = { row: exc.startRow, column: 0 };
+        subEnd = { row: excContentEnd, column: lastLineText.length };
+      }
+
+      // Only the start excerpt (last in our reverse iteration) gets the replacement text
+      const text = exc === startExcerpt ? newText : "";
+      result.push({ start: subStart, end: subEnd, text });
+    }
+
+    return result;
+  }
+
+  /**
+   * Apply the inverse of a history entry. Returns the inverse entry
+   * so the caller can push it onto the opposite stack.
+   * Processes edits in reverse order — each inverse restores the state
+   * to exactly when that edit was originally applied.
+   */
+  private _applyInverse(entry: HistoryEntry): HistoryEntry {
+    const inverseOps: EditOp[] = [];
+
+    // Apply inversions in reverse of application order
+    for (let i = entry.edits.length - 1; i >= 0; i--) {
+      const edit = entry.edits[i];
+      if (!edit) continue;
+      const snap = this.multiBuffer.snapshot();
+      const currentEnd = this._advancePoint(edit.editStart, edit.insertedText, snap);
+      inverseOps.push({
+        editStart: edit.editStart,
+        removedText: edit.insertedText,
+        insertedText: edit.removedText,
+      });
+      this.multiBuffer.edit(edit.editStart, currentEnd, edit.removedText);
+    }
+
+    const inverse: HistoryEntry = {
+      edits: inverseOps,
+      cursorBefore: this._cursor,
+      selectionBefore: this._selection,
+    };
+    this._cursor = entry.cursorBefore;
+    this._selection = entry.selectionBefore;
+    return inverse;
   }
 
   /**

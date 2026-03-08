@@ -195,6 +195,17 @@ async function main() {
 
   // Wire keyboard input
   const inputHandler = new InputHandler((command) => {
+    if (command.type === "copy") {
+      const text = editor.getSelectedText();
+      if (text) {
+        navigator.clipboard.writeText(text);
+      }
+    } else if (command.type === "cut") {
+      const text = editor.getCutText();
+      if (text) {
+        navigator.clipboard.writeText(text);
+      }
+    }
     editor.dispatch(command);
   });
   inputHandler.mount(container);
