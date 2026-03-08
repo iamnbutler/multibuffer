@@ -9,7 +9,7 @@
  */
 
 import { createBuffer } from "../src/multibuffer/buffer.ts";
-import type { BufferId, BufferOffset, BufferRow, BufferSnapshot } from "../src/multibuffer/types.ts";
+import type { Buffer, BufferId, BufferOffset, BufferRow, BufferSnapshot } from "../src/multibuffer/types.ts";
 import { Bias } from "../src/multibuffer/types.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
@@ -24,6 +24,8 @@ function generateText(lines: number): string {
 const id = "bench-buffer" as BufferId;
 
 let snapshot10k: BufferSnapshot;
+let mutableBuf1k: Buffer;
+let mutableBuf10k: Buffer;
 
 export const bufferBenchmarks: BenchmarkSuite = {
   name: "Buffer Operations",
@@ -132,6 +134,34 @@ export const bufferBenchmarks: BenchmarkSuite = {
         const buf = createBuffer(id, generateText(1000));
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         buf.delete(500 as BufferOffset, 510 as BufferOffset);
+      },
+    },
+    {
+      // Buffer creation excluded — measures insert + computeTextSummary only.
+      // Critical path: called on every keystroke. Target: <0.2ms for 1K-line file.
+      name: "Insert character - 1K buf (isolated)",
+      iterations: 1000,
+      targetMs: 0.2,
+      setup: () => {
+        mutableBuf1k = createBuffer(id, generateText(1000));
+      },
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        mutableBuf1k.insert(500 as BufferOffset, "X");
+      },
+    },
+    {
+      // Buffer creation excluded — measures insert + computeTextSummary only.
+      // Critical path: called on every keystroke. Target: <1.5ms for 10K-line file.
+      name: "Insert character - 10K buf (isolated)",
+      iterations: 200,
+      targetMs: 1.5,
+      setup: () => {
+        mutableBuf10k = createBuffer(id, generateText(10_000));
+      },
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        mutableBuf10k.insert(500 as BufferOffset, "X");
       },
     },
   ],

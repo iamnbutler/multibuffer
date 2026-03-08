@@ -38,28 +38,14 @@ function utf8ByteLength(str: string): number {
 }
 
 function computeTextSummary(rope: Rope): TextSummary {
-  const text = rope.text();
-  const lines = text.split("\n");
-  let totalBytes = 0;
-  let totalChars = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    totalBytes += utf8ByteLength(line);
-    totalChars += line.length;
-    if (i < lines.length - 1) {
-      totalBytes += 1;
-      totalChars += 1;
-    }
-  }
-
-  const lastLine = lines[lines.length - 1] ?? "";
-  return {
-    lines: lines.length,
-    bytes: totalBytes,
-    lastLineLength: lastLine.length,
-    chars: totalChars,
-  };
+  // lines and chars are O(1) from rope metadata — no allocation or iteration needed.
+  const lines = rope.lineCount;
+  const chars = rope.length;
+  // biome-ignore lint/plugin/no-type-assertion: expect: BufferRow brand for last-row index
+  const lastLineLength = rope.line((lines - 1) as BufferRow).length;
+  // bytes requires one O(n) scan of the text, but with no intermediate split().
+  const bytes = utf8ByteLength(rope.text());
+  return { lines, bytes, lastLineLength, chars };
 }
 
 class BufferSnapshotImpl implements BufferSnapshot {
