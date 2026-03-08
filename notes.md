@@ -8,13 +8,13 @@ typecheck fails in demo/demo.ts only (pre-existing)
 ## Done
 - #48 merged: Rope.line() O(log n) + offsetToLineCol indexOf
 - #51 open: Rope.lines() single-pass; 3.8-4.2x
-- perf-assist/multibuffer-snapshot-lines-bulk open: MultiBufferSnapshot.lines() Map+bulk; 1.3x
+- #52 open: MultiBufferSnapshot.lines() Map+bulk; 1.3x
+- perf-assist/rope-linecol-indexof open: lineColToOffset indexOf; 3.3x (pointToOffset mid: 1.12µs→0.34µs)
 
 ## Backlog
-1. lineColToOffset charCodeAt→indexOf
-2. Rope insert/delete structural sharing
-3. lineColToOffset cross-chunk bug (lines >1024 chars)
+1. Rope insert/delete structural sharing
+2. lineColToOffset cross-chunk bug (lines >1024 chars)
 
 ## State
-- Round-robin next: 5,6
+- Round-robin next: 1,2 (or 3 if more backlog items identified)
 - Monthly issue: #49 March 2026
