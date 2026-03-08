@@ -59,6 +59,7 @@ tools:
     toolsets: [all]
   bash: true
   repo-memory: true
+engine: claude
 
 ---
 

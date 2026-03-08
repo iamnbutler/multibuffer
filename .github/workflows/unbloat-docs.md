@@ -69,6 +69,7 @@ safe-outputs:
 
 # Timeout
 timeout-minutes: 30
+engine: claude
 ---
 
 # Documentation Unbloat Workflow

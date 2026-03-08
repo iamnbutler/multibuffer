@@ -163,6 +163,7 @@ steps:
       with open('/tmp/gh-aw/task_selection.json', 'w') as f:
           json.dump(result, f, indent=2)
       EOF
+engine: claude
 
 ---
 

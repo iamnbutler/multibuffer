@@ -27,6 +27,7 @@ tools:
   bash: true
 
 timeout-minutes: 20
+engine: claude
 
 ---
 
