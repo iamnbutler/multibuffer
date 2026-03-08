@@ -34,7 +34,7 @@
 # - Maintains a persistent memory of work done and what remains
 # Always polite, constructive, and mindful of the project's goals.
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"ad8413d7a8214ca21ccb0892f230f6c46d59b6649d10048da844d7fccdef6c9d","compiler_version":"v0.56.1","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"66d7ee202ad5942ac1608a6ecf959962f3392024e06f2dcba267d65d6742cb18","compiler_version":"v0.56.1","strict":true}
 
 name: "Repo Assist"
 "on":
@@ -374,8 +374,18 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@ecf28ddc73e819eb6fa29df6b34ef8921c743461 # v2.1.3
+        with:
+          bun-version: '1.1'
       - name: Create gh-aw temp directory
         run: bash /opt/gh-aw/actions/create_gh_aw_tmp_dir.sh
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
       - env:
           GH_TOKEN: ${{ github.token }}
         name: Fetch repo data for task weighting

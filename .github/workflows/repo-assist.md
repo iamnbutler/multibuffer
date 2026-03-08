@@ -72,6 +72,12 @@ tools:
   repo-memory: true
 
 steps:
+  - name: Install bun
+    run: |
+      curl -fsSL https://bun.sh/install | bash
+      echo "$HOME/.bun/bin" >> $GITHUB_PATH
+  - name: Install dependencies
+    run: bun install --frozen-lockfile
   - name: Fetch repo data for task weighting
     env:
       GH_TOKEN: ${{ github.token }}
