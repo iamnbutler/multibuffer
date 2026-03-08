@@ -109,55 +109,69 @@ export class Rope {
   line(row: number): string {
     if (row < 0 || row >= this.lineCount) return "";
 
-    let currentLine = 0;
-    let lineStart = 0;
+    // Find where line `row` starts by locating the (row-1)th newline.
+    // Binary search on chunk newline prefix sums: O(log n_chunks) instead of O(n_chunks).
+    let startCi: number;
+    let startPos: number;
 
-    for (let chunkIdx = 0; chunkIdx < this._chunks.length; chunkIdx++) {
-      const chunk = this._chunks[chunkIdx];
-      if (!chunk) continue;
-      const chunkEnd = lineStart + chunk.text.length;
+    if (row === 0) {
+      startCi = 0;
+      startPos = 0;
+    } else {
+      // _findChunkByLine(row-1) returns the chunk containing the (row-1)th newline.
+      const ci = this._findChunkByLine(row - 1);
+      const chunk = this._chunks[ci];
+      if (!chunk) return "";
 
-      if (currentLine + chunk.newlines >= row || chunkIdx === this._chunks.length - 1) {
-        // The target line starts or is contained in this chunk
-        let pos = 0;
-        const text = chunk.text;
-        while (currentLine < row) {
-          const nl = text.indexOf("\n", pos);
-          if (nl === -1) break;
-          pos = nl + 1;
-          currentLine++;
-        }
+      const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
+      const targetNlInChunk = row - 1 - linesBeforeChunk;
 
-        if (currentLine === row) {
-          // Find end of this line
-          const endPos = text.indexOf("\n", pos);
-          if (endPos === -1) {
-            // Line spans into next chunk(s) — use chunkIdx directly to avoid O(n) indexOf
-            let result = text.slice(pos);
-            let ci = chunkIdx + 1;
-            while (ci < this._chunks.length) {
-              const nextChunk = this._chunks[ci];
-              if (!nextChunk) break;
-              const nl = nextChunk.text.indexOf("\n");
-              if (nl === -1) {
-                result += nextChunk.text;
-                ci++;
-              } else {
-                result += nextChunk.text.slice(0, nl);
-                break;
-              }
-            }
-            return result;
-          }
-          return text.slice(pos, endPos);
-        }
+      // Scan forward to the targetNlInChunk-th newline within this chunk.
+      let nlCount = 0;
+      let searchFrom = 0;
+      let nlPos = -1;
+      while (nlCount <= targetNlInChunk) {
+        const found = chunk.text.indexOf("\n", searchFrom);
+        if (found === -1) break;
+        nlPos = found;
+        nlCount++;
+        searchFrom = found + 1;
       }
 
-      currentLine += chunk.newlines;
-      lineStart = chunkEnd;
+      // Line `row` starts immediately after the located newline.
+      startPos = nlPos + 1;
+      startCi = ci;
+      // If the newline was the last char of the chunk, line starts at the next chunk.
+      if (startPos >= chunk.text.length) {
+        startCi = ci + 1;
+        startPos = 0;
+      }
     }
 
-    return "";
+    if (startCi >= this._chunks.length) return "";
+    const startChunk = this._chunks[startCi];
+    if (!startChunk) return "";
+
+    const endPos = startChunk.text.indexOf("\n", startPos);
+    if (endPos === -1) {
+      // Line spans into next chunk(s)
+      let result = startChunk.text.slice(startPos);
+      let nextCi = startCi + 1;
+      while (nextCi < this._chunks.length) {
+        const nextChunk = this._chunks[nextCi];
+        if (!nextChunk) break;
+        const nl = nextChunk.text.indexOf("\n");
+        if (nl === -1) {
+          result += nextChunk.text;
+          nextCi++;
+        } else {
+          result += nextChunk.text.slice(0, nl);
+          break;
+        }
+      }
+      return result;
+    }
+    return startChunk.text.slice(startPos, endPos);
   }
 
   /** Get lines in range [startRow, endRow). */
@@ -244,14 +258,17 @@ export class Rope {
     const posInChunk = offset - chunkStart;
     const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
 
-    // Count newlines within this chunk up to posInChunk
+    // Count newlines within this chunk up to posInChunk.
+    // indexOf is faster than a charCodeAt loop: ~38 native calls vs ~512 JS iterations.
     let lineInChunk = 0;
     let lastNlPos = -1;
-    for (let i = 0; i < posInChunk; i++) {
-      if (chunk.text.charCodeAt(i) === 10) {
-        lineInChunk++;
-        lastNlPos = i;
-      }
+    let searchFrom = 0;
+    while (searchFrom < posInChunk) {
+      const found = chunk.text.indexOf("\n", searchFrom);
+      if (found === -1 || found >= posInChunk) break;
+      lineInChunk++;
+      lastNlPos = found;
+      searchFrom = found + 1;
     }
 
     const line = linesBeforeChunk + lineInChunk;
