@@ -57,7 +57,7 @@ export class Rope {
   private readonly _chunks: readonly Chunk[];
   private readonly _length: number;
   private readonly _newlineCount: number;
-  /** _chunkOffsets[i] = byte offset where chunk i starts. */
+  /** _chunkOffsets[i] = UTF-16 code unit offset where chunk i starts. */
   private readonly _chunkOffsets: readonly number[];
   /** _chunkNewlines[i] = cumulative newlines in chunks 0..i-1. */
   private readonly _chunkNewlinePrefixes: readonly number[];
@@ -278,7 +278,7 @@ export class Rope {
     return result;
   }
 
-  /** Get a substring by byte offset range. */
+  /** Get a substring by UTF-16 code unit offset range. */
   slice(start: number, end: number): string {
     if (start >= end || start >= this._length) return "";
 
@@ -323,7 +323,7 @@ export class Rope {
     return Rope.from(before + text + after);
   }
 
-  /** Convert a character offset to {line, col}. Binary search on chunk offsets. */
+  /** Convert a UTF-16 code unit offset to {line, col}. Binary search on chunk offsets. */
   offsetToLineCol(offset: number): { line: number; col: number } {
     if (offset <= 0) return { line: 0, col: 0 };
     if (offset >= this._length) {
@@ -371,7 +371,7 @@ export class Rope {
     return { line, col };
   }
 
-  /** Convert {line, col} to a character offset. Binary search on chunk newline prefixes. */
+  /** Convert {line, col} to a UTF-16 code unit offset. Binary search on chunk newline prefixes. */
   lineColToOffset(line: number, col: number): number {
     if (line <= 0) return Math.min(col, this._length);
     if (line >= this.lineCount) return this._length;
@@ -397,7 +397,7 @@ export class Rope {
     return chunkStart + lineStart + col;
   }
 
-  /** Binary search: find chunk index containing the given byte offset. */
+  /** Binary search: find chunk index containing the given UTF-16 code unit offset. */
   private _findChunkByOffset(offset: number): number {
     let lo = 0;
     let hi = this._chunks.length - 1;

@@ -24,10 +24,10 @@ export type BufferRow = number & { readonly __brand: "BufferRow" };
 /** Zero-based line number within the multibuffer's unified view */
 export type MultiBufferRow = number & { readonly __brand: "MultiBufferRow" };
 
-/** Byte offset within a buffer */
+/** UTF-16 code unit offset within a buffer */
 export type BufferOffset = number & { readonly __brand: "BufferOffset" };
 
-/** Byte offset within the multibuffer's unified view */
+/** UTF-16 code unit offset within the multibuffer's unified view */
 export type MultiBufferOffset = number & {
   readonly __brand: "MultiBufferOffset";
 };
@@ -88,7 +88,7 @@ export interface TextSummary {
  * Survives text edits by tracking logical position relative to surrounding text.
  */
 export interface BufferAnchor {
-  /** Byte offset at time of creation */
+  /** UTF-16 code unit offset at time of creation */
   readonly offset: BufferOffset;
   /** Determines behavior when text is inserted at this position */
   readonly bias: Bias;
@@ -224,10 +224,10 @@ export interface BufferSnapshot {
   /** Get the full text */
   text(): string;
 
-  /** Convert a point to a byte offset */
+  /** Convert a point to a UTF-16 code unit offset */
   pointToOffset(point: BufferPoint): BufferOffset;
 
-  /** Convert a byte offset to a point */
+  /** Convert a UTF-16 code unit offset to a point */
   offsetToPoint(offset: BufferOffset): BufferPoint;
 
   /**
@@ -419,11 +419,11 @@ export interface MultiBuffer {
  * All offsets are in pre-edit buffer coordinates.
  */
 export interface EditEntry {
-  /** Byte offset where the edit starts (in pre-edit buffer) */
+  /** UTF-16 code unit offset where the edit starts (in pre-edit buffer) */
   readonly offset: BufferOffset;
-  /** Number of bytes deleted at that offset */
+  /** Number of UTF-16 code units deleted at that offset */
   readonly deletedLength: number;
-  /** Number of bytes inserted at that offset */
+  /** Number of UTF-16 code units inserted at that offset */
   readonly insertedLength: number;
 }
 
