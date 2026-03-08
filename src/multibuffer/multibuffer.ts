@@ -117,24 +117,34 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const clampedEnd = Math.min(endRow, this.lineCount);
     if (startRow >= clampedEnd) return [];
 
+    // Build O(1) lookup for excerpt data once instead of O(n_excerpts) find per row.
+    const dataByKey = new Map<string, Excerpt>();
+    for (const e of this._excerptData) {
+      dataByKey.set(`${e.id.index}:${e.id.generation}`, e);
+    }
+
     const result: string[] = [];
-    for (let row = startRow; row < clampedEnd; row++) {
-      const info = this.excerptAt(
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        row as MultiBufferRow,
-      );
-      if (!info) continue;
+    // Walk excerpts in sorted order; for each that overlaps [startRow, clampedEnd),
+    // collect its lines via buffer.lines() — one bulk call per excerpt instead of
+    // one line() call per row.  No per-row binary search or linear find needed.
+    for (const info of this.excerpts) {
+      if (info.endRow <= startRow) continue;
+      if (info.startRow >= clampedEnd) break;
 
-      const offsetInExcerpt = row - info.startRow;
-      const bufferRow = info.range.context.start.row + offsetInExcerpt;
+      const data = dataByKey.get(`${info.id.index}:${info.id.generation}`);
+      if (!data) continue;
 
-      // Find the corresponding excerpt data to access the buffer snapshot.
-      const data = this._excerptData.find(
-        (e) => e.id.index === info.id.index && e.id.generation === info.id.generation,
-      );
-      if (data) {
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        result.push(data.buffer.line(bufferRow as import("./types.ts").BufferRow));
+      const rowStart = Math.max(info.startRow, startRow);
+      const rowEnd = Math.min(info.endRow, clampedEnd);
+      const offsetStart = rowStart - info.startRow;
+      const offsetEnd = rowEnd - info.startRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const bufStartRow = (info.range.context.start.row + offsetStart) as import("./types.ts").BufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const bufEndRow = (info.range.context.start.row + offsetEnd) as import("./types.ts").BufferRow;
+      const excerptLines = data.buffer.lines(bufStartRow, bufEndRow);
+      for (const line of excerptLines) {
+        result.push(line);
       }
     }
     return result;
