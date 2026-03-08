@@ -1,20 +1,26 @@
 /**
- * Tests for visual-width utilities and wrapLine in wrap-map.ts.
+ * Tests for visual-width utilities, wrapLine, and WrapMap class in wrap-map.ts.
  *
  * Covers:
  * - visualWidth: display cell count for ASCII, CJK, emoji, fullwidth
  * - charColToVisualCol: char index → visual column conversion
  * - visualColToCharCol: visual column → char index conversion
  * - wrapLine: visual-width-aware line splitting
+ * - WrapMap: prefix-sum row mapping with O(1) forward and O(log n) reverse lookup
  */
 
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/multibuffer/buffer.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
+import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import {
+  WrapMap,
   charColToVisualCol,
   visualColToCharCol,
   visualWidth,
   wrapLine,
 } from "../../src/multibuffer_renderer/wrap-map.ts";
+import { createBufferId, excerptRange, num, resetCounters } from "../helpers.ts";
 
 describe("visualWidth", () => {
   test("empty string returns 0", () => {
@@ -203,5 +209,145 @@ describe("wrapLine with visual width", () => {
     // Char offsets: seg 0 starts at 0, seg 1 starts at 3
     expect(segs[0]?.length).toBe(3); // 3 CJK chars
     expect(segs[1]?.length).toBe(4); // 4 ASCII chars
+  });
+});
+
+describe("WrapMap class", () => {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
+  const mbRow = (n: number) => n as MultiBufferRow;
+
+  function makeSnapshot(text: string) {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    return mb.snapshot();
+  }
+
+  beforeEach(() => {
+    resetCounters();
+  });
+
+  test("wrapWidth getter returns configured value", () => {
+    const snap = makeSnapshot("hello");
+    const wm = new WrapMap(snap, 120);
+    expect(wm.wrapWidth).toBe(120);
+  });
+
+  test("single line shorter than wrapWidth: 1 visual row", () => {
+    const snap = makeSnapshot("hello");
+    const wm = new WrapMap(snap, 80);
+    expect(wm.totalVisualRows).toBe(1);
+    expect(wm.visualRowsForLine(mbRow(0))).toBe(1);
+  });
+
+  test("multiple short lines, no wrapping: N visual rows total", () => {
+    const snap = makeSnapshot("abc\ndef\nghi");
+    const wm = new WrapMap(snap, 80);
+    expect(wm.totalVisualRows).toBe(3);
+    expect(wm.visualRowsForLine(mbRow(0))).toBe(1);
+    expect(wm.visualRowsForLine(mbRow(1))).toBe(1);
+    expect(wm.visualRowsForLine(mbRow(2))).toBe(1);
+  });
+
+  test("line that wraps produces multiple visual rows", () => {
+    // "abcdefghij" (10 chars) at wrapWidth=5 → ["abcde","fghij"] → 2 visual rows
+    const snap = makeSnapshot("abcdefghij");
+    const wm = new WrapMap(snap, 5);
+    expect(wm.totalVisualRows).toBe(2);
+    expect(wm.visualRowsForLine(mbRow(0))).toBe(2);
+  });
+
+  test("mixed wrapped and non-wrapped lines: correct per-line visual row counts", () => {
+    // Line 0: "short" (5 chars, wrapWidth=10) → 1 visual row
+    // Line 1: "averylongline" (13 chars) → ["averylongl","ine"] → 2 visual rows
+    // Line 2: "x" → 1 visual row
+    const snap = makeSnapshot("short\naverylongline\nx");
+    const wm = new WrapMap(snap, 10);
+    expect(wm.visualRowsForLine(mbRow(0))).toBe(1);
+    expect(wm.visualRowsForLine(mbRow(1))).toBe(2);
+    expect(wm.visualRowsForLine(mbRow(2))).toBe(1);
+    expect(wm.totalVisualRows).toBe(4);
+  });
+
+  test("bufferRowToFirstVisualRow with no wrapping: row N → visual row N", () => {
+    const snap = makeSnapshot("abc\ndef\nghi");
+    const wm = new WrapMap(snap, 80);
+    expect(wm.bufferRowToFirstVisualRow(mbRow(0))).toBe(0);
+    expect(wm.bufferRowToFirstVisualRow(mbRow(1))).toBe(1);
+    expect(wm.bufferRowToFirstVisualRow(mbRow(2))).toBe(2);
+  });
+
+  test("bufferRowToFirstVisualRow with wrapping accounts for extra visual rows", () => {
+    // prefix = [0, 1, 3, 4] for lines ["short","averylongline","x"] at wrapWidth=10
+    const snap = makeSnapshot("short\naverylongline\nx");
+    const wm = new WrapMap(snap, 10);
+    expect(wm.bufferRowToFirstVisualRow(mbRow(0))).toBe(0);
+    expect(wm.bufferRowToFirstVisualRow(mbRow(1))).toBe(1);
+    // Line 1 wraps into 2 visual rows, so line 2 starts at visual row 3
+    expect(wm.bufferRowToFirstVisualRow(mbRow(2))).toBe(3);
+  });
+
+  test("visualRowToBufferRow: no wrapping maps visual row to same buffer row", () => {
+    const snap = makeSnapshot("abc\ndef\nghi");
+    const wm = new WrapMap(snap, 80);
+
+    const r0 = wm.visualRowToBufferRow(0);
+    expect(num(r0.mbRow)).toBe(0);
+    expect(r0.segment).toBe(0);
+
+    const r1 = wm.visualRowToBufferRow(1);
+    expect(num(r1.mbRow)).toBe(1);
+    expect(r1.segment).toBe(0);
+
+    const r2 = wm.visualRowToBufferRow(2);
+    expect(num(r2.mbRow)).toBe(2);
+    expect(r2.segment).toBe(0);
+  });
+
+  test("visualRowToBufferRow: wrapped line returns correct buffer row and segment index", () => {
+    // ["short","averylongline","x"] at wrapWidth=10
+    // visual row 0 → buffer row 0, segment 0
+    // visual row 1 → buffer row 1, segment 0 (first wrap of "averylongline")
+    // visual row 2 → buffer row 1, segment 1 (second wrap of "averylongline")
+    // visual row 3 → buffer row 2, segment 0
+    const snap = makeSnapshot("short\naverylongline\nx");
+    const wm = new WrapMap(snap, 10);
+
+    const r0 = wm.visualRowToBufferRow(0);
+    expect(num(r0.mbRow)).toBe(0);
+    expect(r0.segment).toBe(0);
+
+    const r1 = wm.visualRowToBufferRow(1);
+    expect(num(r1.mbRow)).toBe(1);
+    expect(r1.segment).toBe(0);
+
+    const r2 = wm.visualRowToBufferRow(2);
+    expect(num(r2.mbRow)).toBe(1);
+    expect(r2.segment).toBe(1);
+
+    const r3 = wm.visualRowToBufferRow(3);
+    expect(num(r3.mbRow)).toBe(2);
+    expect(r3.segment).toBe(0);
+  });
+
+  test("contentHeight: total pixels = visual rows × line height", () => {
+    const snap = makeSnapshot("abc\ndef\nghi");
+    const wm = new WrapMap(snap, 80);
+    expect(wm.contentHeight(20)).toBe(60); // 3 visual rows × 20px
+  });
+
+  test("contentHeight accounts for wrapped lines", () => {
+    // 4 visual rows × 16px = 64px
+    const snap = makeSnapshot("short\naverylongline\nx");
+    const wm = new WrapMap(snap, 10);
+    expect(wm.contentHeight(16)).toBe(64);
+  });
+
+  test("CJK lines wrap at visual width, not char count", () => {
+    // "日日日日" vw=8 (4 chars × 2 cells), wrapWidth=4 → ["日日","日日"] → 2 visual rows
+    const snap = makeSnapshot("日日日日");
+    const wm = new WrapMap(snap, 4);
+    expect(wm.visualRowsForLine(mbRow(0))).toBe(2);
+    expect(wm.totalVisualRows).toBe(2);
   });
 });
