@@ -1,22 +1,22 @@
 {
-  "last_run": "2026-03-07T00:00:00Z",
-  "last_run_id": "22808424719",
+  "last_run": "2026-03-09T00:00:00Z",
+  "last_run_id": "22833885770",
   "backlog_cursor": {
-    "issues": 36,
-    "note": "All open issues seen: #3, #4, #6, #27, #31, #34, #35, #36. Closed issues #5,#7,#8,#9,#10,#11,#16,#20,#28,#29(pr),#30(pr merged) not revisited."
+    "issues": 41,
+    "note": "Open: #3,#31,#35,#41. Bot issues: #46,#49. Closed: #34,#36. All seen."
   },
   "tasks_last_run": {
     "task_1_triage": "2026-03-05",
     "task_2_fix_issues": "2026-03-05",
     "task_3_improvements": "2026-03-06",
     "task_4_deps": "2026-03-01",
-    "task_5_maintain_prs": "2026-03-07",
+    "task_5_maintain_prs": "2026-03-09",
     "task_6_stale_pr_nudges": "2026-03-04",
-    "task_7_labels": "2026-03-05",
+    "task_7_labels": "2026-03-09",
     "task_8_release": "2026-03-03",
     "task_9_welcome": "2026-03-07",
-    "task_10_forward": "2026-03-07",
-    "task_11_monthly_summary": "2026-03-07"
+    "task_10_forward": "2026-03-09",
+    "task_11_monthly_summary": "2026-03-09"
   },
   "comments_made": {
     "issues": {
@@ -37,101 +37,28 @@
   },
   "prs_created": [
     {
-      "pr_number": "queued-run-22808424719",
-      "branch": "repo-assist/docs-utf16-offset-terminology",
-      "issue": null,
-      "description": "docs(types,rope): clarify offsets are UTF-16 code units, not bytes",
-      "created": "2026-03-07",
-      "status": "patch queued - will be pushed when workflow completes"
+      "branch": "repo-assist/improve-insertline-indent-2026-03-09",
+      "description": "improve(editor): auto-indent insertLineBelow/insertLineAbove",
+      "created": "2026-03-09",
+      "status": "queued"
     },
     {
-      "pr_number": 38,
-      "branch": "repo-assist/perf-rope-line-index-tracking",
-      "issue": null,
-      "description": "perf(rope): track chunk index in loop to avoid O(n) indexOf in line()",
-      "created": "2026-03-06",
-      "status": "open draft PR on GitHub"
+      "branch": "repo-assist/eng-bench-history-workflow-2026-03-09",
+      "issue": 41,
+      "description": "feat(ci): benchmark workflow → bench/run-history",
+      "created": "2026-03-09",
+      "status": "queued"
     },
-    {
-      "pr_number": 37,
-      "branch": "repo-assist/fix-cursor-clamp-36",
-      "issue": 36,
-      "description": "fix(editor): clip cursor in extendSelectionTo to prevent past-end-of-line position",
-      "created": "2026-03-05",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 33,
-      "branch": "repo-assist/fix-unicode-word-movement-3ba8e9cefc9d5725",
-      "issue": 4,
-      "description": "fix(editor): Unicode-aware word movement and double-click selection",
-      "created": "2026-03-04",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 32,
-      "branch": "repo-assist/fix-wrap-selection-27-63798408c32b80c7",
-      "issue": 27,
-      "description": "fix(renderer): split wrapped-line selection highlights per visual segment",
-      "created": "2026-03-03",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 30,
-      "branch": "repo-assist/fix-unicode-visual-width-28",
-      "issue": 28,
-      "description": "fix(renderer): correct cursor/selection positioning for wide chars (CJK/emoji)",
-      "created": "2026-03-01",
-      "status": "MERGED"
-    },
-    {
-      "pr_number": 29,
-      "branch": "repo-assist/fix-selection-wrap-rendering-27-e93254940c6f8ce8",
-      "issue": 27,
-      "description": "fix(renderer): split selection highlights per visual segment for wrapped lines",
-      "created": "2026-02-28",
-      "status": "CLOSED by maintainer 2026-03-03"
-    },
-    {
-      "pr_number": 26,
-      "branch": "repo-assist/feat-viewport-pure-fns-and-tests",
-      "issue": null,
-      "description": "perf(multibuffer): resolveAnchors batch API with cursor state reuse (spool mm3lhem1-dz3e)",
-      "created": "2026-02-27",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 23,
-      "branch": "repo-assist/feat-cursor-blink-mm4ui38a",
-      "issue": null,
-      "description": "feat(demo): cursor blink animation + focus-aware rendering (spool mm4ui38a-b39o, p2)",
-      "created": "2026-02-27",
-      "status": "MERGED as commit a507192 on 2026-03-07"
-    },
-    {
-      "pr_number": 22,
-      "branch": "repo-assist/fix-paste-wiring-and-focus",
-      "issue": null,
-      "description": "fix(editor): wire paste event in InputHandler + fix textarea focus (spool mm4ui37e-2yrw p1, mm4v03zz-ttyy p0)",
-      "created": "2026-02-27",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 17,
-      "branch": "repo-assist/feat-fixture-switcher-6-b4040fa724509924",
-      "issue": 6,
-      "description": "feat(demo): fixture scenario switcher panel",
-      "created": "2026-02-27",
-      "status": "open draft PR on GitHub"
-    },
-    {
-      "pr_number": 14,
-      "branch": "repo-assist/feat-undo-redo-history-e88942bccabf727a",
-      "issue": 4,
-      "description": "feat(editor): implement undo/redo with text-snapshot history stack",
-      "created": "2026-02-27",
-      "status": "open draft PR on GitHub"
-    }
+    { "pr_number": 38, "status": "MERGED 2026-03-08" },
+    { "pr_number": 37, "issue": 36, "status": "MERGED 2026-03-08" },
+    { "pr_number": 33, "issue": 4, "status": "MERGED 2026-03-08" },
+    { "pr_number": 26, "status": "MERGED 2026-03-08" },
+    { "pr_number": 30, "issue": 28, "status": "MERGED" },
+    { "pr_number": 23, "status": "MERGED 2026-03-07" },
+    { "pr_number": 32, "status": "CLOSED 2026-03-08" },
+    { "pr_number": 22, "status": "CLOSED 2026-03-08" },
+    { "pr_number": 17, "status": "CLOSED 2026-03-08" },
+    { "pr_number": 14, "status": "CLOSED 2026-03-08" }
   ],
   "issues_created": [
     {
@@ -161,14 +88,15 @@
     "9": ["enhancement"],
     "27": ["bug"],
     "28": ["bug"],
-    "35": ["enhancement", "refactor"]
+    "35": ["enhancement", "refactor"],
+    "41": ["enhancement"]
   },
   "welcomed_contributors": [],
-  "notes": "Run 22808424719 (2026-03-07): (1) Task 10: Created docs PR fixing 'byte offset' → 'UTF-16 code unit offset' terminology in types.ts and rope.ts. Comment-only change. (2) Task 5: Confirmed PR #23 MERGED (commit a507192 on main). PR #38 confirmed created (perf-rope, was queued in previous run). Updated prs_created accordingly. (3) Task 9: No new contributors to welcome (no new issues/PRs since 2026-03-06; all from iamnbutler or repo-assist). (4) Task 11: Updated monthly summary #31 — removed PR #23 (merged), removed duplicate 'queued' entries, added PR #38 and new docs PR.",
+  "notes": "Run 22833885770 (2026-03-09): Maintainer merged #33,#37,#38,#26 and closed #32,#22,#17,#14 on 2026-03-08. Issues #34,#36 closed. PRs queued: insertLineBelow/Above auto-indent (Task5) and bench.yml for issue #41 (Task4). Perf Improver active (PRs #48-56). Labelled #41.",
   "monthly_summary_issue": {
     "month": "2026-03",
     "issue_number": 31,
-    "note": "Updated in run 22808424719"
+    "note": "Updated in run 22833885770"
   },
   "deps_last_checked": "2026-03-01",
   "deps_findings": {
@@ -190,10 +118,7 @@
     "last_checked": "2026-03-07"
   },
   "task_10_in_progress": {
-    "description": "Completed: Unicode word movement (PR #33). Completed: cursor clamping in extendSelectionTo (PR #37, closes #36). Completed: perf rope line index tracking (PR #38). Completed: docs UTF-16 terminology fix (PR queued). Next priorities: (1) decoration range mapping to pixel coords (mm3lhpgn-mqnw p2). (2) stale PR nudges for #14,#17,#22,#26 eligible 2026-03-13.",
-    "spool_remaining_open": [
-      "mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)",
-      "mm4ztys8-ux7k: browser integration tests (needs real browser, p1)"
-    ]
+    "description": "Queued: insertLineBelow/Above auto-indent. Queued: bench.yml workflow (closes #41). Next: decoration range mapping to pixel coords (mm3lhpgn-mqnw p2).",
+    "spool_remaining_open": ["mm3lhpgn-mqnw: decoration range mapping to pixel coords (p2)"]
   }
 }
