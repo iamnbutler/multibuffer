@@ -1805,4 +1805,37 @@ describe("Editor - Indentation", () => {
     editor.dispatch({ type: "dedentLines" });
     expect(getText(mb)).toBe("aaa\nbbb\nccc");
   });
+
+  test("dedent adjusts cursor column by spaces removed", () => {
+    const { editor } = setup("  hello");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "dedentLines" });
+    // Cursor was at col 5; 2 spaces removed → col 3
+    expectPoint(editor.cursor, 0, 3);
+  });
+
+  test("dedent clamps cursor column to 0 when cursor is within indentation", () => {
+    const { editor } = setup("  hello");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "dedentLines" });
+    // Cursor was at col 1; max(0, 1-2) = 0
+    expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("dedent with 4-space indent removes only 2 spaces", () => {
+    const { mb, editor } = setup("    hello");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("  hello");
+    // Cursor shifts left by 2 (was at col 4, now col 2)
+    expectPoint(editor.cursor, 0, 2);
+  });
+
+  test("auto-indent on Enter places cursor after indentation", () => {
+    const { editor } = setup("  hello");
+    editor.setCursor(mbPoint(0, 7));
+    editor.dispatch({ type: "insertNewline" });
+    // New line has 2-space indent; cursor should be at col 2
+    expectPoint(editor.cursor, 1, 2);
+  });
 });
