@@ -1,23 +1,28 @@
 # Test Improver Memory
 
 ## Commands
-- `bun test` — valid; bun not in runner, use locally or CI (ubuntu-latest + setup-bun)
-- CI: install → build:demo → typecheck → lint (biome) → test. No coverage.
+- `bun test` / `bun run typecheck` / `bun run lint` — valid via CI (ubuntu-latest + setup-bun)
+- CI: install → build:demo → typecheck → lint → test. No coverage.
 
 ## Framework
-- bun:test; tests/ mirrors src/
-- Helpers: tests/helpers.ts (num, mbPoint, resetCounters, excerptRange, etc.)
+- bun:test; tests/ mirrors src/; helpers: tests/helpers.ts
 - Biome no-type-assertion — biome-ignore for branded casts
-- Snapshot: createBuffer+createMultiBuffer+addExcerpt(buf,excerptRange(0,n))+snapshot()
+
+## Open PRs (all targeting main, all CI pending)
+- #69: cursor tests, base feat/indentation
+- #70: 15 anchor todos in multibuffer.test.ts
+- #71: 5 excerpt todos (empty layout + ID monotonicity)
+- #72: 8 movePage tests (DUPLICATE of #73)
+- #73: 9 movePage tests (DUPLICATE of #72) — keep #73, close #72
 
 ## Backlog
-1. Editor indent/dedent cursor positions — PR #69 open (branch test-assist/indentation-cursor-gaps-95278efc6ceb4fe0, base: feat/indentation)
-2. multibuffer anchor todos — PR #70 open (branch test-assist/multibuffer-anchor-todos); 15 of 18 todos; 3 remaining: snapshot versioning + 2 benchmark stubs
-3. movePage cursor — PR queued 2026-03-09 (branch test-assist/movepage-cursor-tests, 9 tests)
-4. input-handler.ts, dom.ts — DOM-dependent, needs browser env
-5. excerpt.test.ts todos: bias-at-excerpt-boundary (3 tests — depend on unimplemented feature)
-6. multibuffer.test.ts: 3 remaining todos (snapshot versioning + benchmarks)
+1. multibuffer.test.ts: 3 todos (snapshot versioning + benchmarks, unimplemented)
+2. excerpt.test.ts: 8 anchor-in-excerpt todos (unimplemented feature)
+3. edit-proxy.test.ts: 2 cross-excerpt delete stubs (unimplemented)
+4. selection.test.ts: sparse (6 tests), extendSelection head-flip untested
+5. Infra: expectRange/expectSelection helpers gap in tests/helpers.ts
+6. input-handler.ts, dom.ts: DOM-dependent, skip
 
 ## Round-Robin
-Last: 2026-03-09; done: 3,4,5,7
-Next: tasks 1,2,6,7
+Last: 2026-03-09; done: 2,4,7
+Next: tasks 1,3,6,7
