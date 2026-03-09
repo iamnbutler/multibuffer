@@ -150,12 +150,16 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
     }
 
     case "ArrowUp": {
+      if (alt && shift) return { type: "duplicateLine", direction: "up" };
+      if (alt) return { type: "moveLine", direction: "up" };
       const granularity = mod ? "buffer" : "character";
       if (shift) return { type: "extendSelection", direction: "up", granularity };
       return { type: "moveCursor", direction: "up", granularity };
     }
 
     case "ArrowDown": {
+      if (alt && shift) return { type: "duplicateLine", direction: "down" };
+      if (alt) return { type: "moveLine", direction: "down" };
       const granularity = mod ? "buffer" : "character";
       if (shift) return { type: "extendSelection", direction: "down", granularity };
       return { type: "moveCursor", direction: "down", granularity };
@@ -200,6 +204,8 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
       return undefined;
 
     case "Enter":
+      if (mod && shift) return { type: "insertLineAbove" };
+      if (mod) return { type: "insertLineBelow" };
       return { type: "insertNewline" };
 
     case "Tab":

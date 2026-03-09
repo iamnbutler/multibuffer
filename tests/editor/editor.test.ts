@@ -1082,6 +1082,38 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "deleteForward", granularity: "word" });
   });
 
+  // ── Line operations ──────────────────────────────────────────
+
+  test("Opt+Up → moveLine up", () => {
+    const cmd = keyEventToCommand(key("ArrowUp", { alt: true }));
+    expect(cmd).toEqual({ type: "moveLine", direction: "up" });
+  });
+
+  test("Opt+Down → moveLine down", () => {
+    const cmd = keyEventToCommand(key("ArrowDown", { alt: true }));
+    expect(cmd).toEqual({ type: "moveLine", direction: "down" });
+  });
+
+  test("Opt+Shift+Up → duplicateLine up", () => {
+    const cmd = keyEventToCommand(key("ArrowUp", { alt: true, shift: true }));
+    expect(cmd).toEqual({ type: "duplicateLine", direction: "up" });
+  });
+
+  test("Opt+Shift+Down → duplicateLine down", () => {
+    const cmd = keyEventToCommand(key("ArrowDown", { alt: true, shift: true }));
+    expect(cmd).toEqual({ type: "duplicateLine", direction: "down" });
+  });
+
+  test("Mod+Enter → insertLineBelow", () => {
+    const cmd = keyEventToCommand(key("Enter", { mod: true }));
+    expect(cmd).toEqual({ type: "insertLineBelow" });
+  });
+
+  test("Mod+Shift+Enter → insertLineAbove", () => {
+    const cmd = keyEventToCommand(key("Enter", { mod: true, shift: true }));
+    expect(cmd).toEqual({ type: "insertLineAbove" });
+  });
+
   // ── Text input ────────────────────────────────────────────────
 
   test("Enter → insertNewline", () => {
@@ -1533,5 +1565,134 @@ describe("Editor - Cross-excerpt editing", () => {
 
     editor.dispatch({ type: "undo" });
     expect(getText(mb)).toBe(originalText);
+  });
+});
+
+// ─── Line Operations ─────────────────────────────────────────────
+
+describe("Editor - Line Operations", () => {
+  // ── Move Line ───────────────────────────────────────────────────
+
+  test("move line down (middle line)", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("BBB\nAAA\nCCC");
+    expectPoint(editor.cursor, 1, 1);
+  });
+
+  test("move line up (middle line)", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 1));
+    editor.dispatch({ type: "moveLine", direction: "up" });
+    expect(getText(mb)).toBe("BBB\nAAA\nCCC");
+    expectPoint(editor.cursor, 0, 1);
+  });
+
+  test("move line down at last line (no-op)", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(2, 1));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("AAA\nBBB\nCCC");
+    expectPoint(editor.cursor, 2, 1);
+  });
+
+  test("move line up at first line (no-op)", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "moveLine", direction: "up" });
+    expect(getText(mb)).toBe("AAA\nBBB\nCCC");
+    expectPoint(editor.cursor, 0, 1);
+  });
+
+  test("move line preserves cursor column", () => {
+    const { mb, editor } = setup("Hello\nWorld\nFoo");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("World\nHello\nFoo");
+    expectPoint(editor.cursor, 1, 3);
+  });
+
+  // ── Duplicate Line ──────────────────────────────────────────────
+
+  test("duplicate line down", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 2));
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("AAA\nBBB\nBBB\nCCC");
+    expectPoint(editor.cursor, 2, 2);
+  });
+
+  test("duplicate line up", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 2));
+    editor.dispatch({ type: "duplicateLine", direction: "up" });
+    expect(getText(mb)).toBe("AAA\nBBB\nBBB\nCCC");
+    expectPoint(editor.cursor, 1, 2);
+  });
+
+  // ── Insert Line ─────────────────────────────────────────────────
+
+  test("insert line below", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 2));
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("AAA\nBBB\n\nCCC");
+    expectPoint(editor.cursor, 2, 0);
+  });
+
+  test("insert line above", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 2));
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("AAA\n\nBBB\nCCC");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  // ── Undo/Redo ───────────────────────────────────────────────────
+
+  test("undo reverses moveLine", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("BBB\nAAA\nCCC");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AAA\nBBB\nCCC");
+  });
+
+  test("redo re-applies moveLine", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    editor.dispatch({ type: "undo" });
+    editor.dispatch({ type: "redo" });
+    expect(getText(mb)).toBe("BBB\nAAA\nCCC");
+  });
+
+  test("undo reverses duplicateLine", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("AAA\nBBB\nBBB\nCCC");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AAA\nBBB\nCCC");
+  });
+
+  test("undo reverses insertLineBelow", () => {
+    const { mb, editor } = setup("AAA\nBBB");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("AAA\n\nBBB");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AAA\nBBB");
+  });
+
+  test("undo reverses insertLineAbove", () => {
+    const { mb, editor } = setup("AAA\nBBB");
+    editor.setCursor(mbPoint(1, 1));
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("AAA\n\nBBB");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AAA\nBBB");
   });
 });

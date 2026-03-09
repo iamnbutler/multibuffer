@@ -32,6 +32,10 @@ export type EditorCommand =
   | { type: "selectAll" }
   | { type: "collapseSelection"; to: "start" | "end" }
   | { type: "deleteLine" }
+  | { type: "moveLine"; direction: "up" | "down" }
+  | { type: "duplicateLine"; direction: "up" | "down" }
+  | { type: "insertLineBelow" }
+  | { type: "insertLineAbove" }
   | { type: "undo" }
   | { type: "redo" }
   | { type: "copy" }
