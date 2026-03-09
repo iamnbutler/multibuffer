@@ -1199,6 +1199,23 @@ describe("keyEventToCommand", () => {
     const cmd = keyEventToCommand(key("PageDown", { shift: true }));
     expect(cmd).toEqual({ type: "extendSelection", direction: "down", granularity: "page" });
   });
+
+  // ── Indentation bindings ──────────────────────────────────────
+
+  test("Shift+Tab → dedentLines", () => {
+    const cmd = keyEventToCommand(key("Tab", { shift: true }));
+    expect(cmd).toEqual({ type: "dedentLines" });
+  });
+
+  test("Mod+] → indentLines", () => {
+    const cmd = keyEventToCommand(key("]", { mod: true }));
+    expect(cmd).toEqual({ type: "indentLines" });
+  });
+
+  test("Mod+[ → dedentLines", () => {
+    const cmd = keyEventToCommand(key("[", { mod: true }));
+    expect(cmd).toEqual({ type: "dedentLines" });
+  });
 });
 
 // ─── Goal Column ──────────────────────────────────────────────────
@@ -1694,5 +1711,98 @@ describe("Editor - Line Operations", () => {
     expect(getText(mb)).toBe("AAA\n\nBBB");
     editor.dispatch({ type: "undo" });
     expect(getText(mb)).toBe("AAA\nBBB");
+  });
+});
+
+// ─── Indentation ─────────────────────────────────────────────────
+
+describe("Editor - Indentation", () => {
+  test("indent single line (no selection)", () => {
+    const { mb, editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "indentLines" });
+    expect(getText(mb)).toBe("  hello\nworld");
+  });
+
+  test("indent multiple selected lines", () => {
+    const { mb, editor } = setup("aaa\nbbb\nccc");
+    selectRange(editor, 0, 1, 2, 1);
+    editor.dispatch({ type: "indentLines" });
+    expect(getText(mb)).toBe("  aaa\n  bbb\n  ccc");
+  });
+
+  test("dedent single line", () => {
+    const { mb, editor } = setup("  hello\nworld");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("hello\nworld");
+  });
+
+  test("dedent line with less than 2 spaces (removes what's there)", () => {
+    const { mb, editor } = setup(" hello\nworld");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("hello\nworld");
+  });
+
+  test("dedent line with no indentation (no-op)", () => {
+    const { mb, editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("hello\nworld");
+  });
+
+  test("indent preserves cursor position", () => {
+    const { editor } = setup("hello");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "indentLines" });
+    // Cursor should shift right by the indent amount
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  test("auto-indent on Enter matches previous line's indentation", () => {
+    const { mb, editor } = setup("  hello");
+    editor.setCursor(mbPoint(0, 7));
+    editor.dispatch({ type: "insertNewline" });
+    expect(getText(mb)).toBe("  hello\n  ");
+  });
+
+  test("auto-indent on Enter from unindented line (no extra spaces)", () => {
+    const { mb, editor } = setup("hello");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertNewline" });
+    expect(getText(mb)).toBe("hello\n");
+  });
+
+  test("undo indent restores original indentation", () => {
+    const { mb, editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "indentLines" });
+    expect(getText(mb)).toBe("  hello\nworld");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("hello\nworld");
+  });
+
+  test("undo auto-indent", () => {
+    const { mb, editor } = setup("  hello");
+    editor.setCursor(mbPoint(0, 7));
+    editor.dispatch({ type: "insertNewline" });
+    expect(getText(mb)).toBe("  hello\n  ");
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("  hello");
+  });
+
+  test("insertTab with non-collapsed selection indents lines", () => {
+    const { mb, editor } = setup("aaa\nbbb\nccc");
+    selectRange(editor, 0, 1, 2, 1);
+    editor.dispatch({ type: "insertTab" });
+    expect(getText(mb)).toBe("  aaa\n  bbb\n  ccc");
+  });
+
+  test("dedent multiple selected lines", () => {
+    const { mb, editor } = setup("  aaa\n  bbb\n  ccc");
+    selectRange(editor, 0, 3, 2, 3);
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("aaa\nbbb\nccc");
   });
 });

@@ -295,7 +295,18 @@ export class Editor {
         this._insertText(snap, "\n");
         break;
       case "insertTab":
-        this._insertText(snap, "  ");
+        // If there's a non-collapsed selection, indent the selected lines
+        if (this._selection && !isCollapsed(snap, this._selection)) {
+          this._indentLines(snap);
+        } else {
+          this._insertText(snap, "  ");
+        }
+        break;
+      case "indentLines":
+        this._indentLines(snap);
+        break;
+      case "dedentLines":
+        this._dedentLines(snap);
         break;
       case "deleteBackward":
         this._deleteBackward(snap, command.granularity);
@@ -361,13 +372,26 @@ export class Editor {
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
     this._goalColumn = undefined;
+
+    // Auto-indent: when inserting a newline, match the current line's indentation
+    let insertText = text;
+    if (text === "\n") {
+      const cursor = this.cursor;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lineText = snap.lines(cursor.row, (cursor.row + 1) as MultiBufferRow)[0] ?? "";
+      const match = lineText.match(/^( +)/);
+      if (match?.[1]) {
+        insertText = `\n${match[1]}`;
+      }
+    }
+
     if (this._selection && !isCollapsed(snap, this._selection)) {
       // Replace selection with text
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this._edit(snap, range.start, range.end, text);
+        this._edit(snap, range.start, range.end, insertText);
         const newSnap = this.multiBuffer.snapshot();
-        const newCursor = this._advancePoint(range.start, text, newSnap);
+        const newCursor = this._advancePoint(range.start, insertText, newSnap);
         this._cursor = newCursor;
         this._selection = selectionAtPoint(this.multiBuffer, newCursor);
         return;
@@ -376,9 +400,9 @@ export class Editor {
 
     // Insert at cursor
     const cursor = this.cursor;
-    this._edit(snap, cursor, cursor, text);
+    this._edit(snap, cursor, cursor, insertText);
     const newSnap = this.multiBuffer.snapshot();
-    const newCursor = this._advancePoint(cursor, text, newSnap);
+    const newCursor = this._advancePoint(cursor, insertText, newSnap);
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
@@ -608,7 +632,7 @@ export class Editor {
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
 
-  private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
     const cursor = this.cursor;
     const row = cursor.row;
@@ -709,6 +733,103 @@ export class Editor {
     const newCursor: MultiBufferPoint = { row, column: 0 };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+  }
+
+  /**
+   * Indent all lines touched by the current selection (or just the cursor line)
+   * by prepending 2 spaces to each. Uses a single _edit() for atomic undo.
+   */
+  private _indentLines(snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
+    const { startRow, endRow } = this._affectedRows(snap);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
+    const indented = lines.map((line) => `  ${line}`);
+
+    const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
+    const lastLineLen = lines[lines.length - 1]?.length ?? 0;
+    const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
+
+    this._edit(snap, rangeStart, rangeEnd, indented.join("\n"));
+
+    // Place cursor at its shifted position
+    const cursor = this.cursor;
+    const newCursor: MultiBufferPoint = { row: cursor.row, column: cursor.column + 2 };
+    const newSnap = this.multiBuffer.snapshot();
+    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
+    this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+  }
+
+  /**
+   * Dedent all lines touched by the current selection (or just the cursor line)
+   * by removing up to 2 leading spaces from each. Uses a single _edit() for atomic undo.
+   */
+  private _dedentLines(snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
+    const { startRow, endRow } = this._affectedRows(snap);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
+
+    // Check if any line actually has leading spaces to remove
+    let anyChange = false;
+    const dedented = lines.map((line) => {
+      let spacesToRemove = 0;
+      if (line.length > 0 && line[0] === " ") {
+        spacesToRemove = 1;
+        if (line.length > 1 && line[1] === " ") {
+          spacesToRemove = 2;
+        }
+      }
+      if (spacesToRemove > 0) anyChange = true;
+      return line.slice(spacesToRemove);
+    });
+
+    if (!anyChange) return;
+
+    const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
+    const lastLineLen = lines[lines.length - 1]?.length ?? 0;
+    const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
+
+    // Figure out how many spaces were removed from the cursor's line
+    const cursor = this.cursor;
+    const cursorLineIndex = cursor.row - startRow;
+    const cursorLine = lines[cursorLineIndex] ?? "";
+    let spacesRemovedOnCursorLine = 0;
+    if (cursorLine.length > 0 && cursorLine[0] === " ") {
+      spacesRemovedOnCursorLine = 1;
+      if (cursorLine.length > 1 && cursorLine[1] === " ") {
+        spacesRemovedOnCursorLine = 2;
+      }
+    }
+
+    this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"));
+
+    // Adjust cursor column
+    const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
+    const newCursor: MultiBufferPoint = { row: cursor.row, column: newCol };
+    const newSnap = this.multiBuffer.snapshot();
+    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
+    this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+  }
+
+  /**
+   * Determine the range of rows affected by the current selection or cursor.
+   * Returns inclusive start and end rows.
+   */
+  private _affectedRows(snap: MultiBufferSnapshot): {
+    startRow: MultiBufferRow;
+    endRow: MultiBufferRow;
+  } {
+    if (this._selection && !isCollapsed(snap, this._selection)) {
+      const range = resolveAnchorRange(snap, this._selection.range);
+      if (range) {
+        return { startRow: range.start.row, endRow: range.end.row };
+      }
+    }
+    const cursor = this.cursor;
+    return { startRow: cursor.row, endRow: cursor.row };
   }
 
   private _cut(snap: MultiBufferSnapshot): void {
