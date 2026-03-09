@@ -1666,6 +1666,30 @@ describe("Editor - Line Operations", () => {
     expectPoint(editor.cursor, 1, 0);
   });
 
+  test("insert line below inherits indentation", () => {
+    const { mb, editor } = setup("  hello\n  world");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("  hello\n  \n  world");
+    expectPoint(editor.cursor, 1, 2);
+  });
+
+  test("insert line above inherits indentation", () => {
+    const { mb, editor } = setup("  hello\n  world");
+    editor.setCursor(mbPoint(1, 3));
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("  hello\n  \n  world");
+    expectPoint(editor.cursor, 1, 2);
+  });
+
+  test("insert line below on unindented line produces empty line", () => {
+    const { mb, editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("hello\n\nworld");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
   // ── Undo/Redo ───────────────────────────────────────────────────
 
   test("undo reverses moveLine", () => {

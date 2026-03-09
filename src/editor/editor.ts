@@ -711,26 +711,35 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const nextRowEnd = (row + 1) as MultiBufferRow;
     const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
 
-    const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-    this._edit(snap, insertPoint, insertPoint, "\n");
+    // Inherit the current line's leading whitespace (matches Enter auto-indent)
+    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
 
-    // Move cursor to the new empty line
+    const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
+    this._edit(snap, insertPoint, insertPoint, `\n${indent}`);
+
+    // Move cursor to the new line after any indentation
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: 0 };
+    const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: indent.length };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
 
-  private _insertLineAbove(_snap: MultiBufferSnapshot): void {
+  private _insertLineAbove(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
     const cursor = this.cursor;
     const row = cursor.row;
 
-    const insertPoint: MultiBufferPoint = { row, column: 0 };
-    this._edit(_snap, insertPoint, insertPoint, "\n");
+    // Inherit the current line's leading whitespace (consistent with Enter and insertLineBelow)
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const currentLineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
+    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
 
-    // Cursor moves to the new blank line (at the original row position)
-    const newCursor: MultiBufferPoint = { row, column: 0 };
+    // Insert the indented blank line before the current line
+    const insertPoint: MultiBufferPoint = { row, column: 0 };
+    this._edit(snap, insertPoint, insertPoint, `${indent}\n`);
+
+    // Cursor moves to the new blank line after any indentation
+    const newCursor: MultiBufferPoint = { row, column: indent.length };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
