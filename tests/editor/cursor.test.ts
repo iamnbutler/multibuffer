@@ -204,3 +204,70 @@ describe("Cursor - Buffer Granularity", () => {
     expectPoint(moveCursor(snap, mbPoint(0, 1), "right", "buffer"), 2, 3);
   });
 });
+
+// Helper: buffer with `rows` lines of uniform content, plus an optional short line at the end
+function uniformLines(rows: number, lineContent = "AAAA"): string {
+  return Array.from({ length: rows }, () => lineContent).join("\n");
+}
+
+describe("Cursor - Page Granularity", () => {
+  test("page down advances exactly 30 rows", () => {
+    // 40-row buffer: from row 5, page-down lands at row 35
+    const snap = setup(uniformLines(40)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(5, 0), "down", "page"), 35, 0);
+  });
+
+  test("page down clamps at last row", () => {
+    // 32-row buffer (indices 0–31): from row 25, 25+30=55 > 31, clamps to 31
+    const snap = setup(uniformLines(32)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(25, 0), "down", "page"), 31, 0);
+  });
+
+  test("page down at last row stays put", () => {
+    const snap = setup(uniformLines(32)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(31, 0), "down", "page"), 31, 0);
+  });
+
+  test("page up advances exactly 30 rows back", () => {
+    // 40-row buffer: from row 35, page-up lands at row 5
+    const snap = setup(uniformLines(40)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(35, 0), "up", "page"), 5, 0);
+  });
+
+  test("page up clamps at first row", () => {
+    // from row 5, 5-30 < 0, clamps to row 0
+    const snap = setup(uniformLines(40)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(5, 0), "up", "page"), 0, 0);
+  });
+
+  test("page up at first row stays put", () => {
+    const snap = setup(uniformLines(40)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "up", "page"), 0, 0);
+  });
+
+  test("page down clamps column to shorter destination line", () => {
+    // rows 0–29: "AAAA" (len 4), row 30: "BB" (len 2)
+    const lines = [...Array.from({ length: 30 }, () => "AAAA"), "BB"];
+    const snap = setup(lines.join("\n")).snapshot();
+    // col 3 on row 0, destination row 30 has len 2 → col clamped to 2
+    expectPoint(moveCursor(snap, mbPoint(0, 3), "down", "page"), 30, 2);
+  });
+
+  test("page up clamps column to shorter destination line", () => {
+    // row 0: "BB" (len 2), rows 1–30: "AAAA" (len 4)
+    const lines = ["BB", ...Array.from({ length: 30 }, () => "AAAA")];
+    const snap = setup(lines.join("\n")).snapshot();
+    // col 3 on row 30, destination row 0 has len 2 → col clamped to 2
+    expectPoint(moveCursor(snap, mbPoint(30, 3), "up", "page"), 0, 2);
+  });
+
+  test("page left moves to line start (Home)", () => {
+    const snap = setup("Hello World").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 7), "left", "page"), 0, 0);
+  });
+
+  test("page right moves to line end (End)", () => {
+    const snap = setup("Hello World").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 3), "right", "page"), 0, 11);
+  });
+});
