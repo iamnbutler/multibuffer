@@ -44,11 +44,26 @@ function codePointWidth(cp: number): 1 | 2 {
 /**
  * Visual display width of a string in fixed-width monospace cells.
  * Wide/fullwidth characters (CJK, emoji) count as 2 cells; all others as 1.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) to avoid the iterator
+ * protocol and codePointAt overhead for typical programming text.
+ * For non-ASCII code points, falls through to codePointWidth.
+ * Surrogate pairs are decoded inline to recover the full code point.
  */
 export function visualWidth(text: string): number {
   let w = 0;
-  for (const char of text) {
-    w += codePointWidth(char.codePointAt(0) ?? 0);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c <= 0x7f) {
+      w++;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // High surrogate: decode the full code point from the surrogate pair.
+      const low = text.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      w += codePointWidth(cp);
+    } else {
+      w += codePointWidth(c);
+    }
   }
   return w;
 }
@@ -56,14 +71,25 @@ export function visualWidth(text: string): number {
 /**
  * Convert a UTF-16 code-unit column index to a visual column
  * (number of display cells from the start of the string).
+ *
+ * Uses charCodeAt with an ASCII fast-path for typical programming text.
  */
 export function charColToVisualCol(text: string, charCol: number): number {
   let visual = 0;
-  let i = 0;
-  for (const char of text) {
-    if (i >= charCol) break;
-    visual += codePointWidth(char.codePointAt(0) ?? 0);
-    i += char.length;
+  for (let i = 0; i < charCol && i < text.length; ) {
+    const c = text.charCodeAt(i);
+    if (c <= 0x7f) {
+      visual++;
+      i++;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      const low = text.charCodeAt(i + 1);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      visual += codePointWidth(cp);
+      i += 2;
+    } else {
+      visual += codePointWidth(c);
+      i++;
+    }
   }
   return visual;
 }
@@ -72,14 +98,27 @@ export function charColToVisualCol(text: string, charCol: number): number {
  * Convert a visual column (display cell offset) to a UTF-16 code-unit
  * column index. Snaps to the next character boundary when landing
  * in the middle of a wide glyph. Clamps to the end of the string.
+ *
+ * Uses charCodeAt with an ASCII fast-path for typical programming text.
  */
 export function visualColToCharCol(text: string, visualCol: number): number {
   let visual = 0;
   let i = 0;
-  for (const char of text) {
+  while (i < text.length) {
     if (visual >= visualCol) break;
-    visual += codePointWidth(char.codePointAt(0) ?? 0);
-    i += char.length;
+    const c = text.charCodeAt(i);
+    if (c <= 0x7f) {
+      visual++;
+      i++;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      const low = text.charCodeAt(i + 1);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      visual += codePointWidth(cp);
+      i += 2;
+    } else {
+      visual += codePointWidth(c);
+      i++;
+    }
   }
   return i;
 }
@@ -88,6 +127,8 @@ export function visualColToCharCol(text: string, visualCol: number): number {
  * Split a line into visual-width segments at wrapWidth display cells.
  * Correctly handles wide characters (CJK, emoji) that occupy 2 cells.
  * Never splits in the middle of a wide glyph.
+ *
+ * Uses charCodeAt with an ASCII fast-path for typical programming text.
  */
 export function wrapLine(text: string, wrapWidth: number): string[] {
   if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
@@ -97,8 +138,22 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
   let segStart = 0; // UTF-16 code-unit index of current segment start
   let segVW = 0; // accumulated visual width of current segment
   let i = 0; // current UTF-16 code-unit index
-  for (const char of text) {
-    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+  while (i < text.length) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    let stride: number;
+    if (c <= 0x7f) {
+      cw = 1;
+      stride = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      const low = text.charCodeAt(i + 1);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+      stride = 2;
+    } else {
+      cw = codePointWidth(c);
+      stride = 1;
+    }
     if (segVW + cw > wrapWidth && segVW > 0) {
       // Adding this glyph would exceed the wrap width: cut before it
       segments.push(text.slice(segStart, i));
@@ -107,7 +162,7 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
     } else {
       segVW += cw;
     }
-    i += char.length; // char.length is 2 for surrogate pairs, 1 for BMP
+    i += stride;
   }
   segments.push(text.slice(segStart));
   return segments;

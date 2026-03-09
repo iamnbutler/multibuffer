@@ -12,7 +12,7 @@
 import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type { BufferId, BufferRow, ExcerptRange, MultiBufferRow } from "../src/multibuffer/types.ts";
-import { WrapMap } from "../src/multibuffer_renderer/wrap-map.ts";
+import { visualWidth, charColToVisualCol, WrapMap } from "../src/multibuffer_renderer/wrap-map.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
 function generateText(lines: number, lineLen = 30): string {
@@ -46,11 +46,39 @@ const snap10k = makeSnapshot(10_000);
 // Lines ~40 chars wide; wrap at 20 → each line wraps into 2 visual rows
 const snap1kWrap = makeSnapshot(1000, 40);
 
+// Sample lines for direct visualWidth / charColToVisualCol benchmarks
+const asciiLine = "const result = someFunction(argument1, argument2);"; // 50 chars, all ASCII
+const cjkLine = "日本語テキスト処理の最適化について"; // 17 CJK chars, 34 cells
+
 let wrapMap1k: WrapMap;
 
 export const wrapMapBenchmarks: BenchmarkSuite = {
   name: "WrapMap Operations",
   benchmarks: [
+    {
+      name: "visualWidth - 50-char ASCII line",
+      iterations: 100000,
+      targetMs: 0.001,
+      fn: () => {
+        visualWidth(asciiLine);
+      },
+    },
+    {
+      name: "visualWidth - 17-char CJK line",
+      iterations: 100000,
+      targetMs: 0.002,
+      fn: () => {
+        visualWidth(cjkLine);
+      },
+    },
+    {
+      name: "charColToVisualCol - ASCII mid-string",
+      iterations: 100000,
+      targetMs: 0.001,
+      fn: () => {
+        charColToVisualCol(asciiLine, 25);
+      },
+    },
     {
       name: "WrapMap construct - 1K lines, no wrap (wrapWidth=200)",
       iterations: 1000,
