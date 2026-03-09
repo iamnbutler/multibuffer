@@ -318,6 +318,18 @@ export class Editor {
       case "deleteLine":
         this._deleteLine(snap);
         break;
+      case "moveLine":
+        this._moveLine(snap, command.direction);
+        break;
+      case "duplicateLine":
+        this._duplicateLine(snap, command.direction);
+        break;
+      case "insertLineBelow":
+        this._insertLineBelow(snap);
+        break;
+      case "insertLineAbove":
+        this._insertLineAbove(snap);
+        break;
       case "copy":
         // No-op in the core — callers read the selection via getSelectedText()
         // and write to the platform clipboard themselves.
@@ -592,6 +604,109 @@ export class Editor {
 
     this._edit(snap, deleteStart, deleteEnd, "");
     const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
+    this._cursor = newCursor;
+    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+  }
+
+  private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+    this._goalColumn = undefined;
+    const cursor = this.cursor;
+    const row = cursor.row;
+    const lineCount = snap.lineCount;
+
+    if (direction === "up" && row === 0) return;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const lastRow = (lineCount - 1) as MultiBufferRow;
+    if (direction === "down" && row >= lastRow) return;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const nextRowEnd = (row + 1) as MultiBufferRow;
+    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+
+    if (direction === "down") {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const belowRow = (row + 1) as MultiBufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const belowRowEnd = (belowRow + 1) as MultiBufferRow;
+      const belowLineText = snap.lines(belowRow, belowRowEnd)[0] ?? "";
+
+      const editStart: MultiBufferPoint = { row, column: 0 };
+      const editEnd: MultiBufferPoint = { row: belowRow, column: belowLineText.length };
+      this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`);
+
+      const newCursor: MultiBufferPoint = { row: belowRow, column: cursor.column };
+      this._cursor = newCursor;
+      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    } else {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const aboveRow = (row - 1) as MultiBufferRow;
+      const aboveLineText = snap.lines(aboveRow, row)[0] ?? "";
+
+      const editStart: MultiBufferPoint = { row: aboveRow, column: 0 };
+      const editEnd: MultiBufferPoint = { row, column: currentLineText.length };
+      this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`);
+
+      const newCursor: MultiBufferPoint = { row: aboveRow, column: cursor.column };
+      this._cursor = newCursor;
+      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    }
+  }
+
+  private _duplicateLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+    this._goalColumn = undefined;
+    const cursor = this.cursor;
+    const row = cursor.row;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const nextRowEnd = (row + 1) as MultiBufferRow;
+    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+
+    if (direction === "down") {
+      const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
+      this._edit(snap, insertPoint, insertPoint, `\n${currentLineText}`);
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: cursor.column };
+      this._cursor = newCursor;
+      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    } else {
+      const insertPoint: MultiBufferPoint = { row, column: 0 };
+      this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`);
+
+      this._cursor = { row, column: cursor.column };
+      this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+    }
+  }
+
+  private _insertLineBelow(snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
+    const cursor = this.cursor;
+    const row = cursor.row;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const nextRowEnd = (row + 1) as MultiBufferRow;
+    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+
+    const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
+    this._edit(snap, insertPoint, insertPoint, "\n");
+
+    // Move cursor to the new empty line
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: 0 };
+    this._cursor = newCursor;
+    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+  }
+
+  private _insertLineAbove(_snap: MultiBufferSnapshot): void {
+    this._goalColumn = undefined;
+    const cursor = this.cursor;
+    const row = cursor.row;
+
+    const insertPoint: MultiBufferPoint = { row, column: 0 };
+    this._edit(_snap, insertPoint, insertPoint, "\n");
+
+    // Cursor moves to the new blank line (at the original row position)
+    const newCursor: MultiBufferPoint = { row, column: 0 };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
