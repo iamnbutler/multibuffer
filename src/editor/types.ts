@@ -14,6 +14,15 @@ import type {
   Selection,
 } from "../multibuffer/types.ts";
 
+/**
+ * Options for creating an Editor instance.
+ * All options are opt-in; omit to use defaults.
+ */
+export interface EditorOptions {
+  /** Enable bracket matching (opt-in). Requires issue #68 implementation. */
+  bracketMatching?: boolean;
+}
+
 /** Direction for cursor movement and selection extension. */
 export type Direction = "left" | "right" | "up" | "down";
 
