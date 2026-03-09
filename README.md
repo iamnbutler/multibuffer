@@ -6,7 +6,7 @@ A multibuffer text editor component in TypeScript. Inspired by [Zed](https://zed
 
 ## What it does
 
-A multibuffer composites excerpts from multiple source files into one unified view. Each excerpt is a range of lines from a buffer. The editor supports cursor movement, text insertion/deletion, selection (keyboard and mouse), and syntax highlighting via tree-sitter.
+A multibuffer composites excerpts from multiple source files into a single scrollable, editable document. Each excerpt is a range of lines from a buffer. The editor supports cursor movement (character/word/line/page/buffer), text editing (insert, delete, newline, tab), selection (keyboard and mouse), soft wrap, macOS keybindings, and syntax highlighting via tree-sitter.
 
 ```
 ┌──────────────────────────────┐
@@ -101,21 +101,6 @@ spool list                    # Open tasks
 spool stream list             # All streams with task counts
 spool list --stream <id>      # Tasks in a stream
 ```
-
-## What works
-
-- Multibuffer with multiple excerpts from multiple buffers
-- Cursor movement: character, word, line, page, buffer granularity
-- Selection: keyboard extend, click-drag, double-click word, triple-click line
-- Text editing: insert, delete (char/word/line), newline, tab
-- Delete line (Cmd+Shift+K)
-- Anchors that survive edits (edit log replay with bias)
-- Rope-backed buffers with O(log n) edits
-- DOM renderer with line pooling and viewport-based rendering
-- Soft wrap via WrapMap
-- Tree-sitter syntax highlighting (TypeScript)
-- WebSocket debug API for CLI interaction
-- macOS keybindings (Cmd=line/buffer, Opt=word)
 
 ## What's next
 
