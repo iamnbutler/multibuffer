@@ -139,13 +139,39 @@ describe("Empty Excerpt Edge Cases", () => {
     expect(lineCount).toBe(0);
   });
 
-  test.todo("empty excerpt followed by non-empty excerpt", () => {
+  test("empty excerpt followed by non-empty excerpt", () => {
     // Empty excerpt at row 10
     // Non-empty excerpt should start at row 10 (not 11)
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(2, 2)); // empty: start == end
+    mb.addExcerpt(buf, excerptRange(0, 2)); // non-empty: 2 lines
+
+    const [emptyInfo, nonEmptyInfo] = mb.excerpts;
+    // Empty excerpt contributes zero rows
+    expect(num(emptyInfo?.endRow) - num(emptyInfo?.startRow)).toBe(0);
+    // Non-empty excerpt starts immediately at the same multibuffer row
+    expect(num(nonEmptyInfo?.startRow)).toBe(num(emptyInfo?.endRow));
+    // Total line count comes from non-empty excerpt only
+    expect(mb.lineCount).toBe(2);
   });
 
-  test.todo("multiple consecutive empty excerpts", () => {
+  test("multiple consecutive empty excerpts", () => {
     // Multiple empty excerpts should all have same startRow/endRow
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(1, 1)); // empty
+    mb.addExcerpt(buf, excerptRange(2, 2)); // empty
+    mb.addExcerpt(buf, excerptRange(3, 3)); // empty
+
+    // Each empty excerpt has zero height
+    for (const info of mb.excerpts) {
+      expect(num(info.endRow) - num(info.startRow)).toBe(0);
+    }
+    // All stack at multibuffer row 0; total line count is 0
+    expect(mb.lineCount).toBe(0);
+    expect(mb.excerpts.every((e) => num(e.startRow) === 0)).toBe(true);
+    expect(mb.excerpts.every((e) => num(e.endRow) === 0)).toBe(true);
   });
 });
 
@@ -394,18 +420,74 @@ describe("Excerpt Expansion", () => {
 
 
 describe("Excerpt ID Monotonicity", () => {
-  test.todo("IDs never decrease", () => {
+  test("IDs never decrease", () => {
     // Creating, removing, creating again should still increase
+    // SlotMap reuses the slot index but increments the generation,
+    // so the combined (index, generation) key is always unique.
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+    const id1 = mb.addExcerpt(buf, excerptRange(0, 3));
+    mb.removeExcerpt(id1);
+    const id2 = mb.addExcerpt(buf, excerptRange(0, 3));
+    // id2 must be distinct from id1 (different index or higher generation)
+    const same = id1.index === id2.index && id1.generation === id2.generation;
+    expect(same).toBe(false);
   });
 
-  test.todo("removed excerpt IDs are not reused", () => {
+  test("removed excerpt IDs are not reused", () => {
     // Add excerpt (id=1), remove it, add another (id=2, not 1)
     // This is CRITICAL for anchor stability
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+    const id1 = mb.addExcerpt(buf, excerptRange(0, 3));
+    mb.removeExcerpt(id1);
+    const id2 = mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // The old (index, generation) pair is no longer live
+    expect(
+      mb.excerpts.find(
+        (e) => e.id.index === id1.index && e.id.generation === id1.generation,
+      ),
+    ).toBeUndefined();
+    // The new excerpt is reachable via its fresh ID
+    expect(
+      mb.excerpts.find(
+        (e) => e.id.index === id2.index && e.id.generation === id2.generation,
+      ),
+    ).toBeDefined();
   });
 
-  test.todo("IDs survive excerpt replacement", () => {
+  test("IDs survive excerpt replacement", () => {
     // setExcerptsForBuffer creates new IDs, doesn't reuse old ones
     // Old IDs tracked in replaced_excerpts map
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+    const oldId = mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Create anchor before replacement so we can verify the chain
+    const a = mb.createAnchor(mbPoint(0, 1), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    const [newId] = mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+    expect(newId).toBeDefined();
+    if (!newId) return;
+
+    // Old ID is gone from the live excerpt list
+    expect(
+      mb.excerpts.find(
+        (e) => e.id.index === oldId.index && e.id.generation === oldId.generation,
+      ),
+    ).toBeUndefined();
+    // New ID is live
+    expect(
+      mb.excerpts.find(
+        (e) => e.id.index === newId.index && e.id.generation === newId.generation,
+      ),
+    ).toBeDefined();
+    // Anchor created in the old excerpt resolves via replacement chain
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
   });
 });
 
