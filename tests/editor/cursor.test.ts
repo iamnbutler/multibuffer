@@ -204,3 +204,59 @@ describe("Cursor - Buffer Granularity", () => {
     expectPoint(moveCursor(snap, mbPoint(0, 1), "right", "buffer"), 2, 3);
   });
 });
+
+describe("Cursor - Page Movement", () => {
+  function manyLines(n: number): string {
+    return Array.from({ length: n }, (_, i) => `L${i}`).join("\n");
+  }
+
+  test("page down moves forward 30 rows", () => {
+    const snap = setup(manyLines(60)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(5, 1), "down", "page"), 35, 1);
+  });
+
+  test("page down clamps to last row", () => {
+    // 20 lines → rows 0–19; from row 5: 5+30=35 > 19 → clamped to row 19
+    const snap = setup(manyLines(20)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(5, 1), "down", "page"), 19, 1);
+  });
+
+  test("page down at last row stays put", () => {
+    const snap = setup(manyLines(20)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(19, 1), "down", "page"), 19, 1);
+  });
+
+  test("page up moves back 30 rows", () => {
+    const snap = setup(manyLines(60)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(35, 1), "up", "page"), 5, 1);
+  });
+
+  test("page up clamps to first row", () => {
+    // from row 10: 10−30 = −20 → clamped to row 0
+    const snap = setup(manyLines(60)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(10, 1), "up", "page"), 0, 1);
+  });
+
+  test("page up at first row stays put", () => {
+    const snap = setup(manyLines(20)).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 1), "up", "page"), 0, 1);
+  });
+
+  test("page down clamps column on shorter target line", () => {
+    // row 0: "AAAAAAA" (7 chars), row 30: "BB" (2 chars); cursor col 5 → clamped to 2
+    const text = ["AAAAAAA"]
+      .concat(Array.from({ length: 30 }, (_, i) => (i === 29 ? "BB" : "CCC")))
+      .join("\n");
+    const snap = setup(text).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 5), "down", "page"), 30, 2);
+  });
+
+  test("page up clamps column on shorter target line", () => {
+    // row 30: "AAAAAAA" (7 chars), row 0: "BB" (2 chars); cursor col 5 → clamped to 2
+    const text = ["BB"]
+      .concat(Array.from({ length: 30 }, (_, i) => (i === 29 ? "AAAAAAA" : "CCC")))
+      .join("\n");
+    const snap = setup(text).snapshot();
+    expectPoint(moveCursor(snap, mbPoint(30, 5), "up", "page"), 0, 2);
+  });
+});
