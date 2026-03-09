@@ -1,0 +1,145 @@
+/**
+ * Editor dispatch benchmarks.
+ *
+ * Measures the full keypress-to-model-update latency through Editor.dispatch().
+ * This is the critical user-facing performance path.
+ *
+ * Key performance targets (from CLAUDE.md):
+ * - Keypress to model update: <1ms
+ *
+ * Covers:
+ * - insertText: single char typed (most common keypress)
+ * - deleteBackward: backspace (second most common)
+ * - moveCursor: cursor navigation without edit (no buffer mutation)
+ * - insertNewline: Enter key with auto-indent
+ */
+
+import { Editor } from "../src/editor/editor.ts";
+import { createBuffer } from "../src/multibuffer/buffer.ts";
+import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
+import type { BufferId, BufferRow, MultiBufferRow } from "../src/multibuffer/types.ts";
+import type { BenchmarkSuite } from "./harness.ts";
+
+function generateText(lines: number): string {
+  return Array.from(
+    { length: lines },
+    (_, i) => `Line ${i + 1}: Some text content here`,
+  ).join("\n");
+}
+
+// biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+const bufferId = "bench-editor" as BufferId;
+
+function makeEditor(lineCount: number): Editor {
+  const text = generateText(lineCount);
+  const buf = createBuffer(bufferId, text);
+  const mb = createMultiBuffer();
+  const lineRows = text.split("\n").length;
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+  const start = { row: 0 as BufferRow, column: 0 };
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+  const end = { row: lineRows as BufferRow, column: 0 };
+  const excerptRange = { context: { start, end }, primary: { start, end } };
+  mb.addExcerpt(buf, excerptRange);
+  return new Editor(mb);
+}
+
+let editorInsert1k: Editor;
+let editorInsert10k: Editor;
+let editorDelete1k: Editor;
+let editorMove1k: Editor;
+let editorNewline1k: Editor;
+
+export const editorBenchmarks: BenchmarkSuite = {
+  name: "Editor dispatch (keypress latency)",
+  benchmarks: [
+    {
+      // Most common keypress: typing a character. Measures full dispatch path:
+      // snapshot → resolveAnchor → _edit → buffer.insert → new snapshot → selectionAtPoint.
+      name: "insertText - single char (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorInsert1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert1k.setCursor({ row: 500 as MultiBufferRow, column: 10 });
+      },
+      fn: () => {
+        editorInsert1k.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Large file: 10K buffer bottlenecks on rope insert (~1ms) — separate
+      // backlog item (rope structural sharing). Editor overhead is ~0.12ms.
+      name: "insertText - single char (10K buffer)",
+      iterations: 500,
+      targetMs: 2,
+      setup: () => {
+        editorInsert10k = makeEditor(10_000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert10k.setCursor({ row: 5000 as MultiBufferRow, column: 10 });
+      },
+      fn: () => {
+        editorInsert10k.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Backspace: same hot path as insertText but deletes instead.
+      name: "deleteBackward - char (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorDelete1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorDelete1k.setCursor({ row: 500 as MultiBufferRow, column: 32 });
+      },
+      fn: () => {
+        editorDelete1k.dispatch({ type: "deleteBackward", granularity: "character" });
+      },
+    },
+    {
+      // Pure cursor navigation: no buffer mutation.
+      // Should be significantly cheaper than edit operations.
+      name: "moveCursor right - char (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorMove1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMove1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorMove1k.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+      },
+    },
+    {
+      // Enter key: insertText("\n") + auto-indent regex on current line.
+      // Indented lines add regex match cost on top of insertText.
+      name: "insertNewline with auto-indent (1K buffer, indented line)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        // Generate indented code to exercise auto-indent path
+        const lines = Array.from(
+          { length: 1000 },
+          (_, i) => `  function f${i}() { return ${i}; }`,
+        ).join("\n");
+        const buf = createBuffer(bufferId, lines);
+        const mb = createMultiBuffer();
+        const lineRows = lines.split("\n").length;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const start = { row: 0 as BufferRow, column: 0 };
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const end = { row: lineRows as BufferRow, column: 0 };
+        const excerptRange = { context: { start, end }, primary: { start, end } };
+        mb.addExcerpt(buf, excerptRange);
+        editorNewline1k = new Editor(mb);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorNewline1k.setCursor({ row: 500 as MultiBufferRow, column: 30 });
+      },
+      fn: () => {
+        editorNewline1k.dispatch({ type: "insertNewline" });
+      },
+    },
+  ],
+};

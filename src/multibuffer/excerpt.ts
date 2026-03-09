@@ -44,6 +44,13 @@ function computeExcerptSummary(
 ): TextSummary {
   const startRow = range.context.start.row;
   const endRow = range.context.end.row;
+
+  // Fast path: full-buffer excerpt — reuse the buffer's already-computed summary (O(1)).
+  // This is the common case for single-buffer editors where the excerpt covers all lines.
+  if (startRow === 0 && endRow === buffer.lineCount) {
+    return buffer.textSummary;
+  }
+
   const lines = buffer.lines(startRow, endRow);
 
   let totalBytes = 0;
