@@ -632,7 +632,7 @@ export class Editor {
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
 
-private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+  private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
     const cursor = this.cursor;
     const row = cursor.row;
@@ -772,16 +772,16 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
     const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
 
+    const leadingSpaces = (line: string): number => {
+      if (line.startsWith("  ")) return 2;
+      if (line.startsWith(" ")) return 1;
+      return 0;
+    };
+
     // Check if any line actually has leading spaces to remove
     let anyChange = false;
     const dedented = lines.map((line) => {
-      let spacesToRemove = 0;
-      if (line.length > 0 && line[0] === " ") {
-        spacesToRemove = 1;
-        if (line.length > 1 && line[1] === " ") {
-          spacesToRemove = 2;
-        }
-      }
+      const spacesToRemove = leadingSpaces(line);
       if (spacesToRemove > 0) anyChange = true;
       return line.slice(spacesToRemove);
     });
@@ -796,13 +796,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const cursor = this.cursor;
     const cursorLineIndex = cursor.row - startRow;
     const cursorLine = lines[cursorLineIndex] ?? "";
-    let spacesRemovedOnCursorLine = 0;
-    if (cursorLine.length > 0 && cursorLine[0] === " ") {
-      spacesRemovedOnCursorLine = 1;
-      if (cursorLine.length > 1 && cursorLine[1] === " ") {
-        spacesRemovedOnCursorLine = 2;
-      }
-    }
+    const spacesRemovedOnCursorLine = leadingSpaces(cursorLine);
 
     this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"));
 
