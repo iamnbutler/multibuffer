@@ -1,5 +1,10 @@
 export { moveCursor } from "./cursor.ts";
 export { Editor } from "./editor.ts";
+export type { EditorView, EditorViewOptions, Theme } from "./editor-view.ts";
+export {
+  createEditorView,
+  mergeDecorations,
+} from "./editor-view.ts";
 export {
   createMultiBufferEditor,
   createSingleBufferEditor,
