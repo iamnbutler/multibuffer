@@ -27,6 +27,6 @@
 8. input-handler.ts, dom.ts: DOM-dependent, skip
 
 ## Round-Robin
-Last: 2026-03-09 (run 22849273153); done: 4,7
-Next: 1,3,6,7 — excerpt anchor stability + selection.test.ts
+Last: 2026-03-10 (run 22898181247); done: 4,7
+Next: 1,2,6,7 — selection.test.ts + excerpt anchor stability
 Note: hold off new PRs until maintainer reviews #69-73
