@@ -581,6 +581,17 @@ export class Editor {
       );
       if (extended) {
         this._selection = extended;
+        // Keep _cursor in sync with the head so that a subsequent vertical
+        // extend uses the correct row.  Horizontal extends can wrap to the
+        // next row (Shift+Right past EOL), and without this update _cursor
+        // would still hold the pre-wrap row, causing the next Shift+Down to
+        // re-visit the same row instead of advancing further.
+        const newHead =
+          extended.head === "end" ? extended.range.end : extended.range.start;
+        const newHeadPoint = snap.resolveAnchor(newHead);
+        if (newHeadPoint) {
+          this._cursor = newHeadPoint;
+        }
       }
     }
   }
