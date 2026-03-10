@@ -747,6 +747,61 @@ describe("Editor - Multi-excerpt", () => {
     expect(num(editor.cursor.row)).toBe(3);
   });
 
+  test("Shift+Down selection crosses excerpt boundary (issue #89)", () => {
+    const { editor } = setupMulti();
+    // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline (header)
+    // Excerpt 2: row 3 = "Charlie", row 4 = "Delta"
+    //
+    // Bug: before the fix, repeated Shift+Down from the last content row of
+    // excerpt 1 would never advance into excerpt 2 — the head anchor at the
+    // trailing-newline row (row 2) snaps back to row 1, causing an infinite loop.
+    // Fix: _extendSelection uses this._cursor.row (which advances past the
+    // trailing-newline row) instead of the resolved anchor row.
+    editor.setCursor(mbPoint(1, 3));
+
+    // First Shift+Down: nominal cursor advances to row 2 (trailing-newline).
+    // The head anchor at row 2 has no buffer row, so it snaps to the end of
+    // "Bravo" (row 1, col 5).  The cursor getter resolves the head anchor and
+    // reports row 1.  However, this._cursor.row is now 2.
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(1);
+
+    // Second Shift+Down: this._cursor.row was 2, so moveCursor advances to
+    // row 3 (first row of excerpt 2).  The selection head anchor is now valid.
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(3);
+
+    // Third Shift+Down: continues within excerpt 2 to row 4 ("Delta").
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(4);
+  });
+
+  test("Shift+Up selection crosses excerpt boundary going backwards (issue #89)", () => {
+    const { editor } = setupMulti();
+    // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline
+    // Excerpt 2: row 3 = "Charlie", row 4 = "Delta"
+    //
+    // Without the fix, Shift+Up from excerpt 2 would skip row 1 entirely
+    // (jumping from the header to row 0) because headPoint.row resolves
+    // to row 1 (from snap) and moveCursor subtracts 1 more to reach row 0.
+    editor.setCursor(mbPoint(3, 3));
+
+    // First Shift+Up: nominal cursor to row 2 (header).  Head anchor resolves
+    // to row 1, col 5 (end of "Bravo").  Cursor reports row 1.
+    editor.dispatch({ type: "extendSelection", direction: "up", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(1);
+
+    // Second Shift+Up: this._cursor.row was 2; moveCursor(row 2, "up") → row 1.
+    // Valid anchor at row 1, col 3 (goal column).  Cursor still reports row 1
+    // but now the head is at row 1, col 3 (not row 1, col 5).
+    editor.dispatch({ type: "extendSelection", direction: "up", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(1);
+
+    // Third Shift+Up: this._cursor.row was 1; moveCursor(row 1, "up") → row 0.
+    editor.dispatch({ type: "extendSelection", direction: "up", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(0);
+  });
+
   test("typing in first excerpt does not affect second", () => {
     const { editor, mb } = setupMulti();
     editor.setCursor(mbPoint(0, 5));
