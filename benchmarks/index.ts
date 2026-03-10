@@ -10,6 +10,7 @@
  */
 
 import { bufferBenchmarks } from "./buffer.bench.ts";
+import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { saveHistory } from "./history.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
@@ -21,6 +22,7 @@ const suites: BenchmarkSuite[] = [
   multibufferBenchmarks,
   viewportBenchmarks,
   wrapMapBenchmarks,
+  editorBenchmarks,
 ];
 
 console.log("=".repeat(60));
