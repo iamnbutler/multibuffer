@@ -16,6 +16,13 @@
 - [ ] Line operations: move, duplicate, insert above/below
 - [ ] Indentation: indent/dedent selections, auto-indent on newline
 - [ ] Find & Replace: Cmd+F, Cmd+H, find next/prev, go to line
+- [ ] Consumer API: Buffer creation factories
+- [ ] Consumer API: Granular editor events
+- [ ] Consumer API: EditorView facade
+- [ ] Consumer API: Keybindings/keymap system
+- [ ] Consumer API: Theme API (renderer.setTheme)
+- [ ] Consumer API: Decoration events (bracket match, current line)
+- [ ] Fuzz testing with fast-check for Rope, Buffer, MultiBuffer, Editor
 - [ ] Comment toggling: Cmd+/ to toggle line comments
 - [ ] Multi-cursor editing: Cmd+D, Cmd+Shift+L, Opt+Click
 - [ ] Bracket pair handling: auto-close, match navigation, surround
@@ -23,6 +30,7 @@
 - [ ] Scroll commands: scroll viewport without moving cursor
 - [ ] Text transformation: uppercase, lowercase, title case
 - [ ] Selection expansion: Cmd+L select line, expand/shrink selection
+- [ ] Consumer API: Read-only editor mode
 
 **excerpt-management**
 
