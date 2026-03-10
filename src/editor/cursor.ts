@@ -44,9 +44,11 @@ function moveCharacter(
 
   if (direction === "right") {
     const lineText = snapshot.lines(row, nextRow(row, lineCount));
-    const lineLen = lineText[0]?.length ?? 0;
-    if (column < lineLen) {
-      return { row, column: column + 1 };
+    const text = lineText[0] ?? "";
+    if (column < text.length) {
+      // Advance by the full code point width (2 for surrogate pairs, 1 for BMP)
+      const cp = text.codePointAt(column) ?? 0;
+      return { row, column: column + (cp > 0xffff ? 2 : 1) };
     }
     // At end of line — wrap to start of next line
     if (row + 1 < lineCount) {
@@ -58,7 +60,9 @@ function moveCharacter(
 
   if (direction === "left") {
     if (column > 0) {
-      return { row, column: column - 1 };
+      // Step back by the full code point width (2 for surrogate pairs, 1 for BMP)
+      const lineText = snapshot.lines(row, nextRow(row, lineCount));
+      return { row, column: prevCpStart(lineText[0] ?? "", column) };
     }
     // At start of line — wrap to end of previous line
     if (row > 0) {

@@ -193,6 +193,39 @@ describe("Cursor - Word Movement (Unicode)", () => {
   });
 });
 
+describe("Cursor - Character Movement (Surrogate Pairs)", () => {
+  test("move right over emoji advances by 2 code units", () => {
+    // "😀" is U+1F600, encoded as a surrogate pair: 2 UTF-16 code units
+    // "😀x" has length 3: emoji at [0,1], 'x' at [2]
+    const snap = setup("😀x").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "character"), 0, 2);
+    expectPoint(moveCursor(snap, mbPoint(0, 2), "right", "character"), 0, 3);
+  });
+
+  test("move left over emoji advances by 2 code units", () => {
+    // "x😀" has length 3: 'x' at [0], emoji at [1,2]
+    const snap = setup("x😀").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 3), "left", "character"), 0, 1);
+    expectPoint(moveCursor(snap, mbPoint(0, 1), "left", "character"), 0, 0);
+  });
+
+  test("move right through line of emoji wraps correctly", () => {
+    // "😀😀" has length 4
+    const snap = setup("😀😀\nend").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "character"), 0, 2);
+    expectPoint(moveCursor(snap, mbPoint(0, 2), "right", "character"), 0, 4);
+    // At end of emoji line — wrap to next line
+    expectPoint(moveCursor(snap, mbPoint(0, 4), "right", "character"), 1, 0);
+  });
+
+  test("BMP characters still advance by 1", () => {
+    // CJK are BMP (1 code unit each)
+    const snap = setup("你好").snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "character"), 0, 1);
+    expectPoint(moveCursor(snap, mbPoint(0, 1), "left", "character"), 0, 0);
+  });
+});
+
 describe("Cursor - Buffer Granularity", () => {
   test("move to buffer start", () => {
     const snap = setup("AAA\nBBB\nCCC").snapshot();
