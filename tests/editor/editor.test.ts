@@ -1148,6 +1148,11 @@ describe("keyEventToCommand", () => {
     expect(cmd).toEqual({ type: "redo" });
   });
 
+  test("Mod+Y → redo (Ctrl+Y on Windows/Linux, Cmd+Y on Mac)", () => {
+    const cmd = keyEventToCommand(key("y", { mod: true }));
+    expect(cmd).toEqual({ type: "redo" });
+  });
+
   test("Cmd+C → copy", () => {
     const cmd = keyEventToCommand(key("c", { mod: true }));
     expect(cmd).toEqual({ type: "copy" });
@@ -1995,5 +2000,172 @@ describe("Editor - Read-Only Mode", () => {
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "insertText", text: " X" });
     expect(getText(mb)).toBe("Hello X"); // now works
+  });
+
+  test("cut is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "line" });
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "cut" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
+
+  test("redo is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "buffer" });
+    editor.dispatch({ type: "insertText", text: " World" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "redo" });
+    // redo is blocked — buffer should remain at the undone state
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("deleteLine is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello\nWorld");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
+
+  test("moveLine is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello\nWorld");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
+
+  test("duplicateLine is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello\nWorld");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
+
+  test("insertLineBelow is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("insertLineAbove is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("indentLines is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "indentLines" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("dedentLines is ignored when read-only", () => {
+    const { mb, editor } = setup("  Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "dedentLines" });
+    expect(getText(mb)).toBe("  Hello");
+  });
+
+  test("insertTab is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "insertTab" });
+    expect(getText(mb)).toBe("Hello");
+  });
+});
+
+// ─── Undo Stack Limit ────────────────────────────────────────────
+
+describe("Editor - Undo Stack Limit", () => {
+  test("undo history is capped at 100 entries", () => {
+    const { mb, editor } = setup("");
+    // Insert 101 characters — the 101st push causes the first entry to be shifted off
+    for (let i = 0; i < 101; i++) {
+      editor.dispatch({ type: "insertText", text: "x" });
+    }
+    expect(getText(mb)).toBe("x".repeat(101));
+    // Undo 101 times — the 101st undo is a no-op; one character should remain
+    for (let i = 0; i < 101; i++) {
+      editor.dispatch({ type: "undo" });
+    }
+    expect(getText(mb)).toBe("x");
+  });
+});
+
+// ─── getCutText ──────────────────────────────────────────────────
+
+describe("Editor - getCutText", () => {
+  test("getCutText with non-collapsed selection returns selected text only", () => {
+    const { editor } = setup("Hello World");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    expect(editor.getCutText()).toBe("Hello");
+  });
+
+  test("getCutText with collapsed selection on a non-last line includes trailing newline", () => {
+    const { editor } = setup("Hello\nWorld\nFoo");
+    editor.setCursor(mbPoint(0, 3));
+    expect(editor.getCutText()).toBe("Hello\n");
+  });
+
+  test("getCutText with collapsed selection on last line of multi-line buffer omits trailing newline", () => {
+    const { editor } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(1, 3));
+    expect(editor.getCutText()).toBe("World");
+  });
+
+  test("getCutText with collapsed selection on the only line returns full line text", () => {
+    const { editor } = setup("Hello");
+    editor.setCursor(mbPoint(0, 2));
+    expect(editor.getCutText()).toBe("Hello");
+  });
+});
+
+// ─── selectWordAt with Unicode ───────────────────────────────────
+
+describe("Editor - selectWordAt with Unicode", () => {
+  test("double-click on CJK character selects the CJK word (letters are word chars)", () => {
+    // U+4EE3 ('代') and U+7801 ('码') are BMP letters (each 1 UTF-16 unit)
+    const { editor, mb } = setup("code 代码 end");
+    //                               0123456789...
+    // '代' is at column 5, '码' at column 6
+    editor.selectWordAt(mbPoint(0, 5));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 5);
+    if (end) expectPoint(end, 0, 7);
+  });
+
+  test("double-click on emoji selects the surrounding non-word run (emoji are not word chars)", () => {
+    // U+1F389 ('🎉') occupies 2 UTF-16 units; non-word char
+    // "hi 🎉 bye": h=0, i=1, ' '=2, 🎉=3-4 (2 units), ' '=5, b=6, y=7, e=8
+    const { editor, mb } = setup("hi 🎉 bye");
+    // Click at column 3 (start of 🎉)
+    editor.selectWordAt(mbPoint(0, 3));
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    // Non-word run " 🎉 " is col 2 to col 6 (exclusive): space + 2-unit emoji + space
+    if (start) expectPoint(start, 0, 2);
+    if (end) expectPoint(end, 0, 6);
   });
 });
