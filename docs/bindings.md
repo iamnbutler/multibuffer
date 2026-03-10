@@ -85,48 +85,20 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 
 ## Not Yet Implemented
 
-### Indentation
-- `Tab` with selection — Indent selected lines
-- `Shift+Tab` — Dedent line(s)
-- `Mod+]` — Indent line(s)
-- `Mod+[` — Dedent line(s)
-- Auto-indent on Enter
+**Indentation** — `Tab` with selection (indent), `Shift+Tab` / `Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter.
 
-### Comment toggling
-- `Mod+/` — Toggle line comment
+**Comment toggling** — `Mod+/` toggle line comment.
 
-### Find & replace
-- `Mod+F` — Find
-- `Mod+G` / `F3` — Find next
-- `Mod+Shift+G` / `Shift+F3` — Find previous
-- `Mod+H` — Replace
-- `Mod+Shift+H` — Replace all
+**Find & replace** — `Mod+F` (find), `Mod+G`/`F3` (next), `Mod+Shift+G`/`Shift+F3` (previous), `Mod+H` (replace), `Mod+Shift+H` (replace all).
 
-### Multi-cursor
-- `Mod+D` — Add selection for next occurrence
-- `Mod+Shift+L` — Select all occurrences
-- `Mod+Opt+Up/Down` — Add cursor above/below
-- `Opt+Click` — Add cursor at click location
-- `Escape` — Collapse to single cursor
+**Multi-cursor** — `Mod+D` (next occurrence), `Mod+Shift+L` (all occurrences), `Mod+Opt+Up/Down` (add cursor above/below), `Opt+Click` (add cursor at click), `Escape` (collapse to single cursor).
 
-### Bracket pairs
-- Auto-close brackets/quotes
-- `Mod+Shift+\` — Jump to matching bracket
+**Bracket pairs** — Auto-close brackets/quotes; `Mod+Shift+\` jump to matching bracket.
 
-### macOS text system
-- `Ctrl+A` — Move to line start
-- `Ctrl+E` — Move to line end
-- `Ctrl+K` — Kill to end of line
-- `Ctrl+Y` — Yank (paste kill buffer)
-- `Ctrl+O` — Open line (insert newline after cursor)
-- `Ctrl+T` — Transpose characters
+**macOS text system** — `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose).
 
-### Scroll commands
-- `Mod+Opt+Up/Down` — Scroll viewport without moving cursor
+**Scroll** — `Mod+Opt+Up/Down` scroll viewport without moving cursor.
 
-### Text transformation
-- `Mod+Shift+U` — Transform to uppercase
-- `Mod+Shift+L` — Transform to lowercase
+**Text transformation** — `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase).
 
-### Selection expansion
-- `Mod+Shift+Arrow` — Extend selection by word/line
+**Selection expansion** — `Mod+Shift+Arrow` extend selection by word/line.
