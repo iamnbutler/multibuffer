@@ -1783,6 +1783,24 @@ describe("Editor - Indentation", () => {
     expect(getText(mb)).toBe("hello\nworld");
   });
 
+  test("undo indent restores cursor position", () => {
+    const { editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "indentLines" });
+    expectPoint(editor.cursor, 0, 4);
+    editor.dispatch({ type: "undo" });
+    expectPoint(editor.cursor, 0, 2);
+  });
+
+  test("undo dedent restores cursor position", () => {
+    const { editor } = setup("  hello\nworld");
+    editor.setCursor(mbPoint(0, 4));
+    editor.dispatch({ type: "dedentLines" });
+    expectPoint(editor.cursor, 0, 2);
+    editor.dispatch({ type: "undo" });
+    expectPoint(editor.cursor, 0, 4);
+  });
+
   test("undo auto-indent", () => {
     const { mb, editor } = setup("  hello");
     editor.setCursor(mbPoint(0, 7));
@@ -1804,5 +1822,21 @@ describe("Editor - Indentation", () => {
     selectRange(editor, 0, 3, 2, 3);
     editor.dispatch({ type: "dedentLines" });
     expect(getText(mb)).toBe("aaa\nbbb\nccc");
+  });
+
+  test("indent with active selection shifts cursor by indent width, not double", () => {
+    const { editor } = setup("hello\nworld");
+    selectRange(editor, 0, 2, 1, 2); // head at (1, 2)
+    editor.dispatch({ type: "indentLines" });
+    // cursor should shift right by 2 (not 4)
+    expectPoint(editor.cursor, 1, 4);
+  });
+
+  test("dedent with active selection shifts cursor by removed spaces, not double", () => {
+    const { editor } = setup("  hello\n  world");
+    selectRange(editor, 0, 3, 1, 3); // head at (1, 3)
+    editor.dispatch({ type: "dedentLines" });
+    // cursor should shift left by 2 (not 4)
+    expectPoint(editor.cursor, 1, 1);
   });
 });
