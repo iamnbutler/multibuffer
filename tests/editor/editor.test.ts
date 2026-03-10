@@ -1806,3 +1806,102 @@ describe("Editor - Indentation", () => {
     expect(getText(mb)).toBe("aaa\nbbb\nccc");
   });
 });
+
+// ─── Read-Only Mode ──────────────────────────────────────────────
+
+describe("Editor - Read-Only Mode", () => {
+  test("readOnly is false by default", () => {
+    const { editor } = setup("Hello");
+    expect(editor.readOnly).toBe(false);
+  });
+
+  test("readOnly option set via constructor", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    const editor = new Editor(mb, { readOnly: true });
+    expect(editor.readOnly).toBe(true);
+  });
+
+  test("setReadOnly toggles the flag", () => {
+    const { editor } = setup("Hello");
+    editor.setReadOnly(true);
+    expect(editor.readOnly).toBe(true);
+    editor.setReadOnly(false);
+    expect(editor.readOnly).toBe(false);
+  });
+
+  test("insertText is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertText", text: " World" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("insertNewline is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertNewline" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("deleteBackward is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("deleteForward is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("paste is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "paste", text: " World" });
+    expect(getText(mb)).toBe("Hello");
+  });
+
+  test("undo is ignored when read-only", () => {
+    const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "insertText", text: " World" });
+    expect(getText(mb)).toBe("Hello World");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "undo" });
+    // Undo should not fire because editor is now read-only
+    expect(getText(mb)).toBe("Hello World");
+  });
+
+  test("moveCursor works when read-only", () => {
+    const { editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+    expectPoint(editor.cursor, 0, 1);
+  });
+
+  test("selectAll works when read-only", () => {
+    const { editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "selectAll" });
+    expect(editor.selection).not.toBeUndefined();
+  });
+
+  test("setReadOnly to false re-enables editing", () => {
+    const { mb, editor } = setup("Hello");
+    editor.setReadOnly(true);
+    editor.dispatch({ type: "insertText", text: " X" });
+    expect(getText(mb)).toBe("Hello"); // blocked
+    editor.setReadOnly(false);
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "insertText", text: " X" });
+    expect(getText(mb)).toBe("Hello X"); // now works
+  });
+});

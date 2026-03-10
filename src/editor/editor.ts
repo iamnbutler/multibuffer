@@ -45,6 +45,12 @@ interface HistoryEntry {
   readonly selectionBefore: Selection | undefined;
 }
 
+/** Options for constructing an Editor. */
+export interface EditorOptions {
+  /** When true, all text-mutating commands are ignored. Defaults to false. */
+  readonly readOnly?: boolean;
+}
+
 export class Editor {
   readonly multiBuffer: MultiBuffer;
   private _cursor: MultiBufferPoint;
@@ -60,12 +66,24 @@ export class Editor {
    * shorter lines (e.g. col 10 → col 3 on short line → col 10 on next long line).
    */
   private _goalColumn: number | undefined = undefined;
+  private _readOnly: boolean;
 
-  constructor(multiBuffer: MultiBuffer) {
+  constructor(multiBuffer: MultiBuffer, options?: EditorOptions) {
     this.multiBuffer = multiBuffer;
+    this._readOnly = options?.readOnly ?? false;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     this._cursor = { row: 0 as MultiBufferRow, column: 0 };
     this._selection = selectionAtPoint(multiBuffer, this._cursor);
+  }
+
+  /** Whether the editor is in read-only mode. */
+  get readOnly(): boolean {
+    return this._readOnly;
+  }
+
+  /** Toggle read-only mode at runtime. */
+  setReadOnly(value: boolean): void {
+    this._readOnly = value;
   }
 
   get cursor(): MultiBufferPoint {
@@ -285,6 +303,9 @@ export class Editor {
 
   /** Execute a command. */
   dispatch(command: EditorCommand): void {
+    // Read-only mode: silently ignore all text-mutating commands.
+    if (this._readOnly && _isEditCommand(command.type)) return;
+
     const snap = this.multiBuffer.snapshot();
 
     switch (command.type) {
@@ -1044,5 +1065,33 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const newRow = (start.row + lines.length - 1) as MultiBufferRow;
     const lastLine = lines[lines.length - 1] ?? "";
     return { row: newRow, column: lastLine.length };
+  }
+}
+
+/**
+ * Returns true for commands that mutate text or edit history.
+ * Used by the read-only guard in Editor.dispatch().
+ */
+function _isEditCommand(type: EditorCommand["type"]): boolean {
+  switch (type) {
+    case "insertText":
+    case "insertNewline":
+    case "insertTab":
+    case "indentLines":
+    case "dedentLines":
+    case "deleteBackward":
+    case "deleteForward":
+    case "deleteLine":
+    case "moveLine":
+    case "duplicateLine":
+    case "insertLineBelow":
+    case "insertLineAbove":
+    case "cut":
+    case "paste":
+    case "undo":
+    case "redo":
+      return true;
+    default:
+      return false;
   }
 }

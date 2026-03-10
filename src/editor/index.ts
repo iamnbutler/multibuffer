@@ -1,5 +1,6 @@
 export { moveCursor } from "./cursor.ts";
 export { Editor } from "./editor.ts";
+export type { EditorOptions } from "./editor.ts";
 export type { CommandCallback } from "./input-handler.ts";
 export { InputHandler, keyEventToCommand } from "./input-handler.ts";
 export {
