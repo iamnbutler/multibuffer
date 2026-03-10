@@ -1872,6 +1872,7 @@ describe("Editor - Read-Only Mode", () => {
 
   test("undo is ignored when read-only", () => {
     const { mb, editor } = setup("Hello");
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "buffer" });
     editor.dispatch({ type: "insertText", text: " World" });
     expect(getText(mb)).toBe("Hello World");
     editor.setReadOnly(true);
