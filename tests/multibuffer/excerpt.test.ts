@@ -148,10 +148,11 @@ describe("Empty Excerpt Edge Cases", () => {
     mb.addExcerpt(buf, excerptRange(0, 2)); // non-empty: 2 lines
 
     const [emptyInfo, nonEmptyInfo] = mb.excerpts;
+    if (!emptyInfo || !nonEmptyInfo) throw new Error("Expected two excerpts");
     // Empty excerpt contributes zero rows
-    expect(num(emptyInfo?.endRow) - num(emptyInfo?.startRow)).toBe(0);
+    expect(num(emptyInfo.endRow) - num(emptyInfo.startRow)).toBe(0);
     // Non-empty excerpt starts immediately at the same multibuffer row
-    expect(num(nonEmptyInfo?.startRow)).toBe(num(emptyInfo?.endRow));
+    expect(num(nonEmptyInfo.startRow)).toBe(num(emptyInfo.endRow));
     // Total line count comes from non-empty excerpt only
     expect(mb.lineCount).toBe(2);
   });

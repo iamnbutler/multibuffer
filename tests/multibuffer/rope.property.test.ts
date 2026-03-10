@@ -179,7 +179,9 @@ describe("Rope property: line(n) matches split-on-newline", () => {
       // Verify every line
       const lines = str.split("\n");
       for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-        expect(rope.line(lineIdx)).toBe(lines[lineIdx]);
+        const expected = lines[lineIdx];
+        if (expected === undefined) throw new Error(`Expected line at index ${lineIdx}`);
+        expect(rope.line(lineIdx) ?? "").toBe(expected);
       }
     }
   });

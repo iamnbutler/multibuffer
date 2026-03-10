@@ -21,6 +21,8 @@ import type {
 export interface EditorOptions {
   /** Enable bracket matching (opt-in). Requires issue #68 implementation. */
   bracketMatching?: boolean;
+  /** When true, all text-mutating commands are ignored. Defaults to false. */
+  readOnly?: boolean;
 }
 
 /** Direction for cursor movement and selection extension. */

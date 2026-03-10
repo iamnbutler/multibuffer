@@ -1,5 +1,4 @@
 export { moveCursor } from "./cursor.ts";
-export type { EditorOptions } from "./editor.ts";
 export { Editor } from "./editor.ts";
 export {
   createMultiBufferEditor,

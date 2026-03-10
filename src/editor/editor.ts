@@ -25,7 +25,7 @@ import {
   selectAll,
   selectionAtPoint,
 } from "./selection.ts";
-import type { EditorCommand } from "./types.ts";
+import type { EditorCommand, EditorOptions } from "./types.ts";
 
 /** A single atomic edit within one excerpt/buffer. */
 interface EditOp {
@@ -43,12 +43,6 @@ interface HistoryEntry {
   readonly edits: ReadonlyArray<EditOp>;
   readonly cursorBefore: MultiBufferPoint;
   readonly selectionBefore: Selection | undefined;
-}
-
-/** Options for constructing an Editor. */
-export interface EditorOptions {
-  /** When true, all text-mutating commands are ignored. Defaults to false. */
-  readonly readOnly?: boolean;
 }
 
 export class Editor {
