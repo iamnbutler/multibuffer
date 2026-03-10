@@ -428,29 +428,231 @@ describe("MultiBuffer - Clipping", () => {
 
 
 describe("MultiBuffer - Anchors", () => {
-  test.todo("createAnchor returns anchor for valid position", () => {});
-  test.todo("createAnchor returns undefined for invalid position", () => {});
-  test.todo("anchor stores correct excerpt ID", () => {});
-  test.todo("anchor stores correct buffer offset", () => {});
-  test.todo("resolveAnchor returns current position", () => {});
-  test.todo("resolveAnchor follows replaced_excerpts chain", () => {});
+  test("createAnchor returns anchor for valid position", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+  });
+
+  test("createAnchor returns undefined for invalid position", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Row 99 does not exist in the multibuffer
+    const a = mb.createAnchor(mbPoint(99, 0), Bias.Right);
+    expect(a).toBeUndefined();
+  });
+
+  test("anchor stores correct excerpt ID", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    const excerptId = mb.addExcerpt(buf, excerptRange(0, 1));
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    expect(a.excerptId.index).toBe(excerptId.index);
+    expect(a.excerptId.generation).toBe(excerptId.generation);
+  });
+
+  test("anchor stores correct buffer offset", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // "Hello": ASCII, so offset == column index
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    expect(num(a.textAnchor.offset)).toBe(3);
+  });
+
+  test("resolveAnchor returns current position", () => {
+    const buf = createBuffer(createBufferId(), "Hello\nWorld");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    const a = mb.createAnchor(mbPoint(1, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 2);
+  });
+
+  test("resolveAnchor follows replaced_excerpts chain", () => {
+    const buf = createBuffer(createBufferId(), "AAA\nBBB\nCCC");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    const a = mb.createAnchor(mbPoint(1, 1), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace the single excerpt with two smaller ones
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 2), excerptRange(2, 3)]);
+
+    // Anchor in "BBB" at col 1 should resolve via the replacement chain
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 1);
+  });
 });
 
 
 describe("MultiBuffer - Anchor Survival", () => {
-  test.todo("anchor survives insert before anchor", () => {});
-  test.todo("anchor survives insert after anchor", () => {});
-  test.todo("anchor with Bias.Left at insert position stays left", () => {});
-  test.todo("anchor with Bias.Right at insert position moves right", () => {});
-  test.todo("anchor survives delete that doesn't include anchor", () => {});
-  test.todo("anchor at deleted position resolves to boundary", () => {});
+  test("anchor survives insert before anchor", () => {
+    const buf = createBuffer(createBufferId(), "Hello World");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 6 (start of "World")
+    const a = mb.createAnchor(mbPoint(0, 6), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Insert "XX" before the anchor (at col 0)
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "XX");
+    // Anchor should shift right by 2
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 8);
+  });
+
+  test("anchor survives insert after anchor", () => {
+    const buf = createBuffer(createBufferId(), "Hello World");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 3 (inside "Hel|lo")
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Insert "XX" after the anchor (at col 6)
+    mb.edit(mbPoint(0, 6), mbPoint(0, 6), "XX");
+    // Anchor should be unchanged
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 3);
+  });
+
+  test("anchor with Bias.Left at insert position stays left", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 3 with Left bias
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Left);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Insert "XX" exactly at col 3
+    mb.edit(mbPoint(0, 3), mbPoint(0, 3), "XX");
+    // Bias.Left: anchor stays at the insert point (col 3), not after
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 3);
+  });
+
+  test("anchor with Bias.Right at insert position moves right", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 3 with Right bias
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Insert "XX" exactly at col 3
+    mb.edit(mbPoint(0, 3), mbPoint(0, 3), "XX");
+    // Bias.Right: anchor moves past the inserted text (col 5)
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 5);
+  });
+
+  test("anchor survives delete that doesn't include anchor", () => {
+    const buf = createBuffer(createBufferId(), "Hello World");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 7 (second char of "World")
+    const a = mb.createAnchor(mbPoint(0, 7), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Delete "Hello " (cols 0-6, 6 chars)
+    mb.edit(mbPoint(0, 0), mbPoint(0, 6), "");
+    // Anchor shifts left by 6: col 7 → col 1
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 1);
+  });
+
+  test("anchor at deleted position resolves to boundary", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    // Anchor at col 3 (inside the deleted range)
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Delete cols 2-4 ("ll"): anchor at col 3 is within [2, 4]
+    mb.edit(mbPoint(0, 2), mbPoint(0, 4), "");
+    // Anchor clamps to the delete boundary (col 2)
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 2);
+  });
 });
 
 
 describe("MultiBuffer - Anchor Survival Through Replacement", () => {
-  test.todo("anchor survives excerpt replacement", () => {});
-  test.todo("anchor follows replacement chain", () => {});
-  test.todo("anchor degrades when excerpt removed without replacement", () => {});
+  test("anchor survives excerpt replacement", () => {
+    const buf = createBuffer(createBufferId(), "AAA\nBBB\nCCC");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    // Anchor at row 2, col 1 (inside "CCC")
+    const a = mb.createAnchor(mbPoint(2, 1), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Replace the single 3-line excerpt with a fresh single 3-line excerpt
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+    // Anchor should still resolve via the replacement chain
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 2, 1);
+  });
+
+  test("anchor follows replacement chain", () => {
+    const buf = createBuffer(createBufferId(), "AAA\nBBB\nCCC");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    const a = mb.createAnchor(mbPoint(1, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Replace once: 3-line excerpt → two excerpts
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 2), excerptRange(2, 3)]);
+    // Replace again: two excerpts → one excerpt again
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 3)]);
+    // Anchor at "BBB" col 0 should survive both replacements
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 0);
+  });
+
+  test("anchor degrades when excerpt removed without replacement", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(0, 1));
+    const a = mb.createAnchor(mbPoint(0, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+    // Remove excerpt with no replacement — anchor becomes stale
+    mb.removeExcerpt(eid);
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeUndefined();
+  });
 });
 
 
