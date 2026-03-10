@@ -300,27 +300,117 @@ export class Rope {
     return result;
   }
 
-  /** Insert text at an offset. Returns a new rope. */
+  /**
+   * Insert text at an offset. Returns a new rope with structural sharing.
+   *
+   * Only rebuilds the single affected chunk; all other chunks are reused
+   * unchanged. O(chunk_size + inserted_length) instead of O(total_length).
+   */
   insert(offset: number, text: string): Rope {
     if (text.length === 0) return this;
-    const before = this.slice(0, offset);
-    const after = this.slice(offset, this._length);
-    return Rope.from(before + text + after);
+
+    const clampedOffset = Math.max(0, Math.min(offset, this._length));
+
+    // For append, use the last chunk; otherwise binary-search for the chunk.
+    const ci =
+      clampedOffset >= this._length
+        ? this._chunks.length - 1
+        : this._findChunkByOffset(clampedOffset);
+    const chunk = this._chunks[ci];
+    if (!chunk) return Rope.from(text);
+
+    const chunkStart = this._chunkOffsets[ci] ?? 0;
+    const posInChunk = clampedOffset - chunkStart;
+
+    // Splice the new text into the affected chunk, then rechunk only that portion.
+    const combined =
+      chunk.text.slice(0, posInChunk) + text + chunk.text.slice(posInChunk);
+    const newChunks = textToChunks(combined);
+
+    return new Rope([
+      ...this._chunks.slice(0, ci),
+      ...newChunks,
+      ...this._chunks.slice(ci + 1),
+    ]);
   }
 
-  /** Delete a range [start, end). Returns a new rope. */
+  /**
+   * Delete a range [start, end). Returns a new rope with structural sharing.
+   *
+   * Only rebuilds the two boundary chunks; middle chunks are dropped entirely
+   * and all other chunks are reused unchanged.
+   * O(boundary_chunk_sizes) instead of O(total_length).
+   */
   delete(start: number, end: number): Rope {
     if (start >= end) return this;
-    const before = this.slice(0, start);
-    const after = this.slice(end, this._length);
-    return Rope.from(before + after);
+
+    const clampedStart = Math.max(0, start);
+    const clampedEnd = Math.min(end, this._length);
+    if (clampedStart >= clampedEnd) return this;
+
+    const startCi = this._findChunkByOffset(clampedStart);
+    // clampedEnd >= 1 (since clampedStart >= 0 < clampedEnd), so clampedEnd - 1 >= 0.
+    const endCi = this._findChunkByOffset(clampedEnd - 1);
+
+    const startChunk = this._chunks[startCi];
+    const endChunk = this._chunks[endCi];
+    if (!startChunk || !endChunk) return this;
+
+    const startChunkOffset = this._chunkOffsets[startCi] ?? 0;
+    const endChunkOffset = this._chunkOffsets[endCi] ?? 0;
+
+    // Keep the prefix of the start chunk and the suffix of the end chunk;
+    // everything in between (including whole middle chunks) is discarded.
+    const combined =
+      startChunk.text.slice(0, clampedStart - startChunkOffset) +
+      endChunk.text.slice(clampedEnd - endChunkOffset);
+
+    const newChunks = combined.length > 0 ? textToChunks(combined) : [];
+    const resultChunks = [
+      ...this._chunks.slice(0, startCi),
+      ...newChunks,
+      ...this._chunks.slice(endCi + 1),
+    ];
+
+    // Ensure the rope always has at least one chunk (matches Rope.from("") invariant).
+    return new Rope(resultChunks.length > 0 ? resultChunks : [makeChunk("")]);
   }
 
-  /** Replace a range [start, end) with text. Returns a new rope. */
+  /**
+   * Replace a range [start, end) with text. Returns a new rope with structural sharing.
+   *
+   * Equivalent to delete + insert but fused into a single chunk rebuild pass.
+   * O(boundary_chunk_sizes + replacement_length) instead of O(total_length).
+   */
   replace(start: number, end: number, text: string): Rope {
-    const before = this.slice(0, start);
-    const after = this.slice(end, this._length);
-    return Rope.from(before + text + after);
+    if (start >= end) return this.insert(start, text);
+
+    const clampedStart = Math.max(0, start);
+    const clampedEnd = Math.min(end, this._length);
+
+    const startCi = this._findChunkByOffset(clampedStart);
+    const endCi = this._findChunkByOffset(clampedEnd > 0 ? clampedEnd - 1 : 0);
+
+    const startChunk = this._chunks[startCi];
+    const endChunk = this._chunks[endCi];
+    if (!startChunk || !endChunk) return Rope.from(text);
+
+    const startChunkOffset = this._chunkOffsets[startCi] ?? 0;
+    const endChunkOffset = this._chunkOffsets[endCi] ?? 0;
+
+    // Prefix of start chunk + replacement text + suffix of end chunk.
+    const combined =
+      startChunk.text.slice(0, clampedStart - startChunkOffset) +
+      text +
+      endChunk.text.slice(clampedEnd - endChunkOffset);
+
+    const newChunks = textToChunks(combined);
+
+    return new Rope([
+      ...this._chunks.slice(0, startCi),
+      ...newChunks,
+      ...this._chunks.slice(endCi + 1),
+    ]);
   }
 
   /** Convert a UTF-16 code unit offset to {line, col}. Binary search on chunk offsets. */
