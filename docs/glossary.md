@@ -20,6 +20,10 @@ A range defined by two [anchors](#anchor) (start and end). Because both endpoint
 
 The process of converting an anchor to a current [MultiBufferPoint](#multibufferpoint). Resolution replays edits from the anchor's recorded version to the current version to find the adjusted offset, then converts that offset to a row/column position.
 
+### Auto-Indent
+
+A behavior of the `insertNewline` command: when the cursor is on an indented line, the new line automatically receives the same leading whitespace as the current line. The indentation is detected by matching the leading spaces of the current line and prepending them to the `\n` being inserted. Lines with no leading spaces produce an unindented new line.
+
 ---
 
 ## B
@@ -78,6 +82,12 @@ Branded types enforce that these are never accidentally mixed.
 
 ## D
 
+### dedentLines
+
+An [EditorCommand](#editorcommand) that removes up to 2 leading spaces from the cursor line, or from every line touched by the current selection. All affected lines are updated in a single `_edit()` call so the operation is undone atomically. If no affected line has leading spaces the command is a no-op. Triggered by `Shift+Tab` or `Mod+[`.
+
+See also: [indentLines](#indentlines)
+
 ### Decoration
 
 A visual annotation applied to a range of text in the renderer. Decorations carry an optional CSS class name and style properties (background color, font weight, etc.) and are rendered on top of the text.
@@ -100,7 +110,7 @@ The command-dispatcher layer (`src/editor/`) that sits above the multibuffer dat
 
 ### EditorCommand
 
-A discriminated union type representing a user action the editor can execute. Examples: `insertText`, `moveCursor`, `extendSelection`, `deleteLine`, `undo`.
+A discriminated union type representing a user action the editor can execute. Examples: `insertText`, `moveCursor`, `extendSelection`, `deleteLine`, `indentLines`, `dedentLines`, `undo`.
 
 ### Excerpt
 
@@ -151,6 +161,16 @@ The left-hand area of the editor display reserved for line numbers and other mar
 ### Hit Test
 
 Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }` multibuffer position. Implemented by the renderer using fixed-height line measurements.
+
+---
+
+## I
+
+### indentLines
+
+An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line, or to every line touched by the current selection. All affected lines are updated in a single `_edit()` call so the operation is undone atomically. When `insertTab` is dispatched while a non-collapsed selection exists, it is treated as `indentLines`. Triggered by `Tab` (with a selection) or `Mod+]`.
+
+See also: [dedentLines](#dedentlines)
 
 ---
 
