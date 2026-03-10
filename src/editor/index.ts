@@ -1,6 +1,10 @@
 export { moveCursor } from "./cursor.ts";
 export type { EditorOptions } from "./editor.ts";
 export { Editor } from "./editor.ts";
+export {
+  createMultiBufferEditor,
+  createSingleBufferEditor,
+} from "./factories.ts";
 export type { CommandCallback } from "./input-handler.ts";
 export { InputHandler, keyEventToCommand } from "./input-handler.ts";
 export {
@@ -14,6 +18,7 @@ export type {
   CursorState,
   Direction,
   EditorCommand,
+  EditorOptions,
   EditorState,
   Granularity,
   ResolvedEditorState,
