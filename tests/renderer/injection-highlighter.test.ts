@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { InjectionHighlighter } from "../../src/renderer/injection-highlighter.ts";
 
-const WASM_DIR = path.join(import.meta.dir, "../../demo/wasm");
+const WASM_DIR = path.join(import.meta.dir, "../../playground/wasm");
 
 const MARKDOWN_WITH_YAML_FRONTMATTER = `---
 title: Test Document
