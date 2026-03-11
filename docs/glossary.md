@@ -146,6 +146,10 @@ The specification for creating an excerpt. Contains:
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter. When a slot is freed and reused for a new value, the generation increments, making any existing keys to that slot immediately stale. Provides O(1) stale-key detection without bookkeeping at the call site.
 
+### Goal Column
+
+A remembered column position stored by the `Editor` for vertical cursor navigation (`moveUp`, `moveDown`). When moving vertically through lines of unequal length, the cursor targets the goal column rather than the actual column of the current line. The goal column is cleared by horizontal movement or any edit, and reset at the start of each new vertical movement. This allows the cursor to return to its original column after passing through shorter intermediate lines.
+
 ### Granularity
 
 The unit of movement or deletion for an editor command: `character`, `word`, `line`, `page`, or `buffer`.
@@ -171,6 +175,18 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line, or to every line touched by the current selection. All affected lines are updated in a single `_edit()` call so the operation is undone atomically. When `insertTab` is dispatched while a non-collapsed selection exists, it is treated as `indentLines`. Triggered by `Tab` (with a selection) or `Mod+]`.
 
 See also: [dedentLines](#dedentlines)
+
+### InputHandler
+
+A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
+
+---
+
+## K
+
+### keyEventToCommand
+
+A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent` into an [EditorCommand](#editorcommand). Handles platform-specific shortcuts such as `Mod+Z` for undo and `Mod+Y` / `Mod+Shift+Z` for redo. Returns `undefined` for events that do not map to a recognized command, allowing the [InputHandler](#inputhandler) to fall through to normal text-input handling via the `input` event.
 
 ---
 
@@ -230,6 +246,12 @@ Given a multibuffer row, binary search finds the containing excerpt; subtracting
 
 ## R
 
+### Read-Only Mode
+
+A mode in which the `Editor` silently ignores all text-mutating commands. Enabled by passing `readOnly: true` to the `Editor` constructor or by calling `editor.setReadOnly(true)` at runtime. While active, `dispatch()` discards any command classified as an edit command — including `insertText`, `cut`, `redo`, `deleteLine`, `moveLine`, `duplicateLine`, `indentLines`, `dedentLines`, and others — while still processing cursor-movement commands. The current state is readable via the `editor.readOnly` getter.
+
+See: `src/editor/editor.ts`
+
 ### Renderer
 
 An interface (`src/multibuffer_renderer/types.ts`) that rendering backends implement. A renderer `mount`s into a container element, accepts a `RenderState` and lines, and handles `scrollTo` and `hitTest`. The current implementation targets the DOM; the interface allows future Canvas or WebGPU backends.
@@ -245,6 +267,12 @@ The text storage structure backing each [buffer](#buffer). A Rope splits text in
 ### Selection
 
 An [AnchorRange](#anchorrange) plus a `head` field (`"start"` or `"end"`) indicating which end of the range the cursor occupies. The head determines the direction of the selection and where the cursor is rendered.
+
+### selectWordAt
+
+A method on `Editor` that sets the selection to the full word at a given `MultiBufferPoint`, used for double-click word selection. If the target position is on a word character (`\p{L}`, `\p{N}`, or `_`), the selection expands to the word's boundaries; if it is on non-word content (whitespace or punctuation), it expands to the surrounding non-word run. Unicode-aware: handles multibyte characters including CJK and emoji via surrogate-pair stride helpers.
+
+See: `src/editor/editor.ts`
 
 ### Singleton
 
@@ -277,6 +305,16 @@ Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`,
 ### Trailing Newline (synthetic)
 
 An artificial newline appended after an excerpt's last line to visually separate it from the next excerpt. Tracked by `Excerpt.hasTrailingNewline`. Position calculations must account for this: the excerpt's effective line count is one greater than its buffer range, but the extra line contains no editable content.
+
+---
+
+## U
+
+### Undo Stack
+
+A bounded list of `HistoryEntry` values recording buffer and cursor state before each edit. Limited to `Editor._MAX_HISTORY = 100` entries; when the limit is exceeded, the oldest entry is dropped (shifted off). The complementary **redo stack** is cleared on any new edit and populated when `undo` is dispatched. Both stacks are managed inside `Editor` and are not exposed publicly.
+
+See also: [EditorCommand](#editorcommand)
 
 ---
 
