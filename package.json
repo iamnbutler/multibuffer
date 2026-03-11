@@ -25,6 +25,10 @@
     "./renderer": {
       "import": "./src/renderer/index.ts",
       "types": "./src/renderer/index.ts"
+    },
+    "./diff": {
+      "import": "./src/diff/index.ts",
+      "types": "./src/diff/index.ts"
     }
   },
   "type": "module",
