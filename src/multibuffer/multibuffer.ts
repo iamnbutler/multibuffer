@@ -33,6 +33,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   private readonly _excerptData: readonly Excerpt[];
   private readonly _buffers: ReadonlyMap<string, Buffer>;
   private readonly _replacedExcerpts: ReadonlyMap<string, ExcerptId>;
+  /**
+   * Lazily-built O(1) lookup maps: keyed by "index:generation".
+   * Snapshot is immutable, so building once and caching is safe.
+   * Avoids O(n_excerpts) Map construction on every lines()/clipPoint()/resolveAnchor() call.
+   */
+  private _excerptDataIndex: Map<string, Excerpt> | undefined = undefined;
+  private _excerptInfoIndex: Map<string, ExcerptInfo> | undefined = undefined;
 
   constructor(
     excerpts: readonly ExcerptInfo[],
@@ -49,6 +56,28 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       total += e.endRow - e.startRow;
     }
     this.lineCount = total;
+  }
+
+  /** Lazily build and return the "index:generation" → Excerpt lookup map. */
+  private get excerptDataIndex(): Map<string, Excerpt> {
+    if (!this._excerptDataIndex) {
+      this._excerptDataIndex = new Map<string, Excerpt>();
+      for (const e of this._excerptData) {
+        this._excerptDataIndex.set(`${e.id.index}:${e.id.generation}`, e);
+      }
+    }
+    return this._excerptDataIndex;
+  }
+
+  /** Lazily build and return the "index:generation" → ExcerptInfo lookup map. */
+  private get excerptInfoIndex(): Map<string, ExcerptInfo> {
+    if (!this._excerptInfoIndex) {
+      this._excerptInfoIndex = new Map<string, ExcerptInfo>();
+      for (const info of this.excerpts) {
+        this._excerptInfoIndex.set(`${info.id.index}:${info.id.generation}`, info);
+      }
+    }
+    return this._excerptInfoIndex;
   }
 
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined {
@@ -117,11 +146,8 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const clampedEnd = Math.min(endRow, this.lineCount);
     if (startRow >= clampedEnd) return [];
 
-    // Build O(1) lookup for excerpt data once instead of O(n_excerpts) find per row.
-    const dataByKey = new Map<string, Excerpt>();
-    for (const e of this._excerptData) {
-      dataByKey.set(`${e.id.index}:${e.id.generation}`, e);
-    }
+    // Use the lazily-built excerpt data index for O(1) lookups (built at most once per snapshot).
+    const dataByKey = this.excerptDataIndex;
 
     const result: string[] = [];
     // Walk excerpts in sorted order; for each that overlaps [startRow, clampedEnd),
@@ -170,11 +196,9 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       currentId = replacement;
     }
 
-    // 2. Find the excerpt data
-    const initialExcerpt = this._excerptData.find(
-      (e) =>
-        e.id.index === currentId.index &&
-        e.id.generation === currentId.generation,
+    // 2. Find the excerpt data via O(1) index (lazy-built once per snapshot)
+    const initialExcerpt = this.excerptDataIndex.get(
+      `${currentId.index}:${currentId.generation}`,
     );
     if (!initialExcerpt) return undefined;
 
@@ -209,10 +233,8 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       initialExcerpt,
     );
 
-    const info = this.excerpts.find(
-      (e) =>
-        e.id.index === resolvedExcerpt.id.index &&
-        e.id.generation === resolvedExcerpt.id.generation,
+    const info = this.excerptInfoIndex.get(
+      `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`,
     );
     if (!info) return undefined;
 
@@ -368,10 +390,8 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       const lastRow = (this.lineCount - 1) as MultiBufferRow;
-      const data = this._excerptData.find(
-        (e) =>
-          e.id.index === lastExcerpt.id.index &&
-          e.id.generation === lastExcerpt.id.generation,
+      const data = this.excerptDataIndex.get(
+        `${lastExcerpt.id.index}:${lastExcerpt.id.generation}`,
       );
       if (data) {
         const bufferRow =
@@ -392,9 +412,8 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const info = this.excerptAt(point.row);
     if (!info) return point;
 
-    const data = this._excerptData.find(
-      (e) =>
-        e.id.index === info.id.index && e.id.generation === info.id.generation,
+    const data = this.excerptDataIndex.get(
+      `${info.id.index}:${info.id.generation}`,
     );
     if (!data) return point;
 

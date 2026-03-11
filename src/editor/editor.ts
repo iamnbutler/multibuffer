@@ -82,16 +82,21 @@ export class Editor {
 
   get cursor(): MultiBufferPoint {
     if (this._selection) {
-      const snap = this.multiBuffer.snapshot();
-      // For non-collapsed selections, resolve the head anchor to get
-      // the accurate cursor position after edits may have moved it
-      if (!isCollapsed(snap, this._selection)) {
-        const head =
-          this._selection.head === "end"
-            ? this._selection.range.end
-            : this._selection.range.start;
-        const resolved = snap.resolveAnchor(head);
-        if (resolved) return resolved;
+      // Fast path: selectionAtPoint() always uses the same anchor object for both
+      // start and end (collapsed cursor). In that case _cursor is authoritative and
+      // we can skip snapshot creation and anchor resolution entirely.
+      if (this._selection.range.start !== this._selection.range.end) {
+        const snap = this.multiBuffer.snapshot();
+        // For non-collapsed selections, resolve the head anchor to get
+        // the accurate cursor position after edits may have moved it
+        if (!isCollapsed(snap, this._selection)) {
+          const head =
+            this._selection.head === "end"
+              ? this._selection.range.end
+              : this._selection.range.start;
+          const resolved = snap.resolveAnchor(head);
+          if (resolved) return resolved;
+        }
       }
     }
     // For collapsed selections or no selection, use the directly-set cursor.
