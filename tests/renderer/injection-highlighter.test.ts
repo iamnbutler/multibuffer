@@ -4,7 +4,7 @@
 
 import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { InjectionHighlighter } from "../../src/multibuffer_renderer/injection-highlighter.ts";
+import { InjectionHighlighter } from "../../src/renderer/injection-highlighter.ts";
 
 const WASM_DIR = path.join(import.meta.dir, "../../demo/wasm");
 

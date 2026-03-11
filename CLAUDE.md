@@ -6,18 +6,43 @@ A lightweight, high-performance text editor component for TypeScript/Bun.
 
 ```
 src/
-  multibuffer/           # Data model (rendering-agnostic)
-    types.ts             # Core type definitions
-    buffer.ts            # Single file's text storage
-    excerpt.ts           # Range within a buffer
-    multibuffer.ts       # Collection of excerpts
-    anchor.ts            # Stable positions that survive edits
-    selection.ts         # Anchor-based selections
+  buffer/              # Single-file text storage (no multibuffer deps)
+    rope.ts            # Rope data structure
+    buffer.ts          # Mutable buffer backed by rope
+    offset.ts          # Pure offset adjustment through edits
+    types.ts           # BufferId, BufferRow, BufferOffset, Bias, etc.
 
-  multibuffer_renderer/  # Rendering abstraction
-    types.ts             # Renderer interface
-    measurement.ts       # Line height, character width (fixed)
-    viewport.ts          # Visible range calculations
+  multibuffer/         # Multi-excerpt view over buffers
+    excerpt.ts         # Range within a buffer
+    multibuffer.ts     # Collection of excerpts
+    anchor.ts          # Stable positions that survive edits
+    slot_map.ts        # Generational arena for excerpt IDs
+    types.ts           # ExcerptId, Anchor, Selection, MultiBuffer, etc.
+
+  editor/              # Editor state machine + input handling
+    editor.ts          # Core editor logic
+    editor-view.ts     # High-level facade (Editor + Renderer + Input)
+    cursor.ts          # Cursor movement
+    selection.ts       # Selection operations
+    input-handler.ts   # Keyboard/IME input
+    factories.ts       # createSingleBufferEditor, createMultiBufferEditor
+
+  renderer/            # Rendering abstraction (DOM, Canvas, WebGPU)
+    dom.ts             # DOM renderer implementation
+    measurement.ts     # Line height, character width (fixed)
+    highlighter.ts     # Syntax highlighting
+    wrap-map.ts        # Soft line wrapping
+    theme.ts           # Color themes
+```
+
+### Subpath exports
+
+```ts
+import { createBuffer } from "multibuffer/buffer";
+import { createMultiBuffer } from "multibuffer/multibuffer";
+import { Editor } from "multibuffer/editor";
+import { createDomRenderer } from "multibuffer/renderer";
+import { everything } from "multibuffer"; // kitchen sink
 ```
 
 ## Key Constraints

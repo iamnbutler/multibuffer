@@ -9,10 +9,10 @@
  * construction cost directly impacts keypress latency.
  */
 
-import { createBuffer } from "../src/multibuffer/buffer.ts";
+import { createBuffer } from "../src/buffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type { BufferId, BufferRow, ExcerptRange, MultiBufferRow } from "../src/multibuffer/types.ts";
-import { charColToVisualCol, visualWidth, WrapMap } from "../src/multibuffer_renderer/wrap-map.ts";
+import { charColToVisualCol, visualWidth, WrapMap } from "../src/renderer/wrap-map.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
 function generateText(lines: number, lineLen = 30): string {

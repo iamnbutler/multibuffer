@@ -9,6 +9,22 @@
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"
+    },
+    "./buffer": {
+      "import": "./src/buffer/index.ts",
+      "types": "./src/buffer/index.ts"
+    },
+    "./multibuffer": {
+      "import": "./src/multibuffer/index.ts",
+      "types": "./src/multibuffer/index.ts"
+    },
+    "./editor": {
+      "import": "./src/editor/index.ts",
+      "types": "./src/editor/index.ts"
+    },
+    "./renderer": {
+      "import": "./src/renderer/index.ts",
+      "types": "./src/renderer/index.ts"
     }
   },
   "type": "module",
@@ -20,8 +36,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
-    "dev": "bun run demo/serve.ts",
-    "build:demo": "bun run demo/build.ts"
+    "dev": "bun run playground/serve.ts",
+    "build:playground": "bun run playground/build.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

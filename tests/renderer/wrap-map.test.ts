@@ -10,7 +10,7 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createBuffer } from "../../src/multibuffer/buffer.ts";
+import { createBuffer } from "../../src/buffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import {
@@ -19,7 +19,7 @@ import {
   visualWidth,
   WrapMap,
   wrapLine,
-} from "../../src/multibuffer_renderer/wrap-map.ts";
+} from "../../src/renderer/wrap-map.ts";
 import { createBufferId, excerptRange, num, resetCounters } from "../helpers.ts";
 
 describe("visualWidth", () => {

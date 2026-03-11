@@ -6,8 +6,8 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/buffer/buffer.ts";
 import { Editor } from "../../src/editor/editor.ts";
-import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBuffer } from "../../src/multibuffer/types.ts";
 import {

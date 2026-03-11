@@ -8,7 +8,7 @@
  * - Position conversion: O(1) pointToOffset, O(log n) offsetToPoint
  */
 
-import { createBuffer } from "../src/multibuffer/buffer.ts";
+import { createBuffer } from "../src/buffer/buffer.ts";
 import type { Buffer, BufferId, BufferOffset, BufferRow, BufferSnapshot } from "../src/multibuffer/types.ts";
 import { Bias } from "../src/multibuffer/types.ts";
 import type { BenchmarkSuite } from "./harness.ts";

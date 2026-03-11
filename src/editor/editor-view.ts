@@ -15,8 +15,8 @@
 
 import { resolveAnchorRange } from "../multibuffer/anchor.ts";
 import type { MultiBufferRow } from "../multibuffer/types.ts";
-import { createDomRenderer } from "../multibuffer_renderer/dom.ts";
-import type { Decoration, Measurements } from "../multibuffer_renderer/types.ts";
+import { createDomRenderer } from "../renderer/dom.ts";
+import type { Decoration, Measurements } from "../renderer/types.ts";
 import type { Editor } from "./editor.ts";
 import { createSingleBufferEditor } from "./factories.ts";
 import { InputHandler } from "./input-handler.ts";

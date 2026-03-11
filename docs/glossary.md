@@ -252,7 +252,7 @@ See: `src/editor/editor.ts`
 
 ### Renderer
 
-An interface (`src/multibuffer_renderer/types.ts`) that rendering backends implement. A renderer `mount`s into a container element, accepts a `RenderState` and lines, and handles `scrollTo` and `hitTest`. The current implementation targets the DOM; the interface allows future Canvas or WebGPU backends.
+An interface (`src/renderer/types.ts`) that rendering backends implement. A renderer `mount`s into a container element, accepts a `RenderState` and lines, and handles `scrollTo` and `hitTest`. The current implementation targets the DOM; the interface allows future Canvas or WebGPU backends.
 
 ### Rope
 
@@ -328,4 +328,4 @@ The currently visible rectangular window into the multibuffer: `startRow`, `endR
 
 ### WrapMap
 
-A mapping between buffer rows and visual rows when soft wrapping is enabled (`src/multibuffer_renderer/wrap-map.ts`). Stores the number of visual rows each buffer row occupies, with a prefix-sum array for O(1) buffer-row → visual-row conversion and binary search for the reverse direction.
+A mapping between buffer rows and visual rows when soft wrapping is enabled (`src/renderer/wrap-map.ts`). Stores the number of visual rows each buffer row occupies, with a prefix-sum array for O(1) buffer-row → visual-row conversion and binary search for the reverse direction.
