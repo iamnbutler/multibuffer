@@ -519,7 +519,9 @@ export class Editor {
     if (!this._selection) return;
 
     if (direction === "up" || direction === "down") {
-      // Resolve the current head position
+      // Resolve the current head position for column tracking.
+      // Horizontal extends update the head anchor but not this._cursor, so
+      // we must derive the initial goal column from the resolved anchor.
       const headAnchor =
         this._selection.head === "end"
           ? this._selection.range.end
@@ -532,8 +534,13 @@ export class Editor {
         this._goalColumn = headPoint.column;
       }
 
-      // Move the head using goal column as the intended column
-      const effectiveHead: MultiBufferPoint = { row: headPoint.row, column: this._goalColumn ?? headPoint.column };
+      // Use this._cursor.row (not headPoint.row) to advance the effective head.
+      // Resolved anchors snap back to the last content row for trailing-newline
+      // rows (which have no corresponding buffer row), so headPoint.row gets
+      // stuck there on repeated Shift+Down presses.  this._cursor.row is updated
+      // to the nominal target row after every vertical move, so using it allows
+      // the next key-press to advance past the excerpt header.
+      const effectiveHead: MultiBufferPoint = { row: this._cursor.row, column: this._goalColumn };
       const newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
       const newHeadAnchor = this.multiBuffer.createAnchor(newHeadPoint, Bias.Right);
       if (!newHeadAnchor) return;
@@ -574,6 +581,17 @@ export class Editor {
       );
       if (extended) {
         this._selection = extended;
+        // Keep _cursor in sync with the head so that a subsequent vertical
+        // extend uses the correct row.  Horizontal extends can wrap to the
+        // next row (Shift+Right past EOL), and without this update _cursor
+        // would still hold the pre-wrap row, causing the next Shift+Down to
+        // re-visit the same row instead of advancing further.
+        const newHead =
+          extended.head === "end" ? extended.range.end : extended.range.start;
+        const newHeadPoint = snap.resolveAnchor(newHead);
+        if (newHeadPoint) {
+          this._cursor = newHeadPoint;
+        }
       }
     }
   }
