@@ -25,7 +25,7 @@ import {
   selectAll,
   selectionAtPoint,
 } from "./selection.ts";
-import type { EditorCommand, EditorOptions } from "./types.ts";
+import type { Direction, EditorCommand, EditorOptions, Granularity } from "./types.ts";
 
 /** A single atomic edit within one excerpt/buffer. */
 interface EditOp {
@@ -427,7 +427,7 @@ export class Editor {
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
   }
 
-  private _deleteBackward(snap: MultiBufferSnapshot, granularity: import("./types.ts").Granularity): void {
+  private _deleteBackward(snap: MultiBufferSnapshot, granularity: Granularity): void {
     this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
@@ -448,7 +448,7 @@ export class Editor {
     }
   }
 
-  private _deleteForward(snap: MultiBufferSnapshot, granularity: import("./types.ts").Granularity): void {
+  private _deleteForward(snap: MultiBufferSnapshot, granularity: Granularity): void {
     this._goalColumn = undefined;
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
@@ -470,8 +470,8 @@ export class Editor {
 
   private _moveCursor(
     snap: MultiBufferSnapshot,
-    direction: "left" | "right" | "up" | "down",
-    granularity: import("./types.ts").Granularity,
+    direction: Direction,
+    granularity: Granularity,
   ): void {
     // If there's a non-collapsed selection and we're moving without shift,
     // collapse to the appropriate end first
@@ -518,8 +518,8 @@ export class Editor {
 
   private _extendSelection(
     snap: MultiBufferSnapshot,
-    direction: "left" | "right" | "up" | "down",
-    granularity: import("./types.ts").Granularity,
+    direction: Direction,
+    granularity: Granularity,
   ): void {
     if (!this._selection) return;
 
