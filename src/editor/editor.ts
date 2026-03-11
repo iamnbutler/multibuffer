@@ -409,7 +409,7 @@ export class Editor {
       // Replace selection with text
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this._edit(snap, range.start, range.end, insertText);
+        if (!this._edit(snap, range.start, range.end, insertText)) return;
         const newSnap = this.multiBuffer.snapshot();
         const newCursor = this._advancePoint(range.start, insertText, newSnap);
         this._cursor = newCursor;
@@ -420,7 +420,7 @@ export class Editor {
 
     // Insert at cursor
     const cursor = this.cursor;
-    this._edit(snap, cursor, cursor, insertText);
+    if (!this._edit(snap, cursor, cursor, insertText)) return;
     const newSnap = this.multiBuffer.snapshot();
     const newCursor = this._advancePoint(cursor, insertText, newSnap);
     this._cursor = newCursor;
@@ -432,7 +432,7 @@ export class Editor {
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this._edit(snap, range.start, range.end, "");
+        if (!this._edit(snap, range.start, range.end, "")) return;
         this._cursor = range.start;
         this._selection = selectionAtPoint(this.multiBuffer, range.start);
       }
@@ -442,7 +442,7 @@ export class Editor {
     const cursor = this.cursor;
     const target = moveCursor(snap, cursor, "left", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
-      this._edit(snap, target, cursor, "");
+      if (!this._edit(snap, target, cursor, "")) return;
       this._cursor = target;
       this._selection = selectionAtPoint(this.multiBuffer, target);
     }
@@ -453,7 +453,7 @@ export class Editor {
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this._edit(snap, range.start, range.end, "");
+        if (!this._edit(snap, range.start, range.end, "")) return;
         this._cursor = range.start;
         this._selection = selectionAtPoint(this.multiBuffer, range.start);
       }
@@ -463,7 +463,7 @@ export class Editor {
     const cursor = this.cursor;
     const target = moveCursor(snap, cursor, "right", granularity);
     if (target.row !== cursor.row || target.column !== cursor.column) {
-      this._edit(snap, cursor, target, "");
+      if (!this._edit(snap, cursor, target, "")) return;
       this._selection = selectionAtPoint(this.multiBuffer, cursor);
     }
   }
@@ -664,7 +664,7 @@ export class Editor {
       newCursorRow = prevRow;
     }
 
-    this._edit(snap, deleteStart, deleteEnd, "");
+    if (!this._edit(snap, deleteStart, deleteEnd, "")) return;
     const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
     this._cursor = newCursor;
     this._selection = selectionAtPoint(this.multiBuffer, newCursor);
@@ -694,7 +694,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
       const editStart: MultiBufferPoint = { row, column: 0 };
       const editEnd: MultiBufferPoint = { row: belowRow, column: belowLineText.length };
-      this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`);
+      if (!this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`)) return;
 
       const newCursor: MultiBufferPoint = { row: belowRow, column: cursor.column };
       this._cursor = newCursor;
@@ -706,7 +706,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
       const editStart: MultiBufferPoint = { row: aboveRow, column: 0 };
       const editEnd: MultiBufferPoint = { row, column: currentLineText.length };
-      this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`);
+      if (!this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`)) return;
 
       const newCursor: MultiBufferPoint = { row: aboveRow, column: cursor.column };
       this._cursor = newCursor;
@@ -725,7 +725,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
     if (direction === "down") {
       const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-      this._edit(snap, insertPoint, insertPoint, `\n${currentLineText}`);
+      if (!this._edit(snap, insertPoint, insertPoint, `\n${currentLineText}`)) return;
 
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: cursor.column };
@@ -733,7 +733,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._selection = selectionAtPoint(this.multiBuffer, newCursor);
     } else {
       const insertPoint: MultiBufferPoint = { row, column: 0 };
-      this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`);
+      if (!this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`)) return;
 
       this._cursor = { row, column: cursor.column };
       this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
@@ -753,7 +753,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
 
     const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-    this._edit(snap, insertPoint, insertPoint, `\n${indent}`);
+    if (!this._edit(snap, insertPoint, insertPoint, `\n${indent}`)) return;
 
     // Move cursor to the new line after any indentation
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
@@ -774,7 +774,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
     // Insert the indented blank line before the current line
     const insertPoint: MultiBufferPoint = { row, column: 0 };
-    this._edit(snap, insertPoint, insertPoint, `${indent}\n`);
+    if (!this._edit(snap, insertPoint, insertPoint, `${indent}\n`)) return;
 
     // Cursor moves to the new blank line after any indentation
     const newCursor: MultiBufferPoint = { row, column: indent.length };
@@ -798,7 +798,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
 
-    this._edit(snap, rangeStart, rangeEnd, indented.join("\n"));
+    if (!this._edit(snap, rangeStart, rangeEnd, indented.join("\n"))) return;
 
     // Place cursor at its shifted position
     const cursor = this.cursor;
@@ -851,7 +851,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
     }
 
-    this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"));
+    if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"))) return;
 
     // Adjust cursor column
     const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
@@ -883,7 +883,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     if (this._selection && !isCollapsed(snap, this._selection)) {
       const range = resolveAnchorRange(snap, this._selection.range);
       if (range) {
-        this._edit(snap, range.start, range.end, "");
+        if (!this._edit(snap, range.start, range.end, "")) return;
         this._cursor = range.start;
         this._selection = selectionAtPoint(this.multiBuffer, range.start);
       }
@@ -917,15 +917,21 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
    * Handles cross-excerpt ranges by splitting into per-excerpt edits
    * applied bottom-to-top so that row numbers for higher excerpts
    * aren't shifted during processing.
+   *
+   * Returns false if the edit was rejected (e.g. targeting a non-editable excerpt).
    */
   private _edit(
     snap: MultiBufferSnapshot,
     start: MultiBufferPoint,
     end: MultiBufferPoint,
     newText: string,
-  ): void {
+  ): boolean {
     const startBuf = snap.toBufferPoint(start);
     const endBuf = snap.toBufferPoint(end);
+
+    // Reject edits that touch non-editable excerpts
+    if (startBuf && !startBuf.excerpt.editable) return false;
+    if (endBuf && !endBuf.excerpt.editable) return false;
 
     // Same excerpt (or same point) — single edit
     if (
@@ -944,7 +950,14 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
       this._redoStack = [];
       this.multiBuffer.edit(start, end, newText);
-      return;
+      return true;
+    }
+
+    // Cross-excerpt: reject if any spanned excerpt is non-editable
+    for (const exc of snap.excerpts) {
+      if (exc.startRow >= startBuf.excerpt.startRow && exc.startRow <= endBuf.excerpt.startRow) {
+        if (!exc.editable) return false;
+      }
     }
 
     // Cross-excerpt: split into per-excerpt edits, applied bottom-to-top
@@ -972,6 +985,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.shift();
     }
     this._redoStack = [];
+    return true;
   }
 
   /**

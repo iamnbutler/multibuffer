@@ -106,6 +106,7 @@ export interface Excerpt {
   readonly buffer: BufferSnapshot;
   readonly range: ExcerptRange;
   readonly hasTrailingNewline: boolean;
+  readonly editable: boolean;
   readonly textSummary: TextSummary;
 }
 
@@ -119,6 +120,7 @@ export interface ExcerptInfo {
   readonly startRow: MultiBufferRow;
   readonly endRow: MultiBufferRow;
   readonly hasTrailingNewline: boolean;
+  readonly editable: boolean;
 }
 
 /**
@@ -166,7 +168,7 @@ export interface MultiBuffer {
   addExcerpt(
     buffer: import("../buffer/types.ts").Buffer,
     range: ExcerptRange,
-    options?: { hasTrailingNewline?: boolean },
+    options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId;
   removeExcerpt(excerptId: ExcerptId): void;
   setExcerptsForBuffer(

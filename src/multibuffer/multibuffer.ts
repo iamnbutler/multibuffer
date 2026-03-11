@@ -488,17 +488,18 @@ class MultiBufferImpl implements MultiBuffer {
   addExcerpt(
     buffer: Buffer,
     range: ExcerptRange,
-    options?: { hasTrailingNewline?: boolean },
+    options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId {
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
     this._buffers.set(buffer.id as string, buffer);
     const snapshot = buffer.snapshot();
     const hasTrailing = options?.hasTrailingNewline ?? false;
+    const editable = options?.editable ?? true;
     // Insert a placeholder to allocate the slot and get the key.
     // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
     const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
     // Build the excerpt with its own ID, then set the real value.
-    const excerpt = createExcerpt(id, snapshot, range, hasTrailing);
+    const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
     this._excerpts.set(id, excerpt);
     this._order.push(id);
     this._rebuildCache();
@@ -600,6 +601,7 @@ class MultiBufferImpl implements MultiBuffer {
       snapshot,
       newRange,
       oldExcerpt.hasTrailingNewline,
+      oldExcerpt.editable,
     );
     this._excerpts.set(excerptId, newExcerpt);
     this._rebuildCache();
@@ -725,7 +727,7 @@ class MultiBufferImpl implements MultiBuffer {
         primary: exc.range.primary,
       };
 
-      const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline);
+      const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline, exc.editable);
       this._excerpts.set(id, refreshed);
     }
 
