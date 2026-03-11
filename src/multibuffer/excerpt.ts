@@ -90,6 +90,7 @@ export function createExcerpt(
   buffer: BufferSnapshot,
   range: ExcerptRange,
   hasTrailingNewline: boolean,
+  editable = true,
 ): Excerpt {
   const endRow = range.context.end.row;
   if (endRow > buffer.lineCount) {
@@ -104,6 +105,7 @@ export function createExcerpt(
     buffer,
     range,
     hasTrailingNewline,
+    editable,
     textSummary: computeExcerptSummary(buffer, range),
   };
 }
@@ -126,6 +128,7 @@ export function toExcerptInfo(
     startRow,
     endRow,
     hasTrailingNewline: excerpt.hasTrailingNewline,
+    editable: excerpt.editable,
   };
 }
 

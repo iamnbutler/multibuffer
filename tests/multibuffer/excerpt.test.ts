@@ -84,6 +84,7 @@ describe("ExcerptInfo", () => {
       startRow: mbRow(0),
       endRow: mbRow(10),
       hasTrailingNewline: false,
+      editable: true,
     };
 
     const lineCount = num(info.endRow) - num(info.startRow);
@@ -98,6 +99,7 @@ describe("ExcerptInfo", () => {
       startRow: mbRow(0),
       endRow: mbRow(5),
       hasTrailingNewline: false,
+      editable: true,
     };
 
     const excerpt2: ExcerptInfo = {
@@ -107,6 +109,7 @@ describe("ExcerptInfo", () => {
       startRow: mbRow(5),
       endRow: mbRow(15),
       hasTrailingNewline: false,
+      editable: true,
     };
 
     expect(num(excerpt2.startRow)).toBe(num(excerpt1.endRow));
@@ -134,6 +137,7 @@ describe("Empty Excerpt Edge Cases", () => {
       startRow: mbRow(10),
       endRow: mbRow(10), // Same - zero lines
       hasTrailingNewline: false,
+      editable: true,
     };
 
     const lineCount = num(info.endRow) - num(info.startRow);
@@ -189,6 +193,7 @@ describe("Trailing Newline Handling", () => {
       startRow: mbRow(0),
       endRow: mbRow(5),
       hasTrailingNewline: false,
+      editable: true,
     };
 
     const withNewline: ExcerptInfo = {
@@ -198,6 +203,7 @@ describe("Trailing Newline Handling", () => {
       startRow: mbRow(0),
       endRow: mbRow(6), // One extra line for trailing newline
       hasTrailingNewline: true,
+      editable: true,
     };
 
     expect(num(withNewline.endRow) - num(withoutNewline.endRow)).toBe(1);
