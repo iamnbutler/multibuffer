@@ -37,7 +37,7 @@ function _nextBufferId(): BufferId {
  */
 export function createSingleBufferEditor(
   text: string,
-  _options?: EditorOptions,
+  options?: EditorOptions,
 ): Editor {
   const buffer = createBuffer(_nextBufferId(), text);
   const mb = createMultiBuffer();
@@ -51,7 +51,7 @@ export function createSingleBufferEditor(
     primary: { start: { row: startRow, column: 0 }, end: { row: endRow, column: 0 } },
   };
   mb.addExcerpt(buffer, fullRange);
-  return new Editor(mb);
+  return new Editor(mb, options);
 }
 
 /**
@@ -70,7 +70,7 @@ export function createSingleBufferEditor(
  */
 export function createMultiBufferEditor(
   multiBuffer: MultiBuffer,
-  _options?: EditorOptions,
+  options?: EditorOptions,
 ): Editor {
-  return new Editor(multiBuffer);
+  return new Editor(multiBuffer, options);
 }
