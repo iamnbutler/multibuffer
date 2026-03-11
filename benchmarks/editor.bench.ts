@@ -17,7 +17,7 @@
 import { Editor } from "../src/editor/editor.ts";
 import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
-import type { BufferId, BufferRow, MultiBufferRow } from "../src/multibuffer/types.ts";
+import type { BufferId, BufferRow, ExcerptRange, MultiBufferRow } from "../src/multibuffer/types.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
 function generateText(lines: number): string {
@@ -49,6 +49,7 @@ let editorInsert10k: Editor;
 let editorDelete1k: Editor;
 let editorMove1k: Editor;
 let editorNewline1k: Editor;
+let editorInsert100excerpts: Editor;
 
 export const editorBenchmarks: BenchmarkSuite = {
   name: "Editor dispatch (keypress latency)",
@@ -139,6 +140,35 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         editorNewline1k.dispatch({ type: "insertNewline" });
+      },
+    },
+    {
+      // Multi-excerpt editor: 100 excerpts of 10 lines each.
+      // Measures the cost of insertText when snapshot.lines() and snapshot.clipPoint()
+      // must look up excerpt data. With the lazy-cached index map, the O(n_excerpts)
+      // Map construction in lines() is paid at most once per snapshot instead of
+      // once per call; cursor getter skips snapshot entirely for collapsed cursors.
+      name: "insertText - single char (100 excerpts × 10 lines)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        const mb = createMultiBuffer();
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const buf = createBuffer("bench-multi" as BufferId, generateText(1000));
+        for (let i = 0; i < 100; i++) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+          const start = { row: (i * 10) as BufferRow, column: 0 };
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+          const end = { row: ((i + 1) * 10) as BufferRow, column: 0 };
+          const r: ExcerptRange = { context: { start, end }, primary: { start, end } };
+          mb.addExcerpt(buf, r);
+        }
+        editorInsert100excerpts = new Editor(mb);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert100excerpts.setCursor({ row: 500 as MultiBufferRow, column: 10 });
+      },
+      fn: () => {
+        editorInsert100excerpts.dispatch({ type: "insertText", text: "a" });
       },
     },
   ],
