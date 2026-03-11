@@ -14,6 +14,7 @@ import type {
   Bias,
   Buffer,
   BufferPoint,
+  BufferRow,
   BufferSnapshot,
   EditEntry,
   Excerpt,
@@ -86,7 +87,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       excerpt: info,
       point: {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        row: bufferRow as import("./types.ts").BufferRow,
+        row: bufferRow as BufferRow,
         column: point.column,
       },
     };
@@ -139,13 +140,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       const offsetStart = rowStart - info.startRow;
       const offsetEnd = rowEnd - info.startRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const bufStartRow = (info.range.context.start.row + offsetStart) as import("./types.ts").BufferRow;
+      const bufStartRow = (info.range.context.start.row + offsetStart) as BufferRow;
       // Clamp to the excerpt's actual buffer range to avoid requesting rows
       // past the buffer's line count (hasTrailingNewline extends endRow beyond
       // the buffer range, but those rows should produce empty strings).
       const rangeLines = info.range.context.end.row - info.range.context.start.row;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const bufEndRow = (info.range.context.start.row + Math.min(offsetEnd, rangeLines)) as import("./types.ts").BufferRow;
+      const bufEndRow = (info.range.context.start.row + Math.min(offsetEnd, rangeLines)) as BufferRow;
       const excerptLines = data.buffer.lines(bufStartRow, bufEndRow);
       for (const line of excerptLines) {
         result.push(line);
@@ -377,7 +378,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
         const bufferRow =
           lastExcerpt.range.context.end.row - 1;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        const lineLen = data.buffer.line(bufferRow as import("./types.ts").BufferRow).length;
+        const lineLen = data.buffer.line(bufferRow as BufferRow).length;
         return { row: lastRow, column: lineLen };
       }
       return { row: lastRow, column: 0 };
@@ -402,7 +403,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const bufferRow = info.range.context.start.row + offsetInExcerpt;
     const bufferPoint = data.buffer.clipPoint(
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      { row: bufferRow as import("./types.ts").BufferRow, column: point.column },
+      { row: bufferRow as BufferRow, column: point.column },
       bias,
     );
     return { row: point.row, column: bufferPoint.column };
@@ -563,9 +564,9 @@ class MultiBufferImpl implements MultiBuffer {
     const oldStart = oldExcerpt.range.context.start.row;
     const oldEnd = oldExcerpt.range.context.end.row;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newStart = Math.max(0, oldStart - linesBefore) as import("./types.ts").BufferRow;
+    const newStart = Math.max(0, oldStart - linesBefore) as BufferRow;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newEnd = Math.min(snapshot.lineCount, oldEnd + linesAfter) as import("./types.ts").BufferRow;
+    const newEnd = Math.min(snapshot.lineCount, oldEnd + linesAfter) as BufferRow;
 
     const newRange: ExcerptRange = {
       context: {
@@ -664,7 +665,7 @@ class MultiBufferImpl implements MultiBuffer {
 
   private _refreshExcerptsForBuffer(
     buffer: Buffer,
-    editRow?: import("./types.ts").BufferRow,
+    editRow?: BufferRow,
     lineDelta?: number,
   ): void {
     const newSnap = buffer.snapshot();
@@ -682,7 +683,7 @@ class MultiBufferImpl implements MultiBuffer {
       if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
         if (editRow >= exc.range.context.start.row && editRow < exc.range.context.end.row) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
-          endRow = (endRow + lineDelta) as import("./types.ts").BufferRow;
+          endRow = (endRow + lineDelta) as BufferRow;
         }
       }
 
@@ -691,12 +692,12 @@ class MultiBufferImpl implements MultiBuffer {
       const clampedEndRow = Math.min(
         endRow,
         newSnap.lineCount,
-      ) as import("./types.ts").BufferRow;
+      ) as BufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedStartRow = Math.min(
         exc.range.context.start.row,
         clampedEndRow,
-      ) as import("./types.ts").BufferRow;
+      ) as BufferRow;
       const clampedRange: ExcerptRange = {
         context: {
           start: { row: clampedStartRow, column: exc.range.context.start.column },
