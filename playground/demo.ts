@@ -3,11 +3,12 @@
  */
 
 import { createBuffer } from "../src/buffer/buffer.ts";
+import type { BufferId } from "../src/buffer/types.ts";
+import { createUnifiedDiff } from "../src/diff/unified.ts";
 import { Editor } from "../src/editor/editor.ts";
 import { InputHandler } from "../src/editor/input-handler.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type {
-  BufferId,
   BufferPoint,
   BufferRow,
   Buffer as MbBuffer,
@@ -18,6 +19,7 @@ import { createDomRenderer } from "../src/renderer/dom.ts";
 import { Highlighter } from "../src/renderer/highlighter.ts";
 import { createViewport } from "../src/renderer/measurement.ts";
 import type { Measurements } from "../src/renderer/types.ts";
+import { mountDiffView } from "./diff-renderer.ts";
 import { sources } from "./sources.gen.ts";
 
 /** Identifies a named fixture scenario in the demo. */
@@ -28,11 +30,15 @@ type ScenarioId =
   | "unicode"
   | "long-lines"
   | "empty"
-  | "single-line";
+  | "single-line"
+  | "diff-single"
+  | "diff-multi";
 
 interface Scenario {
   readonly id: ScenarioId;
   readonly label: string;
+  /** If true, this scenario renders a diff view instead of the editor. */
+  readonly isDiff?: boolean;
   build(m: MultiBuffer): void;
 }
 
@@ -330,21 +336,160 @@ async function main() {
         });
       },
     },
+    {
+      id: "diff-single",
+      label: "Unified Diff (single)",
+      isDiff: true,
+      build() {
+        // no-op: diff scenarios render via mountDiffView
+      },
+    },
+    {
+      id: "diff-multi",
+      label: "Unified Diff (multi)",
+      isDiff: true,
+      build() {
+        // no-op: diff scenarios render via mountDiffView
+      },
+    },
   ];
 
   let activeScenarioId: ScenarioId = "all";
+  let diffUnmount: (() => void) | null = null;
+
+  // Scroll container created by the DomRenderer — we toggle its visibility for diff mode
+  const scrollContainer = container.firstElementChild;
 
   function switchScenario(id: ScenarioId): void {
     if (id === activeScenarioId) return;
     activeScenarioId = id;
-    const toRemove = mb.excerpts.map((e) => e.id);
-    for (const excerptId of toRemove) {
-      mb.removeExcerpt(excerptId);
+
+    // Clean up previous diff view if any
+    if (diffUnmount) {
+      diffUnmount();
+      diffUnmount = null;
     }
+
     const scenario = scenarios.find((s) => s.id === id);
-    scenario?.build(mb);
+    if (!scenario) return;
+
+    if (scenario.isDiff) {
+      // Hide the editor scroll container
+      if (scrollContainer instanceof HTMLElement) {
+        scrollContainer.style.display = "none";
+      }
+      if (container) diffUnmount = renderDiffScenario(id, container);
+    } else {
+      // Show the editor scroll container
+      if (scrollContainer instanceof HTMLElement) {
+        scrollContainer.style.display = "";
+      }
+      const toRemove = mb.excerpts.map((e) => e.id);
+      for (const excerptId of toRemove) {
+        mb.removeExcerpt(excerptId);
+      }
+      scenario.build(mb);
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+      editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
+    }
+  }
+
+  function renderDiffScenario(
+    id: ScenarioId,
+    target: HTMLElement,
+  ): () => void {
+    if (id === "diff-single") {
+      return renderSingleBufferDiff(target);
+    }
+    return renderMultiBufferDiff(target);
+  }
+
+  function renderSingleBufferDiff(target: HTMLElement): () => void {
+    // Use the first source file and create a modified version
+    const src = sources[0];
+    if (!src) return () => {};
+
+    const oldText = src.content;
+    const oldLines = oldText.split("\n");
+    const newLines = [...oldLines];
+
+    // Simulate realistic edits: modify some lines, add some, remove some
+    if (newLines.length > 3) {
+      newLines[2] = `${newLines[2]} // updated`;
+    }
+    if (newLines.length > 8) {
+      newLines.splice(8, 0, "// NEW: inserted line", "// NEW: another inserted line");
+    }
+    if (newLines.length > 5) {
+      newLines.splice(5, 1); // delete one line
+    }
+    const newText = newLines.join("\n");
+
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
-    editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
+    const oldId = `${src.path} (before)` as BufferId;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+    const newId = `${src.path} (after)` as BufferId;
+
+    const diff = createUnifiedDiff(oldId, oldText, newId, newText);
+    return mountDiffView(target, [{ label: src.path, diff }]);
+  }
+
+  function renderMultiBufferDiff(target: HTMLElement): () => void {
+    const files: Array<{ label: string; diff: ReturnType<typeof createUnifiedDiff> }> = [];
+
+    // Create diffs for up to 4 source files with varied edit patterns
+    const editPatterns = [
+      // Pattern 0: modify a few lines
+      (lines: string[]) => {
+        const out = [...lines];
+        if (out.length > 2) out[1] = `${out[1]} // refactored`;
+        if (out.length > 6) out[5] = `${out[5]} // updated`;
+        return out;
+      },
+      // Pattern 1: add lines
+      (lines: string[]) => {
+        const out = [...lines];
+        const insertAt = Math.min(4, out.length);
+        out.splice(insertAt, 0, "  // TODO: handle edge case", "  // TODO: add tests");
+        return out;
+      },
+      // Pattern 2: remove lines
+      (lines: string[]) => {
+        const out = [...lines];
+        if (out.length > 10) out.splice(3, 2);
+        return out;
+      },
+      // Pattern 3: mixed edits
+      (lines: string[]) => {
+        const out = [...lines];
+        if (out.length > 4) out[3] = "  // rewritten logic";
+        if (out.length > 8) out.splice(7, 1);
+        if (out.length > 6) out.splice(5, 0, "  // added validation");
+        return out;
+      },
+    ];
+
+    const maxFiles = Math.min(4, sources.length);
+    for (let i = 0; i < maxFiles; i++) {
+      const src = sources[i];
+      if (!src) continue;
+
+      const pattern = editPatterns[i % editPatterns.length];
+      if (!pattern) continue;
+
+      const oldLines = src.content.split("\n");
+      const newLines = pattern(oldLines);
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+      const oldId = `${src.path} (old)` as BufferId;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+      const newId = `${src.path} (new)` as BufferId;
+
+      const diff = createUnifiedDiff(oldId, src.content, newId, newLines.join("\n"));
+      files.push({ label: src.path, diff });
+    }
+
+    return mountDiffView(target, files);
   }
 
   function createScenarioPicker(): HTMLElement {
