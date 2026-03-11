@@ -14,7 +14,7 @@ import {
   type Theme,
 } from "../../src/editor/editor-view.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
-import type { Decoration } from "../../src/multibuffer_renderer/types.ts";
+import type { Decoration } from "../../src/renderer/types.ts";
 
 // ── Type export smoke test ──────────────────────────────────────────────────
 

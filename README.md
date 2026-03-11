@@ -40,7 +40,7 @@ src/
     input-handler.ts          Hidden textarea for keyboard input + key→command mapping
     types.ts                  EditorCommand union type, Direction, Granularity
 
-  multibuffer_renderer/     DOM renderer
+  renderer/     DOM renderer
     dom.ts                    Line pooling, viewport rendering, cursor/selection display
     wrap-map.ts               Soft wrap via prefix sum (buffer row ↔ visual row)
     highlighter.ts            Tree-sitter WASM syntax highlighting

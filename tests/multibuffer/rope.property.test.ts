@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Rope } from "../../src/multibuffer/rope.ts";
+import { Rope } from "../../src/buffer/rope.ts";
 
 // ── Deterministic PRNG ────────────────────────────────────────────────────────
 

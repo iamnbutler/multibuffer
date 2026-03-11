@@ -6,7 +6,7 @@
  * Snapshots are immutable copies of the excerpt list + info.
  */
 
-import { adjustOffset } from "./anchor.ts";
+import { adjustOffset } from "../buffer/offset.ts";
 import { createExcerpt, toExcerptInfo } from "./excerpt.ts";
 import { SlotMap } from "./slot_map.ts";
 import type {

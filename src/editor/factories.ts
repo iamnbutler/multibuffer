@@ -5,7 +5,7 @@
  * while leaving the low-level API available for advanced multi-buffer scenarios.
  */
 
-import { createBuffer } from "../multibuffer/buffer.ts";
+import { createBuffer } from "../buffer/buffer.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
 import type {
   BufferId,

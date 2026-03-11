@@ -33,7 +33,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# Generated demo files
-demo/sources.gen.ts
-demo/dist/
+# Generated playground files
+playground/sources.gen.ts
+playground/dist/
 _site/

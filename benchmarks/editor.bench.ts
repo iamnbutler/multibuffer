@@ -14,8 +14,8 @@
  * - insertNewline: Enter key with auto-indent
  */
 
+import { createBuffer } from "../src/buffer/buffer.ts";
 import { Editor } from "../src/editor/editor.ts";
-import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type { BufferId, BufferRow, ExcerptRange, MultiBufferRow } from "../src/multibuffer/types.ts";
 import type { BenchmarkSuite } from "./harness.ts";

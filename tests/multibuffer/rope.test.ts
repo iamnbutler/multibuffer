@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Rope } from "../../src/multibuffer/rope.ts";
+import { Rope } from "../../src/buffer/rope.ts";
 
 describe("Rope - Construction", () => {
   test("empty rope", () => {

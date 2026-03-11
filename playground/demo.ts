@@ -2,9 +2,9 @@
  * Demo harness for the multibuffer DOM renderer with editing support.
  */
 
+import { createBuffer } from "../src/buffer/buffer.ts";
 import { Editor } from "../src/editor/editor.ts";
 import { InputHandler } from "../src/editor/input-handler.ts";
-import { createBuffer } from "../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type {
   BufferId,
@@ -14,10 +14,10 @@ import type {
   MultiBuffer,
   MultiBufferRow,
 } from "../src/multibuffer/types.ts";
-import { createDomRenderer } from "../src/multibuffer_renderer/dom.ts";
-import { Highlighter } from "../src/multibuffer_renderer/highlighter.ts";
-import { createViewport } from "../src/multibuffer_renderer/measurement.ts";
-import type { Measurements } from "../src/multibuffer_renderer/types.ts";
+import { createDomRenderer } from "../src/renderer/dom.ts";
+import { Highlighter } from "../src/renderer/highlighter.ts";
+import { createViewport } from "../src/renderer/measurement.ts";
+import type { Measurements } from "../src/renderer/types.ts";
 import { sources } from "./sources.gen.ts";
 
 /** Identifies a named fixture scenario in the demo. */

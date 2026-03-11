@@ -22,8 +22,8 @@ import {
   xToColumn,
   yToRow,
   yToVisualRow,
-} from "../../src/multibuffer_renderer/measurement.ts";
-import type { Measurements } from "../../src/multibuffer_renderer/types.ts";
+} from "../../src/renderer/measurement.ts";
+import type { Measurements } from "../../src/renderer/types.ts";
 import { num } from "../helpers.ts";
 
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests

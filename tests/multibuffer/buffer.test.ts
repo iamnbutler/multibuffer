@@ -11,7 +11,7 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createBuffer } from "../../src/multibuffer/buffer.ts";
+import { createBuffer } from "../../src/buffer/buffer.ts";
 import {
   Bias,
   benchmark,

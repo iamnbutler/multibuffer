@@ -8,8 +8,9 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/buffer/buffer.ts";
+import { adjustOffset } from "../../src/buffer/offset.ts";
 import {
-  adjustOffset,
   anchorsEqual,
   compareAnchors,
   createAnchorRange,
@@ -17,7 +18,6 @@ import {
   resolveAnchorRange,
   reverseSelection,
 } from "../../src/multibuffer/anchor.ts";
-import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { Anchor, BufferOffset, EditEntry } from "../../src/multibuffer/types.ts";
 import {

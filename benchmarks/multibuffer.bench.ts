@@ -9,7 +9,7 @@
  * - Anchor resolution: <0.01ms single, <1ms batch 100
  */
 
-import { createBuffer } from "../src/multibuffer/buffer.ts";
+import { createBuffer } from "../src/buffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type {
   Anchor,

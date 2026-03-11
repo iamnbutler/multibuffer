@@ -39,7 +39,7 @@ bun run build:demo    # Build demo (generates sources.gen.ts)
 ## Architecture
 
 - `src/multibuffer/` — Data model (rendering-agnostic): buffer, excerpt, multibuffer, anchor, selection
-- `src/multibuffer_renderer/` — Rendering abstraction: DOM renderer, measurement, viewport, highlighting
+- `src/renderer/` — Rendering abstraction: DOM renderer, measurement, viewport, highlighting
 - `src/editor/` — Editor commands: cursor movement, text editing, input handling, undo/redo
 - `demo/` — Demo harness with fixture scenarios
 - `tests/` — Test suite (~590 tests)

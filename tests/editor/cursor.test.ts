@@ -3,8 +3,8 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/buffer/buffer.ts";
 import { isWordChar, moveCursor } from "../../src/editor/cursor.ts";
-import { createBuffer } from "../../src/multibuffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import {
   createBufferId,
