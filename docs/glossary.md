@@ -22,7 +22,7 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### Auto-Indent
 
-A behavior of the `insertNewline` command: when the cursor is on an indented line, the new line automatically receives the same leading whitespace as the current line. The indentation is detected by matching the leading spaces of the current line and prepending them to the `\n` being inserted. Lines with no leading spaces produce an unindented new line.
+A behavior of the `insertNewline` command: the new line automatically receives the same leading whitespace as the current line.
 
 ---
 
@@ -30,12 +30,10 @@ A behavior of the `insertNewline` command: when the cursor is on an indented lin
 
 ### Bias
 
-A hint that determines how an anchor or clip operation behaves at a position boundary — for example, when text is inserted exactly at the anchor's offset.
+A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds.
 
-- `Bias.Left` — the anchor stays to the left of inserted text (i.e., the cursor does not advance).
-- `Bias.Right` — the anchor moves to the right of inserted text (i.e., the cursor advances past the insertion).
-
-Bias is also used when clipping a point to valid bounds: `Bias.Right` clips to the position at or after a boundary; `Bias.Left` clips to the position before it.
+- `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
+- `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
 
 ### Buffer
 
@@ -84,7 +82,7 @@ Branded types enforce that these are never accidentally mixed.
 
 ### dedentLines
 
-An [EditorCommand](#editorcommand) that removes up to 2 leading spaces from the cursor line, or from every line touched by the current selection. All affected lines are updated in a single `_edit()` call so the operation is undone atomically. If no affected line has leading spaces the command is a no-op. Triggered by `Shift+Tab` or `Mod+[`.
+An [EditorCommand](#editorcommand) that removes up to 2 leading spaces from the cursor line or every line in the selection, applied atomically (no-op if no line has leading spaces). Triggered by `Shift+Tab` or `Mod+[`.
 
 See also: [indentLines](#indentlines)
 
@@ -98,7 +96,7 @@ A visual annotation applied to a range of text in the renderer. Decorations carr
 
 ### Edit Log
 
-A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since the buffer was created. The edit log is the source of truth for [anchor](#anchor) resolution: given an anchor's recorded version, the anchor can be advanced to the current version by replaying only the edits that occurred after it.
+A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since buffer creation. Used for [anchor](#anchor) resolution by replaying edits since an anchor's recorded version to find its current position.
 
 ### EditEntry
 
@@ -144,7 +142,7 @@ The specification for creating an excerpt. Contains:
 
 ### Generational Arena
 
-The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter. When a slot is freed and reused for a new value, the generation increments, making any existing keys to that slot immediately stale. Provides O(1) stale-key detection without bookkeeping at the call site.
+The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
 
 ### Goal Column
 
@@ -172,7 +170,7 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 
 ### indentLines
 
-An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line, or to every line touched by the current selection. All affected lines are updated in a single `_edit()` call so the operation is undone atomically. When `insertTab` is dispatched while a non-collapsed selection exists, it is treated as `indentLines`. Triggered by `Tab` (with a selection) or `Mod+]`.
+An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line or every line in the selection, applied atomically. `insertTab` with a non-collapsed selection is treated as `indentLines`. Triggered by `Tab` (with a selection) or `Mod+]`.
 
 See also: [dedentLines](#dedentlines)
 
@@ -258,7 +256,7 @@ An interface (`src/multibuffer_renderer/types.ts`) that rendering backends imple
 
 ### Rope
 
-The text storage structure backing each [buffer](#buffer). A Rope splits text into fixed-size chunks (≤ 1024 bytes each, preferring newline boundaries). It is immutable: insert/delete/replace return new Rope instances with structural sharing of unchanged chunks. Caches chunk byte offsets as a prefix-sum array for O(log n) line↔offset conversion.
+The text storage structure backing each [buffer](#buffer). Splits text into fixed-size chunks (≤ 1024 bytes, preferring newline boundaries); insert/delete/replace return new Rope instances with structural sharing of unchanged chunks. Caches chunk byte offsets as a prefix-sum array for O(log n) line↔offset conversion.
 
 ---
 
