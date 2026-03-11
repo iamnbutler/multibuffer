@@ -13,7 +13,7 @@ import {
   createViewport,
   yToVisualRow,
 } from "./measurement.ts";
-import type { Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
+import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
 import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
 
 /** Slice tokens to a column range, adjusting offsets to be segment-relative. */
@@ -51,6 +51,7 @@ export class DomRenderer implements Renderer {
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
   private _highlighter: SyntaxHighlighter | null = null;
+  private _decorations: readonly Decoration[] = [];
   private _onScroll: (() => void) | null = null;
   private _onClick: ((e: MouseEvent) => void) | null = null;
   private _onMouseMove: ((e: MouseEvent) => void) | null = null;
@@ -157,6 +158,7 @@ export class DomRenderer implements Renderer {
     this._rowPool = [];
     this._snapshot = null;
     this._wrapMap = null;
+    this._decorations = [];
     this._onScroll = null;
     this._onClick = null;
   }
@@ -181,8 +183,9 @@ export class DomRenderer implements Renderer {
   render(state: RenderState, lines: readonly string[]): void {
     if (!this._linesContainer || !this._spacer || !this._scrollContainer) return;
 
-    const { viewport, excerptHeaders } = state;
+    const { viewport, excerptHeaders, decorations } = state;
     this._viewport = viewport;
+    this._decorations = decorations;
 
     // Update spacer height
     const totalLines = this._snapshot?.lineCount ?? viewport.endRow;
@@ -199,6 +202,17 @@ export class DomRenderer implements Renderer {
       headerMap.set(header.row, header);
     }
 
+    // Build decoration lookup: mbRow → decoration style (last decoration wins)
+    const decorationMap = new Map<number, Partial<DecorationStyle>>();
+    for (const dec of decorations) {
+      if (!dec.style) continue;
+      for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
+        if (r >= viewport.startRow && r < viewport.endRow) {
+          decorationMap.set(r, dec.style);
+        }
+      }
+    }
+
     // Determine the wrap width
     const wrapWidth = this._measurements.wrapWidth ?? 0;
 
@@ -212,6 +226,7 @@ export class DomRenderer implements Renderer {
       headerLabel?: string;
       tokens?: Token[];
       gutterText: string;
+      decoration?: Partial<DecorationStyle>;
     }> = [];
 
     for (let i = 0; i < lines.length; i++) {
@@ -239,6 +254,8 @@ export class DomRenderer implements Renderer {
       const showLineNumber = !header && bufferRow >= 0;
       const gutterBase = showLineNumber ? String(bufferRow + 1) : "";
 
+      const decoration = decorationMap.get(mbRow);
+
       if (wrapWidth > 0) {
         const segments = wrapLine(lineText, wrapWidth);
         let charOffset = 0;
@@ -260,6 +277,7 @@ export class DomRenderer implements Renderer {
             headerLabel: header?.label,
             tokens: segTokens,
             gutterText: s === 0 ? gutterBase : "",
+            decoration,
           });
         }
       } else {
@@ -272,6 +290,7 @@ export class DomRenderer implements Renderer {
           headerLabel: header?.label,
           tokens: lineTokens,
           gutterText: gutterBase,
+          decoration,
         });
       }
     }
@@ -299,7 +318,7 @@ export class DomRenderer implements Renderer {
       if (vr.isHeader && vr.headerPath) {
         this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens);
+        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration);
       }
     }
   }
@@ -396,7 +415,7 @@ export class DomRenderer implements Renderer {
       {
         viewport,
         selections: [],
-        decorations: [],
+        decorations: this._decorations,
         excerptHeaders,
         focused: false,
       },
@@ -453,15 +472,35 @@ export class DomRenderer implements Renderer {
     gutterText: string,
     text: string,
     tokens?: Token[],
+    decoration?: Partial<DecorationStyle>,
   ): void {
     rowEl.root.style.display = "flex";
-    rowEl.root.style.background = "var(--editor-line-bg, transparent)";
     rowEl.root.style.borderTop = "";
-    rowEl.gutter.textContent = gutterText;
-    rowEl.gutter.style.background = "var(--editor-line-bg, transparent)";
-    rowEl.content.style.color = "";
-    rowEl.content.style.fontWeight = "";
+
+    // Apply decoration styles or defaults
+    const bg = decoration?.backgroundColor ?? "var(--editor-line-bg, transparent)";
+    rowEl.root.style.background = bg;
+    rowEl.gutter.style.background = decoration?.gutterBackground ?? bg;
+    rowEl.gutter.style.color = decoration?.gutterColor ?? "";
+    rowEl.content.style.color = decoration?.color ?? "";
+    rowEl.content.style.fontWeight = decoration?.fontWeight ?? "";
+    rowEl.content.style.fontStyle = decoration?.fontStyle ?? "";
+    rowEl.content.style.textDecoration = decoration?.textDecoration ?? "";
     rowEl.content.style.fontSize = "";
+
+    // Gutter text: sign character prepended if present
+    if (decoration?.gutterSign) {
+      rowEl.gutter.textContent = "";
+      const numSpan = document.createElement("span");
+      numSpan.textContent = gutterText;
+      const signSpan = document.createElement("span");
+      signSpan.textContent = ` ${decoration.gutterSign} `;
+      signSpan.style.color = decoration.gutterSignColor ?? "";
+      rowEl.gutter.appendChild(numSpan);
+      rowEl.gutter.appendChild(signSpan);
+    } else {
+      rowEl.gutter.textContent = gutterText;
+    }
 
     if (tokens && tokens.length > 0) {
       buildHighlightedSpans(rowEl.content, text, tokens);
