@@ -1081,12 +1081,14 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   ): MultiBufferPoint {
     if (text.length === 0) return start;
 
-    const lines = text.split("\n");
-    if (lines.length === 1) {
-      // Same row, column advances
+    // Fast path: no newlines — single-char inserts (the common keypress).
+    // indexOf avoids allocating a string[] just to confirm length === 1.
+    if (text.indexOf("\n") === -1) {
       return { row: start.row, column: start.column + text.length };
     }
+
     // Multi-line: row advances, column is length of last line
+    const lines = text.split("\n");
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const newRow = (start.row + lines.length - 1) as MultiBufferRow;
     const lastLine = lines[lines.length - 1] ?? "";
