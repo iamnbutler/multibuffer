@@ -61,8 +61,17 @@ describe("createSingleBufferEditor", () => {
     expect(lines[0]).toBe("bbb");
   });
 
-  test("accepts options without error (options are currently unused)", () => {
-    expect(() => createSingleBufferEditor("text", { bracketMatching: true })).not.toThrow();
+  test("forwards readOnly option to the editor", () => {
+    const editor = createSingleBufferEditor("hello", { readOnly: true });
+    expect(editor.readOnly).toBe(true);
+    // Text-mutating commands are ignored in read-only mode
+    editor.dispatch({ type: "insertText", text: "X" });
+    const snap = editor.multiBuffer.snapshot();
+    const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
+    expect(lines[0]).toBe("hello");
+  });
+
+  test("accepts empty options and undefined without error", () => {
     expect(() => createSingleBufferEditor("text", {})).not.toThrow();
     expect(() => createSingleBufferEditor("text", undefined)).not.toThrow();
   });
@@ -96,7 +105,19 @@ describe("createMultiBufferEditor", () => {
     expectPoint(editor.cursor, 0, 5);
   });
 
-  test("accepts options without error", () => {
+  test("forwards readOnly option to the editor", () => {
+    const buf = createBuffer(createBufferId(), "hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    const editor = createMultiBufferEditor(mb, { readOnly: true });
+    expect(editor.readOnly).toBe(true);
+    editor.dispatch({ type: "insertText", text: "X" });
+    const snap = editor.multiBuffer.snapshot();
+    const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
+    expect(lines[0]).toBe("hello");
+  });
+
+  test("accepts empty options and undefined without error", () => {
     const mb = createMultiBuffer();
     expect(() => createMultiBufferEditor(mb, {})).not.toThrow();
     expect(() => createMultiBufferEditor(mb, undefined)).not.toThrow();
