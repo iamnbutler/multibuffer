@@ -69,6 +69,14 @@ export interface DecorationStyle {
   readonly fontWeight: "normal" | "bold";
   readonly fontStyle: "normal" | "italic";
   readonly textDecoration: "none" | "underline" | "line-through";
+  /** Background color for the gutter area on decorated lines */
+  readonly gutterBackground: string;
+  /** Text color for the gutter line number on decorated lines */
+  readonly gutterColor: string;
+  /** A sign character rendered between gutter and content (e.g., "+", "−") */
+  readonly gutterSign: string;
+  /** Color for the gutter sign character */
+  readonly gutterSignColor: string;
 }
 
 /**
