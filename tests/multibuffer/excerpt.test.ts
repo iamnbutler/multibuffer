@@ -28,6 +28,7 @@ import {
   mbPoint,
   mbRow,
   num,
+  offset,
   range,
   resetCounters,
   row,
@@ -494,32 +495,110 @@ describe("Excerpt ID Monotonicity", () => {
 
 
 describe("Excerpt Anchor Stability", () => {
-  test.todo("anchor in excerpt survives buffer edit before excerpt", () => {
-    // Edit in buffer at line 5
-    // Excerpt starts at line 10
-    // Anchor at line 12 should still point to same logical position
+  test("anchor in excerpt survives buffer edit before excerpt", () => {
+    // Buffer: "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ" (10 lines, each 2 bytes except last)
+    // Each row n starts at byte offset n*2 (for single-letter lines)
+    // Excerpt: buffer rows 5-9 (F,G,H,I), mb rows 0-3
+    // Anchor at mb row 2, col 0 → buffer row 7 ("H"), byte offset 14
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(5, 9));
+
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert "XX" (2 bytes, no newline) at offset 4 — start of "C", row 2, before excerpt
+    // Row numbers don't shift (no newline added); only byte offsets shift.
+    buf.insert(offset(4), "XX");
+
+    // Adjusted offset: 14 + 2 = 16.  Buffer row 7 ("H") is still at row 7 in the new
+    // "A\nB\nXXC\nD\nE\nF\nG\nH\nI\nJ" layout.  Row 7 is in [5,9) → mb row 2, col 0.
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 2, 0);
   });
 
-  test.todo("anchor in excerpt survives buffer edit within excerpt", () => {
-    // Anchor at line 15 in excerpt
-    // Insert text at line 12
-    // Anchor should now be at line 16 (shifted by insert)
+  test("anchor in excerpt survives buffer edit within excerpt", () => {
+    // Full 10-line excerpt (rows 0-10), anchor at mb row 7 ("H").
+    // Insert a new line inside the excerpt before the anchor — anchor shifts by +1 row.
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 10));
+
+    const a = mb.createAnchor(mbPoint(7, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert "X\n" (2 bytes) at offset 8 — start of "E", row 4, within the excerpt
+    buf.insert(offset(8), "X\n");
+
+    // Adjusted offset: 14 + 2 = 16.  "H" now at row 8 in the updated buffer
+    // "A\nB\nC\nD\nX\nE\nF\nG\nH\nI\nJ".  Row 8 is in [0,10) → mb row 8, col 0.
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 8, 0);
   });
 
-  test.todo("anchor in excerpt survives buffer edit after excerpt", () => {
-    // Excerpt is lines 10-20
-    // Edit at line 25
-    // Anchor at line 15 should be unchanged
+  test("anchor in excerpt survives buffer edit after excerpt", () => {
+    // Excerpt: rows 5-9 (F,G,H,I), anchor at mb row 2 ("H").
+    // Edit is at row 9 — after the excerpt ends — so the anchor byte offset is unchanged.
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE\nF\nG\nH\nI\nJ");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(5, 9));
+
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert "XX" (2 bytes) at offset 18 — start of "J", row 9, after the excerpt
+    buf.insert(offset(18), "XX");
+
+    // Anchor offset 14 < edit offset 18 → unchanged.  Still row 7, mb row 2, col 0.
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 2, 0);
   });
 
-  test.todo("anchor with Bias.Left stays left of inserted text", () => {
-    // Insert at anchor position
-    // Anchor with Bias.Left should resolve to position before inserted text
+  test("anchor with Bias.Left stays left of inserted text", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Left);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert "XX" exactly at col 3 (byte offset 3)
+    mb.edit(mbPoint(0, 3), mbPoint(0, 3), "XX");
+
+    // Bias.Left: anchor clamps to the insert position — stays at col 3
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 3);
   });
 
-  test.todo("anchor with Bias.Right moves right of inserted text", () => {
-    // Insert at anchor position
-    // Anchor with Bias.Right should resolve to position after inserted text
+  test("anchor with Bias.Right moves right of inserted text", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const a = mb.createAnchor(mbPoint(0, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert "XX" exactly at col 3 (byte offset 3)
+    mb.edit(mbPoint(0, 3), mbPoint(0, 3), "XX");
+
+    // Bias.Right: anchor moves past the 2 inserted bytes — resolves to col 5
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 0, 5);
   });
 });
 
