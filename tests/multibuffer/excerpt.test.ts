@@ -209,9 +209,45 @@ describe("Trailing Newline Handling", () => {
     expect(num(withNewline.endRow) - num(withoutNewline.endRow)).toBe(1);
   });
 
-  test.todo("position conversion accounts for trailing newline", () => {
-    // When resolving ranges: if hasTrailingNewline, end_before_newline -= 1
-    // This is an off-by-one trap
+  test("position conversion accounts for trailing newline", () => {
+    // "A\nB\nC" → 3 content lines (rows 0-2).
+    // Adding with hasTrailingNewline=true allocates 4 mb rows:
+    //   mb row 0 = "A", mb row 1 = "B", mb row 2 = "C",
+    //   mb row 3 = synthetic trailing newline (empty)
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3), { hasTrailingNewline: true });
+
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(4);
+
+    // The trailing newline row yields an empty line string.
+    const trailingLines = snap.lines(mbRow(3), mbRow(4));
+    expect(trailingLines).toEqual([""]);
+
+    // GOTCHA: an anchor placed on the trailing newline row (row 3) maps to
+    // buffer offset = rope.length (past "C"), which offsetToPoint resolves to
+    // {row:2, col:1} — i.e. it lands on the last CONTENT row, not row 3.
+    // This is the off-by-one trap: callers expecting row 3 must account for
+    // the fact that the synthetic row collapses back to the last real row.
+    const trailingAnchor = mb.createAnchor(mbPoint(3, 0), Bias.Left);
+    expect(trailingAnchor).toBeDefined();
+    if (!trailingAnchor) return;
+
+    const resolved = snap.resolveAnchor(trailingAnchor);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    // Resolves to end of "C" (row 2, col 1), not the synthetic row 3.
+    expectPoint(resolved, 2, 1);
+
+    // By contrast, an anchor on the last CONTENT row resolves faithfully.
+    const contentAnchor = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(contentAnchor).toBeDefined();
+    if (!contentAnchor) return;
+    const resolvedContent = snap.resolveAnchor(contentAnchor);
+    expect(resolvedContent).toBeDefined();
+    if (!resolvedContent) return;
+    expectPoint(resolvedContent, 2, 0);
   });
 });
 
