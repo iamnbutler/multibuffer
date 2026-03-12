@@ -126,9 +126,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     excerptId: ExcerptId,
     point: BufferPoint,
   ): MultiBufferPoint | undefined {
-    const info = this.excerpts.find(
-      (e) => e.id.index === excerptId.index && e.id.generation === excerptId.generation,
-    );
+    const info = this.excerptInfoIndex.get(`${excerptId.index}:${excerptId.generation}`);
     if (!info) return undefined;
 
     const startBufferRow = info.range.context.start.row;
@@ -245,17 +243,11 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   resolveAnchors(anchors: readonly Anchor[]): (MultiBufferPoint | undefined)[] {
     if (anchors.length === 0) return [];
 
-    // Build O(1) excerpt-data lookup: "index:generation" → Excerpt
-    const excerptDataCache = new Map<string, Excerpt>();
-    for (const exc of this._excerptData) {
-      excerptDataCache.set(`${exc.id.index}:${exc.id.generation}`, exc);
-    }
-
-    // Build O(1) excerpt-info lookup: "index:generation" → ExcerptInfo
-    const excerptInfoCache = new Map<string, ExcerptInfo>();
-    for (const info of this.excerpts) {
-      excerptInfoCache.set(`${info.id.index}:${info.id.generation}`, info);
-    }
+    // Reuse the snapshot's lazily-built indexes instead of constructing new maps.
+    // excerptDataIndex and excerptInfoIndex are built at most once per snapshot
+    // and cached, so repeated resolveAnchors calls share the same map objects.
+    const excerptDataCache = this.excerptDataIndex;
+    const excerptInfoCache = this.excerptInfoIndex;
 
     // Cursor state: reuse buffer snapshots and edit-log slices across anchors
     // from the same buffer and version so we don't call editsSince / snapshot
@@ -315,7 +307,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       // 4. Find best excerpt for this buffer point
       const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
 
-      // 5. Convert to multibuffer point via cache (O(1) instead of O(n) find)
+      // 5. Convert to multibuffer point via the shared index (O(1))
       const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
       const info = excerptInfoCache.get(resolvedKey);
       if (!info) return undefined;
