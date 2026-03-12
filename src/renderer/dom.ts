@@ -35,6 +35,10 @@ interface RowElement {
   gutter: HTMLSpanElement;
   content: HTMLSpanElement;
   kind: "line" | "header";
+  // Diff mode elements (created but hidden in standard mode)
+  oldGutter?: HTMLSpanElement;
+  newGutter?: HTMLSpanElement;
+  sign?: HTMLSpanElement;
 }
 
 export class DomRenderer implements Renderer {
@@ -64,6 +68,19 @@ export class DomRenderer implements Renderer {
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
+
+  /** Diff mode gutter widths */
+  private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
+  private static readonly DIFF_NEW_GUTTER_WIDTH = 40;
+  private static readonly DIFF_SIGN_WIDTH = 16;
+
+  /** Get effective gutter width based on mode */
+  private _getEffectiveGutterWidth(): number {
+    if (this._measurements.gutterMode === "diff") {
+      return DomRenderer.DIFF_OLD_GUTTER_WIDTH + DomRenderer.DIFF_NEW_GUTTER_WIDTH + DomRenderer.DIFF_SIGN_WIDTH;
+    }
+    return this._measurements.gutterWidth;
+  }
 
   constructor(measurements: Measurements) {
     this._measurements = measurements;
@@ -227,7 +244,10 @@ export class DomRenderer implements Renderer {
       tokens?: Token[];
       gutterText: string;
       decoration?: Partial<DecorationStyle>;
+      diffGutter?: { oldLineNum?: string; newLineNum?: string };
     }> = [];
+
+    const isDiffMode = this._measurements.gutterMode === "diff";
 
     for (let i = 0; i < lines.length; i++) {
       const mbRow = viewport.startRow + i;
@@ -256,6 +276,23 @@ export class DomRenderer implements Renderer {
 
       const decoration = decorationMap.get(mbRow);
 
+      // Compute diff gutter info if in diff mode
+      let diffGutter: { oldLineNum?: string; newLineNum?: string } | undefined;
+      if (isDiffMode && showLineNumber) {
+        const lineNumStr = String(bufferRow + 1);
+        const sign = decoration?.gutterSign;
+        if (sign === "−") {
+          // Delete line: show in old column only
+          diffGutter = { oldLineNum: lineNumStr };
+        } else if (sign === "+") {
+          // Insert line: show in new column only
+          diffGutter = { newLineNum: lineNumStr };
+        } else {
+          // Equal line: show in both columns
+          diffGutter = { oldLineNum: lineNumStr, newLineNum: lineNumStr };
+        }
+      }
+
       if (wrapWidth > 0) {
         const segments = wrapLine(lineText, wrapWidth);
         let charOffset = 0;
@@ -278,6 +315,7 @@ export class DomRenderer implements Renderer {
             tokens: segTokens,
             gutterText: s === 0 ? gutterBase : "",
             decoration,
+            diffGutter: s === 0 ? diffGutter : undefined,
           });
         }
       } else {
@@ -291,6 +329,7 @@ export class DomRenderer implements Renderer {
           tokens: lineTokens,
           gutterText: gutterBase,
           decoration,
+          diffGutter,
         });
       }
     }
@@ -318,7 +357,7 @@ export class DomRenderer implements Renderer {
       if (vr.isHeader && vr.headerPath) {
         this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration);
+        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration, vr.diffGutter);
       }
     }
   }
@@ -355,7 +394,8 @@ export class DomRenderer implements Renderer {
     const scrollTop = this._scrollContainer.scrollTop;
     const visualRow = yToVisualRow(scrollTop + y, this._measurements.lineHeight);
     // Convert pixel X to visual column using measured charWidth
-    const visualColInSegment = Math.max(0, Math.floor((x - this._measurements.gutterWidth) / this._charWidth));
+    const gutterWidth = this._getEffectiveGutterWidth();
+    const visualColInSegment = Math.max(0, Math.floor((x - gutterWidth) / this._charWidth));
 
     if (this._wrapMap) {
       const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
@@ -458,8 +498,24 @@ export class DomRenderer implements Renderer {
     rowEl.root.style.display = "flex";
     rowEl.root.style.background = "var(--editor-header-bg, #3c3836)";
     rowEl.root.style.borderTop = "1px solid var(--editor-header-border, #504945)";
-    rowEl.gutter.textContent = "";
-    rowEl.gutter.style.background = "var(--editor-header-bg, #3c3836)";
+
+    const isDiffMode = this._measurements.gutterMode === "diff";
+
+    if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
+      // Hide all gutters in header, content spans full width
+      rowEl.gutter.style.display = "none";
+      rowEl.oldGutter.style.display = "none";
+      rowEl.newGutter.style.display = "none";
+      rowEl.sign.style.display = "none";
+    } else {
+      rowEl.gutter.style.display = "inline-block";
+      rowEl.gutter.textContent = "";
+      rowEl.gutter.style.background = "var(--editor-header-bg, #3c3836)";
+      if (rowEl.oldGutter) rowEl.oldGutter.style.display = "none";
+      if (rowEl.newGutter) rowEl.newGutter.style.display = "none";
+      if (rowEl.sign) rowEl.sign.style.display = "none";
+    }
+
     rowEl.content.textContent = path + (label ? `  ${label}` : "");
     rowEl.content.style.color = "var(--editor-header-text, #a89984)";
     rowEl.content.style.fontWeight = "bold";
@@ -473,6 +529,7 @@ export class DomRenderer implements Renderer {
     text: string,
     tokens?: Token[],
     decoration?: Partial<DecorationStyle>,
+    diffGutter?: { oldLineNum?: string; newLineNum?: string },
   ): void {
     rowEl.root.style.display = "flex";
     rowEl.root.style.borderTop = "";
@@ -480,26 +537,54 @@ export class DomRenderer implements Renderer {
     // Apply decoration styles or defaults
     const bg = decoration?.backgroundColor ?? "var(--editor-line-bg, transparent)";
     rowEl.root.style.background = bg;
-    rowEl.gutter.style.background = decoration?.gutterBackground ?? bg;
-    rowEl.gutter.style.color = decoration?.gutterColor ?? "";
     rowEl.content.style.color = decoration?.color ?? "";
     rowEl.content.style.fontWeight = decoration?.fontWeight ?? "";
     rowEl.content.style.fontStyle = decoration?.fontStyle ?? "";
     rowEl.content.style.textDecoration = decoration?.textDecoration ?? "";
     rowEl.content.style.fontSize = "";
 
-    // Gutter text: sign character prepended if present
-    if (decoration?.gutterSign) {
-      rowEl.gutter.textContent = "";
-      const numSpan = document.createElement("span");
-      numSpan.textContent = gutterText;
-      const signSpan = document.createElement("span");
-      signSpan.textContent = ` ${decoration.gutterSign} `;
-      signSpan.style.color = decoration.gutterSignColor ?? "";
-      rowEl.gutter.appendChild(numSpan);
-      rowEl.gutter.appendChild(signSpan);
+    const isDiffMode = this._measurements.gutterMode === "diff";
+
+    if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
+      // Diff mode: show old/new gutters and sign, hide standard gutter
+      rowEl.gutter.style.display = "none";
+      rowEl.oldGutter.style.display = "inline-block";
+      rowEl.newGutter.style.display = "inline-block";
+      rowEl.sign.style.display = "inline-block";
+
+      rowEl.oldGutter.textContent = diffGutter?.oldLineNum ?? "";
+      rowEl.newGutter.textContent = diffGutter?.newLineNum ?? "";
+      rowEl.oldGutter.style.background = decoration?.gutterBackground ?? bg;
+      rowEl.newGutter.style.background = decoration?.gutterBackground ?? bg;
+      rowEl.oldGutter.style.color = decoration?.gutterColor ?? "";
+      rowEl.newGutter.style.color = decoration?.gutterColor ?? "";
+
+      rowEl.sign.textContent = decoration?.gutterSign ?? " ";
+      rowEl.sign.style.color = decoration?.gutterSignColor ?? "";
+      rowEl.sign.style.background = decoration?.gutterBackground ?? bg;
     } else {
-      rowEl.gutter.textContent = gutterText;
+      // Standard mode: show standard gutter, hide diff gutters
+      rowEl.gutter.style.display = "inline-block";
+      if (rowEl.oldGutter) rowEl.oldGutter.style.display = "none";
+      if (rowEl.newGutter) rowEl.newGutter.style.display = "none";
+      if (rowEl.sign) rowEl.sign.style.display = "none";
+
+      rowEl.gutter.style.background = decoration?.gutterBackground ?? bg;
+      rowEl.gutter.style.color = decoration?.gutterColor ?? "";
+
+      // Gutter text: sign character prepended if present
+      if (decoration?.gutterSign) {
+        rowEl.gutter.textContent = "";
+        const numSpan = document.createElement("span");
+        numSpan.textContent = gutterText;
+        const signSpan = document.createElement("span");
+        signSpan.textContent = ` ${decoration.gutterSign} `;
+        signSpan.style.color = decoration.gutterSignColor ?? "";
+        rowEl.gutter.appendChild(numSpan);
+        rowEl.gutter.appendChild(signSpan);
+      } else {
+        rowEl.gutter.textContent = gutterText;
+      }
     }
 
     if (tokens && tokens.length > 0) {
@@ -514,26 +599,52 @@ export class DomRenderer implements Renderer {
   private _ensureRowPool(count: number): void {
     const lh = this._measurements.lineHeight;
     const gw = this._measurements.gutterWidth;
+    const isDiffMode = this._measurements.gutterMode === "diff";
 
     while (this._rowPool.length < count) {
       const root = document.createElement("div");
       root.style.cssText =
         `display:none;height:${lh}px;line-height:${lh}px;white-space:pre;`;
 
+      // Standard gutter (used in standard mode, hidden in diff mode)
       const gutter = document.createElement("span");
       gutter.style.cssText =
         `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;`;
 
+      // Diff mode gutters
+      const oldGutter = document.createElement("span");
+      oldGutter.style.cssText =
+        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;";
+
+      const newGutter = document.createElement("span");
+      newGutter.style.cssText =
+        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;";
+
+      const sign = document.createElement("span");
+      sign.style.cssText =
+        "display:none;width:16px;text-align:center;user-select:none;flex-shrink:0;";
+
       const content = document.createElement("span");
       content.style.cssText = "flex:1;overflow:hidden;";
 
+      root.appendChild(oldGutter);
+      root.appendChild(newGutter);
+      root.appendChild(sign);
       root.appendChild(gutter);
       root.appendChild(content);
+
+      // Set initial visibility based on mode
+      if (isDiffMode) {
+        gutter.style.display = "none";
+        oldGutter.style.display = "inline-block";
+        newGutter.style.display = "inline-block";
+        sign.style.display = "inline-block";
+      }
 
       if (this._linesContainer) {
         this._linesContainer.appendChild(root);
       }
-      this._rowPool.push({ root, gutter, content, kind: "line" });
+      this._rowPool.push({ root, gutter, content, kind: "line", oldGutter, newGutter, sign });
     }
   }
 
@@ -565,7 +676,8 @@ export class DomRenderer implements Renderer {
       return;
     }
 
-    const { lineHeight, gutterWidth } = this._measurements;
+    const { lineHeight } = this._measurements;
+    const gutterWidth = this._getEffectiveGutterWidth();
     const charWidth = this._charWidth;
     const visualRow = this._wrapMap
       ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
@@ -628,7 +740,8 @@ export class DomRenderer implements Renderer {
     if (!start || !end) return;
     if (start.row === end.row && start.column === end.column) return;
 
-    const { lineHeight, gutterWidth } = this._measurements;
+    const { lineHeight } = this._measurements;
+    const gutterWidth = this._getEffectiveGutterWidth();
     const charWidth = this._charWidth;
 
     // Ensure start is before end
