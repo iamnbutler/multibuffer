@@ -226,6 +226,56 @@ describe("Cursor - Character Movement (Surrogate Pairs)", () => {
   });
 });
 
+describe("Cursor - Vertical Movement Across Excerpt Headers", () => {
+  // Set up a multibuffer with two excerpts separated by a trailing-newline row (header).
+  // Excerpt 1: "a\nb\nc" → multiBuffer rows 0, 1, 2 (content) + row 3 (trailing newline/header)
+  // Excerpt 2: "x\ny\nz" → multiBuffer rows 4, 5, 6
+  function setupWithHeader() {
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const buf2 = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    return mb;
+  }
+
+  test("move down from last content row of excerpt 1 skips header row and lands on first row of excerpt 2", () => {
+    // Row 2 is the last content row of excerpt 1; row 3 is the header (trailing newline).
+    // Pressing down should skip row 3 and land on row 4.
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(2, 0), "down", "character"), 4, 0);
+  });
+
+  test("move up from first content row of excerpt 2 skips header row and lands on last row of excerpt 1", () => {
+    // Row 4 is the first content row of excerpt 2; row 3 is the header (trailing newline).
+    // Pressing up should skip row 3 and land on row 2.
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(4, 0), "up", "character"), 2, 0);
+  });
+
+  test("move down through header preserves column (clamped to destination line length)", () => {
+    const snap = setupWithHeader().snapshot();
+    // "c" is at row 2, "x\ny\nz" lines have length 1.
+    // Moving down from col 0 lands at col 0 on row 4.
+    expectPoint(moveCursor(snap, mbPoint(2, 0), "down", "character"), 4, 0);
+  });
+
+  test("move up through header preserves column (clamped to destination line length)", () => {
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(4, 0), "up", "character"), 2, 0);
+  });
+
+  test("move down within excerpt 2 does not skip non-header rows", () => {
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(4, 0), "down", "character"), 5, 0);
+  });
+
+  test("move up within excerpt 1 does not skip non-header rows", () => {
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(2, 0), "up", "character"), 1, 0);
+  });
+});
+
 describe("Cursor - Buffer Granularity", () => {
   test("move to buffer start", () => {
     const snap = setup("AAA\nBBB\nCCC").snapshot();

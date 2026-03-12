@@ -78,7 +78,8 @@ function moveCharacter(
   if (direction === "down") {
     if (row + 1 >= lineCount) return current;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newRow = (row + 1) as MultiBufferRow;
+    const rawRow = (row + 1) as MultiBufferRow;
+    const newRow = skipTrailingNewlineRow(snapshot, rawRow, "down", lineCount);
     const newLineText = snapshot.lines(newRow, nextRow(newRow, lineCount));
     const newLen = newLineText[0]?.length ?? 0;
     return { row: newRow, column: Math.min(column, newLen) };
@@ -87,8 +88,9 @@ function moveCharacter(
   if (direction === "up") {
     if (row <= 0) return current;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newRow = (row - 1) as MultiBufferRow;
-    const newLineText = snapshot.lines(newRow, row);
+    const rawRow = (row - 1) as MultiBufferRow;
+    const newRow = skipTrailingNewlineRow(snapshot, rawRow, "up", lineCount);
+    const newLineText = snapshot.lines(newRow, nextRow(newRow, lineCount));
     const newLen = newLineText[0]?.length ?? 0;
     return { row: newRow, column: Math.min(column, newLen) };
   }
@@ -202,6 +204,35 @@ function moveBuffer(
   const lineText = snapshot.lines(lastRow, nextRow(lastRow, snapshot.lineCount));
   const lineLen = lineText[0]?.length ?? 0;
   return { row: lastRow, column: lineLen };
+}
+
+/**
+ * If `row` is a trailing-newline row (the visual header separator between two excerpts),
+ * skip to the adjacent content row in the given movement direction.
+ *
+ * Trailing-newline rows are the last row of an excerpt with `hasTrailingNewline: true`.
+ * The DOM renderer places the file-path header on this row, so the cursor should
+ * never stop there during up/down navigation.
+ */
+function skipTrailingNewlineRow(
+  snapshot: MultiBufferSnapshot,
+  row: MultiBufferRow,
+  direction: "down" | "up",
+  lineCount: number,
+): MultiBufferRow {
+  const excerpt = snapshot.excerptAt(row);
+  if (!excerpt || !excerpt.hasTrailingNewline || row !== excerpt.endRow - 1) {
+    return row;
+  }
+  if (direction === "down") {
+    // Skip forward to the first row of the next excerpt.
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    const next = excerpt.endRow as MultiBufferRow;
+    return next < lineCount ? next : row;
+  }
+  // direction === "up": skip back to the last content row of the current excerpt.
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+  return row > 0 ? ((row - 1) as MultiBufferRow) : row;
 }
 
 function nextRow(row: MultiBufferRow, lineCount: number): MultiBufferRow {
