@@ -88,7 +88,11 @@ See also: [indentLines](#indentlines)
 
 ### Decoration
 
-A visual annotation applied to a range of text in the renderer. Decorations carry an optional CSS class name and style properties (background color, font weight, etc.) and are rendered on top of the text.
+A visual annotation applied to a range of text in the renderer. Each decoration specifies a `MultiBufferRange` and optionally a CSS class name and a partial [`DecorationStyle`](#decorationstyle). The DOM renderer builds a per-row lookup during each render pass; when two decorations overlap the same row, the later entry in the array wins.
+
+### DecorationStyle
+
+An interface (`src/renderer/types.ts`) describing the full set of visual properties a [Decoration](#decoration) can apply to a row: `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, `textDecoration`, and gutter-specific fields `gutterBackground`, `gutterColor`, `gutterSign`, and `gutterSignColor`. Decorations accept a `Partial<DecorationStyle>`, so any subset of fields may be specified.
 
 ---
 
@@ -155,6 +159,12 @@ The unit of movement or deletion for an editor command: `character`, `word`, `li
 ### Gutter
 
 The left-hand area of the editor display reserved for line numbers and other margin decorations. Its width is captured in `Measurements.gutterWidth`.
+
+### Gutter Sign
+
+A character rendered between the gutter line-number area and the line content on a decorated row. Specified via `DecorationStyle.gutterSign` (e.g., `"+"` or `"−"`) and colored by `gutterSignColor`. Useful for diff-style annotations that indicate added or removed lines.
+
+See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutter](#gutter)
 
 ---
 
