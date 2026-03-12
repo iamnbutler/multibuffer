@@ -4,6 +4,7 @@
 
 import { createBuffer } from "../src/buffer/buffer.ts";
 import type { BufferId } from "../src/buffer/types.ts";
+import { createUnifiedDiffMultiBuffer } from "../src/diff/multibuffer.ts";
 import { createUnifiedDiff } from "../src/diff/unified.ts";
 import { Editor } from "../src/editor/editor.ts";
 import { InputHandler } from "../src/editor/input-handler.ts";
@@ -32,7 +33,8 @@ type ScenarioId =
   | "empty"
   | "single-line"
   | "diff-single"
-  | "diff-multi";
+  | "diff-multi"
+  | "diff-editable";
 
 interface Scenario {
   readonly id: ScenarioId;
@@ -352,6 +354,14 @@ async function main() {
         // no-op: diff scenarios render via mountDiffView
       },
     },
+    {
+      id: "diff-editable",
+      label: "Editable Diff",
+      isDiff: true,
+      build() {
+        // no-op: handled by mountEditableDiff
+      },
+    },
   ];
 
   let activeScenarioId: ScenarioId = "all";
@@ -400,6 +410,9 @@ async function main() {
   ): () => void {
     if (id === "diff-single") {
       return renderSingleBufferDiff(target);
+    }
+    if (id === "diff-editable") {
+      return mountEditableDiff(target);
     }
     return renderMultiBufferDiff(target);
   }
@@ -490,6 +503,165 @@ async function main() {
     }
 
     return mountDiffView(target, files);
+  }
+
+  /**
+   * Mount an editable diff view using the standard Editor + DomRenderer.
+   * This demonstrates the full diff editing pipeline:
+   * - createUnifiedDiffMultiBuffer builds a MultiBuffer with delete/insert/equal excerpts
+   * - Delete excerpts are non-editable (from old buffer)
+   * - Insert/equal excerpts are editable (from new buffer)
+   * - DomRenderer in gutterMode: "diff" shows dual line numbers
+   */
+  function mountEditableDiff(target: HTMLElement): () => void {
+    // Use the first source file and create a modified version
+    const src = sources[0];
+    if (!src) return () => {};
+
+    const oldText = src.content;
+    const oldLines = oldText.split("\n");
+    const newLines = [...oldLines];
+
+    // Simulate edits: modify, add, and remove lines
+    if (newLines.length > 3) {
+      newLines[2] = `${newLines[2]} // updated`;
+    }
+    if (newLines.length > 8) {
+      newLines.splice(8, 0, "// NEW: inserted line", "// NEW: another inserted line");
+    }
+    if (newLines.length > 5) {
+      newLines.splice(5, 1); // delete one line
+    }
+    const newText = newLines.join("\n");
+
+    // Create buffers
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+    const oldId = `${src.path} (before)` as BufferId;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+    const newId = `${src.path} (after)` as BufferId;
+    const oldBuf = createBuffer(oldId, oldText);
+    const newBuf = createBuffer(newId, newText);
+
+    // Build the diff MultiBuffer with decorations
+    const { multiBuffer: diffMb, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    // Create diff renderer with dual gutter mode
+    const diffMeasurements: Measurements = {
+      lineHeight: 20,
+      gutterWidth: 48, // Not used in diff mode, but required
+      wrapWidth: 0, // No wrapping for now
+      gutterMode: "diff",
+    };
+
+    const diffRenderer = createDomRenderer(diffMeasurements);
+    diffRenderer.mount(target);
+    diffRenderer.setSnapshot(diffMb.snapshot());
+
+    // Create editor for the diff MultiBuffer
+    const diffEditor = new Editor(diffMb);
+
+    // Render function
+    function renderDiff() {
+      const snapshot = diffMb.snapshot();
+      diffRenderer.setSnapshot(snapshot);
+
+      const viewport = createViewport(
+        diffRenderer.getScrollTop(),
+        target.clientHeight,
+        target.clientWidth,
+        diffMeasurements,
+        snapshot.lineCount,
+      );
+
+      const lines = snapshot.lines(viewport.startRow, viewport.endRow);
+      const boundaries = snapshot.excerptBoundaries(viewport.startRow, viewport.endRow);
+
+      const excerptHeaders = boundaries
+        .filter((b) => b.prev !== undefined)
+        .map((b) => ({
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+          row: (b.row - 1) as MultiBufferRow,
+          path: b.next.bufferId,
+          label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
+        }));
+
+      diffRenderer.render(
+        {
+          viewport,
+          selections: [],
+          decorations,
+          excerptHeaders,
+          focused: true,
+        },
+        lines,
+      );
+
+      // Render cursor and selection
+      const cursor = diffEditor.cursor;
+      diffRenderer.renderCursor(cursor);
+      diffRenderer.scrollTo({ row: cursor.row, strategy: "nearest" });
+
+      const sel = diffEditor.selection;
+      if (sel) {
+        const start = snapshot.resolveAnchor(sel.range.start);
+        const end = snapshot.resolveAnchor(sel.range.end);
+        diffRenderer.renderSelection(start, end);
+      } else {
+        diffRenderer.renderSelection(undefined, undefined);
+      }
+    }
+
+    // Wire editor changes to re-render
+    diffEditor.onChange(renderDiff);
+
+    // Wire mouse interactions
+    diffRenderer.onClickPosition((clickPoint) => {
+      diffEditor.setCursor(clickPoint);
+    });
+    diffRenderer.onDrag((dragPoint) => {
+      diffEditor.extendSelectionTo(dragPoint);
+    });
+    diffRenderer.onDoubleClick((clickPoint) => {
+      diffEditor.selectWordAt(clickPoint);
+    });
+    diffRenderer.onTripleClick((clickPoint) => {
+      diffEditor.selectLineAt(clickPoint);
+    });
+
+    // Wire keyboard input
+    const diffInputHandler = new InputHandler((command) => {
+      if (command.type === "copy") {
+        const text = diffEditor.getSelectedText();
+        if (text) navigator.clipboard.writeText(text);
+      } else if (command.type === "cut") {
+        const text = diffEditor.getCutText();
+        if (text) navigator.clipboard.writeText(text);
+      }
+      diffEditor.dispatch(command);
+    });
+    diffInputHandler.mount(target);
+
+    // Wire focus state
+    const textarea = target.querySelector("textarea");
+    if (textarea) {
+      textarea.addEventListener("focus", () => diffRenderer.setFocused(true));
+      textarea.addEventListener("blur", () => diffRenderer.setFocused(false));
+    }
+
+    // Focus on container click
+    target.addEventListener("mousedown", () => {
+      diffInputHandler.focus();
+    });
+
+    // Initial render
+    renderDiff();
+    diffInputHandler.focus();
+
+    // Return cleanup function
+    return () => {
+      diffRenderer.unmount();
+      diffInputHandler.unmount();
+    };
   }
 
   function createScenarioPicker(): HTMLElement {
