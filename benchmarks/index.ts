@@ -2,6 +2,7 @@
  * Benchmark runner for multibuffer.
  *
  * Run with: bun run bench
+ * Run with JSON output: bun run bench --json
  *
  * Target performance:
  * - Buffer operations: <1ms
@@ -13,10 +14,11 @@ import { bufferBenchmarks } from "./buffer.bench.ts";
 import { diffBenchmarks } from "./diff.bench.ts";
 import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
-import { saveHistory } from "./history.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { viewportBenchmarks } from "./viewport.bench.ts";
 import { wrapMapBenchmarks } from "./wrapmap.bench.ts";
+
+const jsonMode = process.argv.includes("--json");
 
 const suites: BenchmarkSuite[] = [
   bufferBenchmarks,
@@ -27,10 +29,15 @@ const suites: BenchmarkSuite[] = [
   diffBenchmarks,
 ];
 
-console.log("=".repeat(60));
-console.log("Multibuffer Performance Benchmarks");
-console.log("=".repeat(60));
-console.log("");
+if (!jsonMode) {
+  console.log("=".repeat(60));
+  console.log("Multibuffer Performance Benchmarks");
+  console.log("=".repeat(60));
+  console.log("");
+}
 
-const results = await runBenchmarks(suites);
-await saveHistory(results);
+const results = await runBenchmarks(suites, { silent: jsonMode });
+
+if (jsonMode) {
+  console.log(JSON.stringify(results));
+}

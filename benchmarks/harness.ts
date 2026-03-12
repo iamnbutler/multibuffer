@@ -109,24 +109,36 @@ export function formatResult(result: BenchmarkResult): string {
   ].join("\n");
 }
 
+export interface RunOptions {
+  silent?: boolean;
+}
+
 /**
  * Run all benchmark suites and return per-suite results.
  */
-export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<SuiteResult[]> {
+export async function runBenchmarks(
+  suites: BenchmarkSuite[],
+  options: RunOptions = {},
+): Promise<SuiteResult[]> {
+  const { silent = false } = options;
   let totalPassed = 0;
   let totalFailed = 0;
   const suiteResults: SuiteResult[] = [];
 
   for (const suite of suites) {
-    console.log(`\n## ${suite.name}\n`);
+    if (!silent) {
+      console.log(`\n## ${suite.name}\n`);
+    }
 
     const results: BenchmarkResult[] = [];
 
     for (const bench of suite.benchmarks) {
       try {
         const result = await runBenchmark(bench);
-        console.log(formatResult(result));
-        console.log("");
+        if (!silent) {
+          console.log(formatResult(result));
+          console.log("");
+        }
         results.push(result);
 
         if (result.passed) {
@@ -135,9 +147,11 @@ export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<SuiteResu
           totalFailed++;
         }
       } catch (error) {
-        console.log(`✗ ${bench.name}`);
-        console.log(`  ERROR: ${error}`);
-        console.log("");
+        if (!silent) {
+          console.log(`✗ ${bench.name}`);
+          console.log(`  ERROR: ${error}`);
+          console.log("");
+        }
         totalFailed++;
       }
     }
@@ -145,9 +159,11 @@ export async function runBenchmarks(suites: BenchmarkSuite[]): Promise<SuiteResu
     suiteResults.push({ suite: suite.name, results });
   }
 
-  console.log("=".repeat(60));
-  console.log(`Results: ${totalPassed} passed, ${totalFailed} failed`);
-  console.log("=".repeat(60));
+  if (!silent) {
+    console.log("=".repeat(60));
+    console.log(`Results: ${totalPassed} passed, ${totalFailed} failed`);
+    console.log("=".repeat(60));
+  }
 
   if (totalFailed > 0) {
     process.exitCode = 1;
