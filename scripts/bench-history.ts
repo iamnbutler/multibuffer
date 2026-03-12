@@ -120,12 +120,12 @@ async function main(): Promise<void> {
 
   // Parse args
   const shaIndex = args.indexOf("--sha");
-  if (shaIndex !== -1 && args[shaIndex + 1]) {
-    const targetSha = args[shaIndex + 1];
-    const entry = entries.find((e) => e.sha.startsWith(targetSha));
+  const shaArg = shaIndex !== -1 ? args[shaIndex + 1] : undefined;
+  if (shaArg) {
+    const entry = entries.find((e) => e.sha.startsWith(shaArg));
 
     if (!entry) {
-      console.error(`No benchmark found for SHA: ${targetSha}`);
+      console.error(`No benchmark found for SHA: ${shaArg}`);
       process.exit(1);
     }
 
@@ -136,8 +136,9 @@ async function main(): Promise<void> {
   // Check for -n flag
   let count = 20;
   const nIndex = args.indexOf("-n");
-  if (nIndex !== -1 && args[nIndex + 1]) {
-    count = parseInt(args[nIndex + 1], 10) || 20;
+  const nArg = nIndex !== -1 ? args[nIndex + 1] : undefined;
+  if (nArg) {
+    count = parseInt(nArg, 10) || 20;
   }
 
   showSummary(entries, count);

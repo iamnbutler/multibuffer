@@ -8,8 +8,10 @@
  * - Unified diff view construction
  */
 
+import { createBuffer } from "../src/buffer/buffer.ts";
 import type { BufferId } from "../src/buffer/types.ts";
 import { diff } from "../src/diff/diff.ts";
+import { createUnifiedDiffMultiBuffer } from "../src/diff/multibuffer.ts";
 import { createUnifiedDiff } from "../src/diff/unified.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
@@ -122,6 +124,26 @@ export const diffBenchmarks: BenchmarkSuite = {
       fn() {
         createUnifiedDiff(oldId, large10k, newId, large10kFewChanges);
       },
+    },
+    {
+      name: "createUnifiedDiffMultiBuffer - 1K lines, scattered edits",
+      fn() {
+        const oldBuf = createBuffer(oldId, medium1k);
+        const newBuf = createBuffer(newId, medium1kScattered);
+        createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+      },
+      iterations: 100,
+      targetMs: 10,
+    },
+    {
+      name: "createUnifiedDiffMultiBuffer - 10K lines, few changes",
+      fn() {
+        const oldBuf = createBuffer(oldId, large10k);
+        const newBuf = createBuffer(newId, large10kFewChanges);
+        createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+      },
+      iterations: 10,
+      targetMs: 100,
     },
   ],
 };
