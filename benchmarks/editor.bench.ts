@@ -44,12 +44,37 @@ function makeEditor(lineCount: number): Editor {
   return new Editor(mb);
 }
 
+function makeIndentedEditor(lineCount: number, leadingSpaces: number): Editor {
+  const indent = " ".repeat(leadingSpaces);
+  const text = Array.from(
+    { length: lineCount },
+    (_, i) => `${indent}Line ${i + 1}: content`,
+  ).join("\n");
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+  const buf = createBuffer("bench-indent" as BufferId, text);
+  const mb = createMultiBuffer();
+  const lineRows = text.split("\n").length;
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+  const start = { row: 0 as BufferRow, column: 0 };
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+  const end = { row: lineRows as BufferRow, column: 0 };
+  const excerptRange = { context: { start, end }, primary: { start, end } };
+  mb.addExcerpt(buf, excerptRange);
+  return new Editor(mb);
+}
+
 let editorInsert1k: Editor;
 let editorInsert10k: Editor;
 let editorDelete1k: Editor;
 let editorMove1k: Editor;
 let editorNewline1k: Editor;
 let editorInsert100excerpts: Editor;
+let editorIndent1k: Editor;
+let editorDedent1k: Editor;
+let editorMoveLine1k: Editor;
+let editorDuplicate1k: Editor;
+let editorInsertBelow1k: Editor;
+let editorInsertAbove1k: Editor;
 
 export const editorBenchmarks: BenchmarkSuite = {
   name: "Editor dispatch (keypress latency)",
@@ -169,6 +194,95 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         editorInsert100excerpts.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Indent cursor line (Tab / Cmd+]) — snap.lines() + buffer.insert() per keypress.
+      // Lines accumulate 2 spaces per iteration; buffer stays ~1K lines throughout.
+      name: "indentLines - single line (1K buffer)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        editorIndent1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorIndent1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorIndent1k.dispatch({ type: "indentLines" });
+      },
+    },
+    {
+      // Dedent cursor line (Shift+Tab / Cmd+[).
+      // Realistic indentation: 100 leading spaces (enough for 50 iters × 2 spaces each).
+      name: "dedentLines - single line (1K buffer, 100-space indent)",
+      iterations: 50,
+      targetMs: 1,
+      setup: () => {
+        // 100 leading spaces — enough for 50 dedent iters (+ 10% warmup = 5) × 2 = 110 removed
+        editorDedent1k = makeIndentedEditor(1000, 110);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorDedent1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorDedent1k.dispatch({ type: "dedentLines" });
+      },
+    },
+    {
+      // Move cursor line down — 2× snap.lines() (combined into 1 after optimization) + _edit().
+      // Cursor moves down with each iteration; bounces near end of buffer.
+      name: "moveLine down (1K buffer)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        editorMoveLine1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMoveLine1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorMoveLine1k.dispatch({ type: "moveLine", direction: "down" });
+      },
+    },
+    {
+      // Duplicate line below — snap.lines(1 row) + _edit() insertion.
+      // Buffer grows by 1 line per iteration; staying well within 1K range for 500 iters.
+      name: "duplicateLine down (1K buffer)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        editorDuplicate1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorDuplicate1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorDuplicate1k.dispatch({ type: "duplicateLine", direction: "down" });
+      },
+    },
+    {
+      // Insert blank line below cursor (Enter equivalent from non-eol position).
+      name: "insertLineBelow (1K buffer)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        editorInsertBelow1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsertBelow1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorInsertBelow1k.dispatch({ type: "insertLineBelow" });
+      },
+    },
+    {
+      // Insert blank line above cursor.
+      name: "insertLineAbove (1K buffer)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        editorInsertAbove1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsertAbove1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorInsertAbove1k.dispatch({ type: "insertLineAbove" });
       },
     },
   ],

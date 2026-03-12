@@ -681,20 +681,21 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastRow = (lineCount - 1) as MultiBufferRow;
     if (direction === "down" && row >= lastRow) return;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const nextRowEnd = (row + 1) as MultiBufferRow;
-    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
-
     if (direction === "down") {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const belowRow = (row + 1) as MultiBufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const belowRowEnd = (belowRow + 1) as MultiBufferRow;
-      const belowLineText = snap.lines(belowRow, belowRowEnd)[0] ?? "";
+      const twoRowsEnd = (row + 2) as MultiBufferRow;
+      // Fetch both lines in a single snap.lines() call instead of two.
+      // The knownRemovedText avoids a third call inside _getTextInRange.
+      const twoLines = snap.lines(row, twoRowsEnd);
+      const currentLineText = twoLines[0] ?? "";
+      const belowLineText = twoLines[1] ?? "";
+      const removedText = `${currentLineText}\n${belowLineText}`;
 
       const editStart: MultiBufferPoint = { row, column: 0 };
       const editEnd: MultiBufferPoint = { row: belowRow, column: belowLineText.length };
-      if (!this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`)) return;
+      if (!this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`, removedText)) return;
 
       const newCursor: MultiBufferPoint = { row: belowRow, column: cursor.column };
       this._cursor = newCursor;
@@ -702,11 +703,17 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     } else {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const aboveRow = (row - 1) as MultiBufferRow;
-      const aboveLineText = snap.lines(aboveRow, row)[0] ?? "";
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const nextRowEnd = (row + 1) as MultiBufferRow;
+      // Fetch both lines in a single snap.lines() call instead of two.
+      const twoLines = snap.lines(aboveRow, nextRowEnd);
+      const aboveLineText = twoLines[0] ?? "";
+      const currentLineText = twoLines[1] ?? "";
+      const removedText = `${aboveLineText}\n${currentLineText}`;
 
       const editStart: MultiBufferPoint = { row: aboveRow, column: 0 };
       const editEnd: MultiBufferPoint = { row, column: currentLineText.length };
-      if (!this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`)) return;
+      if (!this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`, removedText)) return;
 
       const newCursor: MultiBufferPoint = { row: aboveRow, column: cursor.column };
       this._cursor = newCursor;
@@ -797,8 +804,10 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
-
-    if (!this._edit(snap, rangeStart, rangeEnd, indented.join("\n"))) return;
+    // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
+    // Safe: rangeStart.column === 0 and rangeEnd.column === lastLineLen (full line), so
+    // lines.join("\n") matches exactly what _getTextInRange would return.
+    if (!this._edit(snap, rangeStart, rangeEnd, indented.join("\n"), lines.join("\n"))) return;
 
     // Place cursor at its shifted position
     const cursor = this.cursor;
@@ -851,7 +860,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
     }
 
-    if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"))) return;
+    // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
+    if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"), lines.join("\n"))) return;
 
     // Adjust cursor column
     const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
@@ -925,6 +935,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     start: MultiBufferPoint,
     end: MultiBufferPoint,
     newText: string,
+    /** Pre-computed removed text. When provided, skips the `_getTextInRange` call for single-excerpt edits. */
+    knownRemovedText?: string,
   ): boolean {
     const startBuf = snap.toBufferPoint(start);
     const endBuf = snap.toBufferPoint(end);
@@ -939,7 +951,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       (start.row === end.row && start.column === end.column) ||
       startBuf.excerpt.id.index === endBuf.excerpt.id.index
     ) {
-      const removedText = this._getTextInRange(snap, start, end);
+      const removedText = knownRemovedText ?? this._getTextInRange(snap, start, end);
       this._undoStack.push({
         edits: [{ editStart: start, removedText, insertedText: newText }],
         cursorBefore: this._cursor,
