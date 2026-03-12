@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
-import type { Decoration, DecorationStyle } from "../../src/renderer/types.ts";
+import type { Decoration, DecorationStyle, Measurements } from "../../src/renderer/types.ts";
 
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
 const mbRow = (n: number) => n as MultiBufferRow;
@@ -176,5 +176,33 @@ describe("DecorationStyle type contract", () => {
     };
     expect(style.gutterSign).toBe("+");
     expect(style.fontWeight).toBe("bold");
+  });
+});
+
+describe("Measurements gutterMode", () => {
+  test("gutterMode defaults to undefined (standard)", () => {
+    const measurements: Measurements = {
+      lineHeight: 20,
+      gutterWidth: 48,
+    };
+    expect(measurements.gutterMode).toBeUndefined();
+  });
+
+  test("gutterMode can be set to 'standard'", () => {
+    const measurements: Measurements = {
+      lineHeight: 20,
+      gutterWidth: 48,
+      gutterMode: "standard",
+    };
+    expect(measurements.gutterMode).toBe("standard");
+  });
+
+  test("gutterMode can be set to 'diff'", () => {
+    const measurements: Measurements = {
+      lineHeight: 20,
+      gutterWidth: 48,
+      gutterMode: "diff",
+    };
+    expect(measurements.gutterMode).toBe("diff");
   });
 });

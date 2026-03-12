@@ -25,6 +25,12 @@ export interface Measurements {
   readonly gutterWidth: number;
   /** Character column limit for soft wrapping. Undefined or 0 = no wrap. */
   readonly wrapWidth?: number;
+  /**
+   * Gutter rendering mode.
+   * - "standard": single line number column (default)
+   * - "diff": dual columns (old line #, new line #) plus sign character
+   */
+  readonly gutterMode?: "standard" | "diff";
 }
 
 /**
