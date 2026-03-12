@@ -1,0 +1,57 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  bench:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run benchmarks
+        run: bun run bench --json > bench-results.json
+
+      - name: Push results to bench-data branch
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          # Try to fetch existing bench-data branch, or create orphan
+          if git fetch origin bench-data 2>/dev/null; then
+            git checkout bench-data
+          else
+            git checkout --orphan bench-data
+            git rm -rf .
+            echo "# Benchmark History" > README.md
+            echo "" >> README.md
+            echo "This branch stores benchmark results. Each line in history.jsonl is a JSON object with:" >> README.md
+            echo "- \`sha\`: commit hash" >> README.md
+            echo "- \`timestamp\`: ISO timestamp" >> README.md
+            echo "- \`suites\`: array of benchmark suite results" >> README.md
+            git add README.md
+          fi
+
+          # Build the history entry
+          ENTRY=$(jq -c --arg sha "${{ github.sha }}" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{sha: $sha, timestamp: $ts, suites: .}' bench-results.json)
+
+          # Remove any existing entry for this SHA, then append new entry
+          if [ -f history.jsonl ]; then
+            grep -v "\"sha\":\"${{ github.sha }}\"" history.jsonl > history.jsonl.tmp || true
+            mv history.jsonl.tmp history.jsonl
+          fi
+          echo "$ENTRY" >> history.jsonl
+
+          git add history.jsonl
+          git commit -m "bench: ${{ github.sha }}"
+          git push origin bench-data
