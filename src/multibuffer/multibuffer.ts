@@ -149,11 +149,31 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const dataByKey = this.excerptDataIndex;
 
     const result: string[] = [];
-    // Walk excerpts in sorted order; for each that overlaps [startRow, clampedEnd),
+    // Binary search for the first excerpt that could overlap [startRow, clampedEnd).
+    // Finds the leftmost excerpt where endRow > startRow, skipping the O(n) prefix
+    // scan that previously occurred for rows deep in the document.
+    let startIdx = 0;
+    {
+      let lo = 0;
+      let hi = this.excerpts.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        const exc = this.excerpts[mid];
+        if (exc && exc.endRow <= startRow) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      startIdx = lo;
+    }
+
+    // Walk excerpts in sorted order from startIdx; for each that overlaps [startRow, clampedEnd),
     // collect its lines via buffer.lines() — one bulk call per excerpt instead of
-    // one line() call per row.  No per-row binary search or linear find needed.
-    for (const info of this.excerpts) {
-      if (info.endRow <= startRow) continue;
+    // one line() call per row.
+    for (let i = startIdx; i < this.excerpts.length; i++) {
+      const info = this.excerpts[i];
+      if (!info) continue;
       if (info.startRow >= clampedEnd) break;
 
       const data = dataByKey.get(`${info.id.index}:${info.id.generation}`);
