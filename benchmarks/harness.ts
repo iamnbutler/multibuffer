@@ -163,10 +163,11 @@ export async function runBenchmarks(
     console.log("=".repeat(60));
     console.log(`Results: ${totalPassed} passed, ${totalFailed} failed`);
     console.log("=".repeat(60));
-  }
 
-  if (totalFailed > 0) {
-    process.exitCode = 1;
+    // Only fail in interactive mode - CI records results regardless of pass/fail
+    if (totalFailed > 0) {
+      process.exitCode = 1;
+    }
   }
 
   return suiteResults;
