@@ -97,7 +97,7 @@ Close the PR when any of these are true:
 - **Duplicate**: Another open PR addresses the same issue with the same or better approach
 - **Spam/noise**: The PR is obviously auto-generated junk, test commits, or unrelated to the project
 - **Fundamentally broken**: The approach is architecturally wrong and no amount of review feedback will fix it (e.g., introduces a framework dependency into the vanilla-TS core)
-- **Abandoned**: The PR has open `REQUEST_CHANGES` from 2+ review cycles with no author response for 7+ days
+- **Abandoned**: The PR has open `REQUEST_CHANGES` from 2+ review cycles with no author response for 7+ days (note: this only triggers on review events — truly abandoned PRs with no new reviews won't be caught)
 
 Comment explaining the close reason. Be direct but not rude. If closing as duplicate, link the better PR.
 
@@ -117,8 +117,9 @@ Comment explaining the close reason. Be direct but not rude. If closing as dupli
 Run through the decision framework above. The order matters:
 
 1. **Check for close conditions first.** Duplicates and spam should be caught before wasting time on detailed evaluation.
-2. **Check ready-to-merge conditions.** If everything is green, label it.
-3. **Default to needs-review.** When in doubt, flag for human review. The cost of a false label is much lower than the cost of merging bad code.
+2. **Check needs-review conditions.** If any apply (workflow files, security-sensitive code, large unreviewed diffs, blocking reviews), the PR needs human review — even if CI is green and there are no blocking reviews.
+3. **Check ready-to-merge conditions.** Only if no needs-review conditions apply and everything is green, label it.
+4. **Default to needs-review.** When in doubt, flag for human review. The cost of a false label is much lower than the cost of merging bad code.
 
 ### Step 3: Act
 
