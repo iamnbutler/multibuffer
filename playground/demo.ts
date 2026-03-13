@@ -574,23 +574,14 @@ async function main() {
       );
 
       const lines = snapshot.lines(viewport.startRow, viewport.endRow);
-      const boundaries = snapshot.excerptBoundaries(viewport.startRow, viewport.endRow);
 
-      const excerptHeaders = boundaries
-        .filter((b) => b.prev !== undefined)
-        .map((b) => ({
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-          row: (b.row - 1) as MultiBufferRow,
-          path: b.next.bufferId,
-          label: `L${b.next.range.context.start.row + 1}\u2013${b.next.range.context.end.row}`,
-        }));
-
+      // Diff mode: no excerpt headers - show unified view without fragmentation
       diffRenderer.render(
         {
           viewport,
           selections: [],
           decorations,
-          excerptHeaders,
+          excerptHeaders: [],
           focused: true,
         },
         lines,
