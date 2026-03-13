@@ -92,16 +92,6 @@ bun run demo/debug-client.ts click 5 10             # set cursor to row 5, col 1
 
 Also available as `window.__editor` in the browser console.
 
-## Task tracking
-
-Using [spool](https://github.com/iamnbutler/spool) for task management. Data is in `.spool/`.
-
-```bash
-spool list                    # Open tasks
-spool stream list             # All streams with task counts
-spool list --stream <id>      # Tasks in a stream
-```
-
 ## What's next
 
 Open tasks by priority:
