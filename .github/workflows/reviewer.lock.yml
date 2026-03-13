@@ -37,7 +37,7 @@
 #
 # gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"2ff360e3b5ffa219cb2ed9148de641ab4c092322b19283e8c8e76258a08f5cf4","compiler_version":"v0.56.1","strict":true}
 
-name: "Reviewer"
+name: "PR / Review"
 "on":
   pull_request:
     types:
@@ -51,7 +51,7 @@ concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}"
   cancel-in-progress: true
 
-run-name: "Reviewer"
+run-name: "PR / Review"
 
 jobs:
   activation:
@@ -83,7 +83,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.56.1"
-          GH_AW_INFO_WORKFLOW_NAME: "Reviewer"
+          GH_AW_INFO_WORKFLOW_NAME: "PR / Review"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -1111,7 +1111,7 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Reviewer"
+          WORKFLOW_NAME: "PR / Review"
           WORKFLOW_DESCRIPTION: "Adversarial code reviewer that enforces the project's core priorities on every PR.\nTriggered automatically on pull request events.\n- Evaluates accuracy, performance, consistency, and public API UX\n- Hard but fair — pushes back on shortcuts, loose types, sloppy suppressions\n- Uses REQUEST_CHANGES for blocking issues, COMMENT for suggestions\n- Hardballs every biome-ignore comment — suppressions must be truly necessary\n- Can sparingly create issues for recurring antipatterns\nNever writes implementation code. Only produces review comments and issues."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
@@ -1251,7 +1251,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Reviewer"
+          GH_AW_WORKFLOW_NAME: "PR / Review"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1264,7 +1264,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Reviewer"
+          GH_AW_WORKFLOW_NAME: "PR / Review"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1277,7 +1277,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Reviewer"
+          GH_AW_WORKFLOW_NAME: "PR / Review"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "reviewer"
@@ -1298,7 +1298,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Reviewer"
+          GH_AW_WORKFLOW_NAME: "PR / Review"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -1349,7 +1349,7 @@ jobs:
       GH_AW_ENGINE_ID: "claude"
       GH_AW_SAFE_OUTPUT_MESSAGES: "{\"footer\":\"\\u003e ⚖️ *Reviewed by [{workflow_name}]({run_url})*\",\"runStarted\":\"⚖️ [{workflow_name}]({run_url}) is reviewing this PR...\",\"runSuccess\":\"⚖️ [{workflow_name}]({run_url}) review complete. ✅\",\"runFailure\":\"⚖️ [{workflow_name}]({run_url}) {status}.\"}"
       GH_AW_WORKFLOW_ID: "reviewer"
-      GH_AW_WORKFLOW_NAME: "Reviewer"
+      GH_AW_WORKFLOW_NAME: "PR / Review"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}

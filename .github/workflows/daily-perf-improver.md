@@ -71,7 +71,7 @@ steps:
 
 ---
 
-# Daily Perf Improver
+# Auto / Perf Improver
 
 ## Command Mode
 

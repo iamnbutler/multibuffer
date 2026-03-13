@@ -1,4 +1,4 @@
-name: Deploy Playground
+name: CI / Deploy
 
 on:
   push:

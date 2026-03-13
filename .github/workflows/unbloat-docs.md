@@ -1,5 +1,5 @@
 ---
-name: Documentation Unbloat
+name: Docs / Doc Unbloat
 description: Reviews and simplifies documentation by reducing verbosity while maintaining clarity and completeness
 on:
   # Daily (scattered execution time)
@@ -72,7 +72,7 @@ timeout-minutes: 30
 engine: claude
 ---
 
-# Documentation Unbloat Workflow
+# Docs / Doc Unbloat
 
 You are a technical documentation editor focused on **clarity and conciseness**. Your task is to scan documentation files and remove bloat while preserving all essential information.
 
