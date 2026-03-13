@@ -94,6 +94,45 @@ A visual annotation applied to a range of text in the renderer. Each decoration 
 
 An interface (`src/renderer/types.ts`) describing the full set of visual properties a [Decoration](#decoration) can apply to a row: `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, `textDecoration`, and gutter-specific fields `gutterBackground`, `gutterColor`, `gutterSign`, and `gutterSignColor`. Decorations accept a `Partial<DecorationStyle>`, so any subset of fields may be specified.
 
+### DiffController
+
+A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
+
+Key methods:
+
+- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
+- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
+- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
+- `dispose()` — cleans up timers and subscriptions.
+
+See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
+
+### DiffHunk
+
+A contiguous group of changed and context [DiffLine](#diffline) entries produced by the diff algorithm, analogous to a unified diff hunk (`@@ -a,b +c,d @@`). Carries `oldStart`, `oldCount`, `newStart`, `newCount`, and a `lines` array. Adjacent changes within `2 × context` lines of each other are merged into a single hunk.
+
+See: `src/diff/types.ts`
+
+### DiffKind
+
+The type of change a [DiffLine](#diffline) represents:
+
+- `"equal"` — the line is unchanged between old and new.
+- `"insert"` — the line was added in the new version (has no `oldRow`).
+- `"delete"` — the line was removed from the old version (has no `newRow`).
+
+### DiffLine
+
+A single line in a diff result, carrying its [DiffKind](#diffkind), `text`, and source row numbers (`oldRow` from the old buffer, `newRow` from the new buffer). Insert lines have `oldRow: undefined`; delete lines have `newRow: undefined`.
+
+See: `src/diff/types.ts`
+
+### DiffResult
+
+The complete output of a diff computation: `{ hunks: DiffHunk[], isEqual: boolean }`. When `isEqual` is `true`, `hunks` is empty and the two texts are identical — no excerpts need to be created for changed content.
+
+See: `src/diff/types.ts`, `src/diff/diff.ts`
+
 ---
 
 ## E
@@ -178,6 +217,12 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 
 ## I
 
+### Implementor
+
+An automated AI agent (`.github/workflows/implementor.md`) that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command on any issue. Creates draft pull requests, self-maintains its open PRs for CI failures (delegating complex fixes to `/pr-fix`), and can decompose large issues into sub-issues also labeled `agent:implement`. Every output is prefixed with `[Implementor]` for transparency.
+
+See: `.github/workflows/implementor.md`
+
 ### indentLines
 
 An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line or every line in the selection, applied atomically. `insertTab` with a non-collapsed selection is treated as `indentLines`. Triggered by `Tab` (with a selection) or `Mod+]`.
@@ -231,6 +276,12 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 ### MultiBufferSnapshot
 
 An immutable snapshot of the multibuffer's state. Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns.
+
+### Myers' Algorithm
+
+The O(ND) line-level diff algorithm used in `src/diff/diff.ts`, where N is the sum of line counts in both texts and D is the number of differing lines. Finds the shortest edit script by tracking the furthest-reaching path on each diagonal of an edit graph. The implementation stores the trace as active diagonal slices of size `2d+1` at each step `d`, reducing memory from O(max·D) to O(D²) — a significant win for large files with few changes.
+
+See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
 ---
 
