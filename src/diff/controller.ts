@@ -74,8 +74,9 @@ export function createDiffController(
     _multiBuffer.clearExcerpts();
 
     if (diffResult.isEqual) {
-      // Only add excerpt if buffer has actual content
-      if (newSnap.text().length > 0) {
+      // Only add excerpt if buffer has actual content.
+      // textSummary.chars is O(1) — avoids a redundant text() call.
+      if (newSnap.textSummary.chars > 0) {
         _multiBuffer.addExcerpt(
           newBuffer,
           makeExcerptRange(0, newSnap.lineCount),

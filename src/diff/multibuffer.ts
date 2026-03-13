@@ -65,8 +65,9 @@ export function createUnifiedDiffMultiBuffer(
   const mb = createMultiBuffer();
 
   if (result.isEqual) {
-    // Only add excerpt if buffer has actual content (empty buffer has lineCount=1 but no text)
-    if (newSnap.text().length > 0) {
+    // Only add excerpt if buffer has actual content (empty buffer has lineCount=1 but no text).
+    // textSummary.chars is O(1) — avoids a redundant text() call.
+    if (newSnap.textSummary.chars > 0) {
       mb.addExcerpt(newBuffer, makeExcerptRange(0, newSnap.lineCount), {
         editable: editableEqual,
       });
