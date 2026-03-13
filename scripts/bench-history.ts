@@ -51,14 +51,19 @@ function showSummary(entries: HistoryEntry[], count: number): void {
   const recent = entries.slice(-count).reverse();
 
   console.log(`\nBenchmark History (last ${recent.length} runs)\n`);
-  console.log("SHA      | Date       | Passed | Failed | Avg Keypress");
-  console.log("-".repeat(60));
+  console.log(
+    "SHA      | Date       | Pass | Fail | Keypress | Diff 1K | Buffer 1K | WrapMap",
+  );
+  console.log("-".repeat(84));
 
   for (const entry of recent) {
     const date = entry.timestamp.split("T")[0];
     let passed = 0;
     let failed = 0;
     let keypressAvg: number | null = null;
+    let diffAvg: number | null = null;
+    let bufferAvg: number | null = null;
+    let viewportAvg: number | null = null;
 
     for (const suite of entry.suites) {
       for (const result of suite.results) {
@@ -69,14 +74,26 @@ function showSummary(entries: HistoryEntry[], count: number): void {
         if (result.name.includes("insertText") && result.name.includes("1K")) {
           keypressAvg = result.avgMs;
         }
+        // Look for diff benchmark (1K scattered)
+        if (result.name.includes("diff") && result.name.includes("1K") && result.name.includes("scattered")) {
+          diffAvg = result.avgMs;
+        }
+        // Look for buffer edit benchmark
+        if (result.name.includes("Insert single character") && result.name.includes("1K")) {
+          bufferAvg = result.avgMs;
+        }
+        // Look for WrapMap construction benchmark
+        if (result.name.includes("WrapMap construct") && result.name.includes("1K") && result.name.includes("no wrap")) {
+          viewportAvg = result.avgMs;
+        }
       }
     }
 
-    const keypressStr = keypressAvg !== null ? formatMs(keypressAvg) : "N/A";
+    const fmtOrNA = (v: number | null) => (v !== null ? formatMs(v).padStart(8) : "     N/A");
     const status = failed === 0 ? "✓" : "✗";
 
     console.log(
-      `${entry.sha.slice(0, 8)} | ${date} | ${String(passed).padStart(6)} | ${String(failed).padStart(6)} | ${keypressStr} ${status}`,
+      `${entry.sha.slice(0, 8)} | ${date} | ${String(passed).padStart(4)} | ${String(failed).padStart(4)} |${fmtOrNA(keypressAvg)} |${fmtOrNA(diffAvg)} |${fmtOrNA(bufferAvg)} |${fmtOrNA(viewportAvg)} ${status}`,
     );
   }
 
