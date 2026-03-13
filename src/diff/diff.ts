@@ -59,18 +59,24 @@ function myersDiff(oldLines: string[], newLines: string[]): Edit[] {
   // V[k] = furthest reaching x on diagonal k
   // We use offset to handle negative indices: v[k + offset]
   const offset = max;
-  const size = 2 * max + 1;
-  const v = new Int32Array(size);
+  const v = new Int32Array(2 * max + 1);
   v.fill(-1);
   v[1 + offset] = 0;
 
-  // Store the trace for backtracking
+  // Store only the active diagonals [-d, d] at each step d ≥ 1.
+  // Reduces trace memory from O(max · D) to O(D²) — a significant win for large
+  // files with few changes (e.g. D=5 on a 10K-line file: ~960 KB → ~140 bytes).
+  // d=0 is not stored; backtracking handles it with a simple equal-line walk.
   const trace: Int32Array[] = [];
 
   // Forward pass: find shortest edit path
   let found = false;
   for (let d = 0; d <= max; d++) {
-    trace.push(v.slice());
+    // Save active diagonals for this step before updating v.
+    // Slice covers k ∈ [-d, d]; within the slice, diagonal k is at index k + d.
+    if (d > 0) {
+      trace.push(v.slice(offset - d, offset + d + 1));
+    }
 
     for (let k = -d; k <= d; k += 2) {
       let x: number;
@@ -100,12 +106,11 @@ function myersDiff(oldLines: string[], newLines: string[]): Edit[] {
   }
 
   // Backtrack to recover the edit sequence
-  return backtrack(trace, offset, oldLines, newLines);
+  return backtrack(trace, oldLines, newLines);
 }
 
 function backtrack(
   trace: Int32Array[],
-  offset: number,
   oldLines: string[],
   newLines: string[],
 ): Edit[] {
@@ -115,19 +120,25 @@ function backtrack(
   let y = m;
   const edits: Edit[] = [];
 
-  for (let d = trace.length - 1; d >= 0; d--) {
-    const v = trace[d];
-    if (!v) continue;
+  // trace[i] corresponds to step d = i + 1 (d=0 is not stored).
+  // Each trace[i] covers diagonals k ∈ [-(i+1), i+1], indexed as k + (i+1).
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const d = i + 1;
+    const vSlice = trace[i];
+    if (!vSlice) continue;
     const k = x - y;
 
+    // Access diagonal kk within the slice: vSlice[kk + d]
+    const getV = (kk: number): number => vSlice[kk + d] ?? -1;
+
     let prevK: number;
-    if (k === -d || (k !== d && (v[k - 1 + offset] ?? -1) < (v[k + 1 + offset] ?? -1))) {
+    if (k === -d || (k !== d && getV(k - 1) < getV(k + 1))) {
       prevK = k + 1;
     } else {
       prevK = k - 1;
     }
 
-    const prevX = v[prevK + offset] ?? 0;
+    const prevX = getV(prevK);
     const prevY = prevX - prevK;
 
     // Diagonal moves (equal lines) — walk backwards
@@ -137,27 +148,33 @@ function backtrack(
       edits.push({ kind: "equal", oldRow: x, newRow: y, text: oldLines[x] ?? "" });
     }
 
-    if (d > 0) {
-      if (x === prevX) {
-        // Insert
-        y--;
-        edits.push({
-          kind: "insert",
-          oldRow: undefined,
-          newRow: y,
-          text: newLines[y] ?? "",
-        });
-      } else {
-        // Delete
-        x--;
-        edits.push({
-          kind: "delete",
-          oldRow: x,
-          newRow: undefined,
-          text: oldLines[x] ?? "",
-        });
-      }
+    // d is always ≥ 1 here; push the insert or delete for this step
+    if (x === prevX) {
+      // Insert
+      y--;
+      edits.push({
+        kind: "insert",
+        oldRow: undefined,
+        newRow: y,
+        text: newLines[y] ?? "",
+      });
+    } else {
+      // Delete
+      x--;
+      edits.push({
+        kind: "delete",
+        oldRow: x,
+        newRow: undefined,
+        text: oldLines[x] ?? "",
+      });
     }
+  }
+
+  // d=0: walk any remaining equal lines (the common prefix) back to (0, 0)
+  while (x > 0 && y > 0) {
+    x--;
+    y--;
+    edits.push({ kind: "equal", oldRow: x, newRow: y, text: oldLines[x] ?? "" });
   }
 
   edits.reverse();
