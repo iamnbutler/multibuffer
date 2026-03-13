@@ -173,7 +173,7 @@ engine: claude
 
 ---
 
-# Repo Assist
+# Auto / Repo Assist
 
 ## Command Mode
 

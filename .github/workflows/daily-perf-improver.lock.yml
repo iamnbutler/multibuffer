@@ -33,7 +33,7 @@
 #
 # gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"cfb27351be08b6adabd11902e5d2b6c69184e4d71f8c56850174b840daab7c1c","compiler_version":"v0.56.1","strict":true}
 
-name: "Daily Perf Improver"
+name: "Auto / Perf Improver"
 "on":
   discussion:
     types:
@@ -70,7 +70,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}"
 
-run-name: "Daily Perf Improver"
+run-name: "Auto / Perf Improver"
 
 jobs:
   activation:
@@ -119,7 +119,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.56.1"
-          GH_AW_INFO_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_INFO_WORKFLOW_NAME: "Auto / Perf Improver"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -1385,7 +1385,7 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Daily Perf Improver"
+          WORKFLOW_NAME: "Auto / Perf Improver"
           WORKFLOW_DESCRIPTION: "A performance-focused repository assistant that runs daily to identify and implement performance improvements.\nCan also be triggered on-demand via '/perf-assist <instructions>' to perform specific tasks.\n- Discovers and validates build, test, and benchmark commands for the repository\n- Identifies performance bottlenecks and optimization opportunities\n- Implements performance improvements with measured impact\n- Maintains performance-related PRs when CI fails or conflicts arise\n- Records performance techniques and learnings in persistent memory\n- Updates a monthly activity summary for maintainer visibility\nAlways methodical, measurement-driven, and mindful of trade-offs."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
@@ -1526,7 +1526,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1539,7 +1539,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1552,7 +1552,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "daily-perf-improver"
@@ -1577,7 +1577,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -1594,7 +1594,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+          GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -1732,7 +1732,7 @@ jobs:
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/daily-perf-improver"
       GH_AW_ENGINE_ID: "claude"
       GH_AW_WORKFLOW_ID: "daily-perf-improver"
-      GH_AW_WORKFLOW_NAME: "Daily Perf Improver"
+      GH_AW_WORKFLOW_NAME: "Auto / Perf Improver"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}
