@@ -62,7 +62,7 @@ export class Highlighter implements SyntaxHighlighter {
 
   /**
    * Get syntax tokens for a specific line of a buffer.
-   * Returns tokens sorted by startColumn with pre-resolved colors.
+   * Returns tokens in startColumn order (guaranteed by depth-first tree traversal).
    */
   getLineTokens(bufferId: string, row: number): Token[] {
     const tree = this._trees.get(bufferId);
@@ -70,7 +70,6 @@ export class Highlighter implements SyntaxHighlighter {
 
     const tokens: Token[] = [];
     this._collectTokens(tree.rootNode, row, tokens, null);
-    tokens.sort((a, b) => a.startColumn - b.startColumn);
     return tokens;
   }
 
