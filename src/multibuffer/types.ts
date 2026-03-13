@@ -171,6 +171,7 @@ export interface MultiBuffer {
     options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId;
   removeExcerpt(excerptId: ExcerptId): void;
+  clearExcerpts(): readonly ExcerptId[];
   setExcerptsForBuffer(
     buffer: import("../buffer/types.ts").Buffer,
     ranges: readonly ExcerptRange[],

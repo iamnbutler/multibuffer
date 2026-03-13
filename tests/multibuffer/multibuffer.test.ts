@@ -949,3 +949,57 @@ describe("MultiBuffer - Performance", () => {
 
   test.todo("singleton optimization provides speedup", () => {});
 });
+
+describe("clearExcerpts", () => {
+  test("removes all excerpts", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), "line1\nline2\n");
+    const buf2 = createBuffer(createBufferId(), "lineA\nlineB\n");
+
+    mb.addExcerpt(buf1, excerptRange(0, 2));
+    mb.addExcerpt(buf2, excerptRange(0, 2));
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.lineCount).toBe(4);
+
+    mb.clearExcerpts();
+
+    expect(mb.excerpts.length).toBe(0);
+    expect(mb.lineCount).toBe(0);
+  });
+
+  test("returns old excerpt IDs for anchor replacement mapping", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "a\nb\nc\n");
+
+    const id1 = mb.addExcerpt(buffer, excerptRange(0, 1));
+    const id2 = mb.addExcerpt(buffer, excerptRange(1, 2));
+    const id3 = mb.addExcerpt(buffer, excerptRange(2, 3));
+
+    const oldIds = mb.clearExcerpts();
+
+    expect(oldIds.length).toBe(3);
+    expect(oldIds).toContainEqual(id1);
+    expect(oldIds).toContainEqual(id2);
+    expect(oldIds).toContainEqual(id3);
+  });
+
+  test("clearing empty multibuffer returns empty array", () => {
+    const mb = createMultiBuffer();
+    const oldIds = mb.clearExcerpts();
+    expect(oldIds).toEqual([]);
+  });
+
+  test("resets singleton flag after clearing", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), "a\nb\n");
+    mb.addExcerpt(buffer, excerptRange(0, 2));
+    expect(mb.isSingleton).toBe(true);
+
+    mb.clearExcerpts();
+    expect(mb.isSingleton).toBe(false);
+
+    // Adding single excerpt again should restore singleton
+    mb.addExcerpt(buffer, excerptRange(0, 2));
+    expect(mb.isSingleton).toBe(true);
+  });
+});

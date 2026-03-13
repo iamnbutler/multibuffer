@@ -53,7 +53,7 @@ The system must handle:
    - Constructs a `MultiBuffer` with excerpts from appropriate source buffers.
    - Generates `Decoration[]` for visual styling.
 
-3. **Live Diff Controller** (`src/diff/live-diff.ts`)
+3. **Diff Controller** (`src/diff/controller.ts`)
    - Wraps the diff MultiBuffer with change detection.
    - Provides `notifyChange()` for edit notifications.
    - Debounces and triggers re-diff on content changes.
@@ -85,7 +85,7 @@ The system must handle:
 When user edits:
 1. Editor modifies the new buffer via `MultiBuffer.edit()`.
 2. Editor fires `onChange` callback.
-3. Live diff controller receives `notifyChange()`.
+3. Diff controller receives `notifyChange()`.
 4. After debounce delay, controller:
    - Reads current text from both buffers.
    - Runs `diff()` to get new hunks.
@@ -170,9 +170,9 @@ Fields:
 - `gutterSign` (string) - Sign character (e.g., "+", "−").
 - `gutterSignColor` (string) - Color for the sign character.
 
-#### 4.1.6 LiveDiffController
+#### 4.1.6 DiffController
 
-Controller for a live-updating diff view.
+Controller for a diff view with re-diff on edit support.
 
 Interface:
 - `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
@@ -434,21 +434,21 @@ interface UnifiedDiffMultiBufferResult {
 }
 ```
 
-### 7.2 createLiveDiff
+### 7.2 createDiffController
 
 ```typescript
-function createLiveDiff(
+function createDiffController(
   oldBuffer: Buffer,
   newBuffer: Buffer,
-  options?: LiveDiffOptions
-): LiveDiffController;
+  options?: DiffControllerOptions
+): DiffController;
 
-interface LiveDiffOptions extends DiffOptions, UnifiedDiffMultiBufferOptions {
+interface DiffControllerOptions extends DiffOptions, UnifiedDiffMultiBufferOptions {
   /** Debounce delay in milliseconds. Default: 150. */
   debounceMs?: number;
 }
 
-interface LiveDiffController {
+interface DiffController {
   readonly multiBuffer: MultiBuffer;
   readonly decorations: readonly Decoration[];
   readonly isEqual: boolean;
@@ -498,7 +498,7 @@ interface Measurements {
 - Decoration styles correct for line kind.
 - Total line count correct.
 
-### 8.3 Live Diff Tests
+### 8.3 DiffController Tests
 
 - `reDiff()` updates decorations.
 - `notifyChange()` debounces correctly.
