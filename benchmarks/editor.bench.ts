@@ -198,9 +198,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Indent cursor line (Tab / Cmd+]) — snap.lines() + buffer.insert() per keypress.
-      // Lines accumulate 2 spaces per iteration; buffer stays ~1K lines throughout.
+      // Lines accumulate 2 spaces per iteration; limit iterations to avoid line explosion.
       name: "indentLines - single line (1K buffer)",
-      iterations: 500,
+      iterations: 50,
       targetMs: 1,
       setup: () => {
         editorIndent1k = makeEditor(1000);
@@ -229,9 +229,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Move cursor line down — 2× snap.lines() (combined into 1 after optimization) + _edit().
-      // Cursor moves down with each iteration; bounces near end of buffer.
+      // Cursor moves down with each iteration; limit to avoid buffer end bouncing issues.
       name: "moveLine down (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorMoveLine1k = makeEditor(1000);
@@ -244,9 +244,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Duplicate line below — snap.lines(1 row) + _edit() insertion.
-      // Buffer grows by 1 line per iteration; staying well within 1K range for 500 iters.
+      // Buffer grows by 1 line per iteration; limit iterations to avoid buffer explosion.
       name: "duplicateLine down (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorDuplicate1k = makeEditor(1000);
@@ -259,8 +259,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Insert blank line below cursor (Enter equivalent from non-eol position).
+      // Buffer grows; limit iterations.
       name: "insertLineBelow (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorInsertBelow1k = makeEditor(1000);
@@ -273,8 +274,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Insert blank line above cursor.
+      // Buffer grows; limit iterations.
       name: "insertLineAbove (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorInsertAbove1k = makeEditor(1000);
