@@ -109,50 +109,37 @@ When user edits:
 A single line in the diff output.
 
 Fields:
-- `kind` ("equal" | "insert" | "delete")
-  - The type of change this line represents.
-- `text` (string)
-  - The line content without trailing newline.
-- `oldRow` (number | undefined)
-  - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined)
-  - 0-based line number in new buffer. Undefined for delete lines.
+- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
+- `text` (string) - The line content without trailing newline.
+- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
+- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
 
 #### 4.1.2 DiffHunk
 
 A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
 
 Fields:
-- `oldStart` (number)
-  - Starting line number in old buffer.
-- `oldCount` (number)
-  - Number of lines from old buffer in this hunk.
-- `newStart` (number)
-  - Starting line number in new buffer.
-- `newCount` (number)
-  - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[])
-  - The lines in this hunk, including context.
+- `oldStart` (number) - Starting line number in old buffer.
+- `oldCount` (number) - Number of lines from old buffer in this hunk.
+- `newStart` (number) - Starting line number in new buffer.
+- `newCount` (number) - Number of lines from new buffer in this hunk.
+- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
 
 #### 4.1.3 DiffResult
 
 Complete diff output.
 
 Fields:
-- `hunks` (readonly DiffHunk[])
-  - All hunks describing changes.
-- `isEqual` (boolean)
-  - True if old and new text are identical.
+- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
+- `isEqual` (boolean) - True if old and new text are identical.
 
 #### 4.1.4 Decoration
 
 Visual styling applied to a range of text.
 
 Fields:
-- `range` (MultiBufferRange)
-  - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>)
-  - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+- `range` (MultiBufferRange) - The rows this decoration applies to.
+- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
 
 #### 4.1.5 DecorationStyle
 
@@ -374,13 +361,7 @@ gutterSignColor: "#4ade80"
 
 ### 6.1 Excerpt Headers
 
-**Problem**: The current implementation shows excerpt headers at every excerpt boundary, which creates visual clutter in diff views.
-
-**Solution**: Excerpt headers should NOT be shown in diff mode. The diff is a unified view of two files; showing file paths between every hunk fragment is wrong.
-
-**Implementation**:
-- When `gutterMode === "diff"`, skip excerpt header rendering.
-- Alternative: Provide an explicit `showExcerptHeaders: boolean` option.
+Excerpt headers must NOT be shown in diff mode — the unified view spans two files, so showing file paths at every hunk boundary is wrong. Skip header rendering when `gutterMode === "diff"`, or expose a `showExcerptHeaders: boolean` option.
 
 ### 6.2 Diff Gutter Layout
 
@@ -526,16 +507,9 @@ interface Measurements {
 - Re-render after re-diff: <16ms (one frame).
 - Memory: No per-line allocations; reuse excerpt objects where possible.
 
-## 10. Open Questions
+## 10. Deferred Features
 
-1. **Word-level highlighting**: Should we highlight changed words/characters within a line, not just the whole line?
-   - Decision: Out of scope for v1. Can be added as decoration extension later.
-
-2. **Hunk folding**: Should users be able to collapse unchanged context regions?
-   - Decision: Out of scope for v1. Would require excerpt expand/collapse support.
-
-3. **Three-way merge**: Should we support base/ours/theirs views?
-   - Decision: Out of scope. Would require significantly different architecture.
-
-4. **Undo behavior**: Should undo after convergence restore the original insert text?
-   - Decision: Yes. The editor's undo stack operates on the new buffer independently of diff state.
+- **Word-level highlighting**: Out of scope for v1; can be added as a decoration extension.
+- **Hunk folding**: Out of scope for v1; requires excerpt expand/collapse support.
+- **Three-way merge**: Out of scope; requires significantly different architecture.
+- **Undo behavior**: Supported — the editor's undo stack operates on the new buffer independently of diff state.
