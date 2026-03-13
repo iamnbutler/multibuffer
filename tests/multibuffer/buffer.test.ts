@@ -372,6 +372,45 @@ describe("Buffer Clipping with Bias", () => {
     const snapshot = buffer.snapshot();
     expectOffset(snapshot.clipOffset(offset(100), Bias.Left), 5);
   });
+
+  test("clipPoint with Bias.Left snaps back over surrogate pair", () => {
+    // "A🎉B" — 🎉 (U+1F389) encodes as two UTF-16 code units at columns 1–2.
+    // Column 2 is the low surrogate; Bias.Left should snap back to column 1.
+    const buffer = createBuffer(createBufferId(), "A🎉B");
+    const snapshot = buffer.snapshot();
+    expectPoint(snapshot.clipPoint(point(0, 2), Bias.Left), 0, 1);
+  });
+
+  test("clipPoint with Bias.Right snaps forward over surrogate pair", () => {
+    // Column 2 is the low surrogate; Bias.Right should advance to column 3.
+    const buffer = createBuffer(createBufferId(), "A🎉B");
+    const snapshot = buffer.snapshot();
+    expectPoint(snapshot.clipPoint(point(0, 2), Bias.Right), 0, 3);
+  });
+
+  test("clipPoint on high-surrogate column is unchanged (valid boundary)", () => {
+    // Column 1 is the high surrogate — the start of the pair, which is a
+    // valid boundary in both left and right bias.
+    const buffer = createBuffer(createBufferId(), "A🎉B");
+    const snapshot = buffer.snapshot();
+    expectPoint(snapshot.clipPoint(point(0, 1), Bias.Left), 0, 1);
+    expectPoint(snapshot.clipPoint(point(0, 1), Bias.Right), 0, 1);
+  });
+
+  test("clipOffset with Bias.Left snaps back over surrogate pair", () => {
+    // "A🎉B": offsets 0=A, 1=high-surrogate, 2=low-surrogate, 3=B
+    // Offset 2 is a low surrogate; Bias.Left snaps to offset 1.
+    const buffer = createBuffer(createBufferId(), "A🎉B");
+    const snapshot = buffer.snapshot();
+    expectOffset(snapshot.clipOffset(offset(2), Bias.Left), 1);
+  });
+
+  test("clipOffset with Bias.Right snaps forward over surrogate pair", () => {
+    // Offset 2 is a low surrogate; Bias.Right snaps to offset 3.
+    const buffer = createBuffer(createBufferId(), "A🎉B");
+    const snapshot = buffer.snapshot();
+    expectOffset(snapshot.clipOffset(offset(2), Bias.Right), 3);
+  });
 });
 
 

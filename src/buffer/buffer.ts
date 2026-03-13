@@ -6,16 +6,16 @@
  */
 
 import { Rope } from "./rope.ts";
-import type {
+import {
   Bias,
-  Buffer,
-  BufferId,
-  BufferOffset,
-  BufferPoint,
-  BufferRow,
-  BufferSnapshot,
-  EditEntry,
-  TextSummary,
+  type Buffer,
+  type BufferId,
+  type BufferOffset,
+  type BufferPoint,
+  type BufferRow,
+  type BufferSnapshot,
+  type EditEntry,
+  type TextSummary,
 } from "./types.ts";
 
 /** UTF-8 byte length without allocating a Uint8Array. */
@@ -86,7 +86,7 @@ class BufferSnapshotImpl implements BufferSnapshot {
     return { row: line as BufferRow, column: col };
   }
 
-  clipPoint(point: BufferPoint, _bias: Bias): BufferPoint {
+  clipPoint(point: BufferPoint, bias: Bias): BufferPoint {
     const r = point.row;
     if (r >= this.lineCount) {
       const lastRow = this.lineCount - 1;
@@ -99,16 +99,27 @@ class BufferSnapshotImpl implements BufferSnapshot {
       return { row: 0 as BufferRow, column: 0 };
     }
 
-    const lineLen = this._rope.line(r).length;
+    const lineText = this._rope.line(r);
+    const lineLen = lineText.length;
     let col = point.column;
     if (col < 0) col = 0;
     if (col > lineLen) col = lineLen;
+
+    // Snap to a valid Unicode code point boundary.
+    // A column pointing at a low surrogate (U+DC00–U+DFFF) is in the middle
+    // of a supplementary character encoded as a UTF-16 surrogate pair.
+    if (col > 0 && col < lineLen) {
+      const charCode = lineText.charCodeAt(col);
+      if (charCode >= 0xdc00 && charCode <= 0xdfff) {
+        col = bias === Bias.Left ? col - 1 : col + 1;
+      }
+    }
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { row: r as BufferRow, column: col };
   }
 
-  clipOffset(offset: BufferOffset, _bias: Bias): BufferOffset {
+  clipOffset(offset: BufferOffset, bias: Bias): BufferOffset {
     if (offset < 0) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       return 0 as BufferOffset;
@@ -117,6 +128,21 @@ class BufferSnapshotImpl implements BufferSnapshot {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       return this._rope.length as BufferOffset;
     }
+
+    // Snap to a valid Unicode code point boundary.
+    if (offset > 0 && offset < this._rope.length) {
+      const { line, col } = this._rope.offsetToLineCol(offset);
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const lineText = this._rope.line(line as BufferRow);
+      if (col < lineText.length) {
+        const charCode = lineText.charCodeAt(col);
+        if (charCode >= 0xdc00 && charCode <= 0xdfff) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          return (bias === Bias.Left ? offset - 1 : offset + 1) as BufferOffset;
+        }
+      }
+    }
+
     return offset;
   }
 }
