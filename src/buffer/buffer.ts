@@ -18,33 +18,14 @@ import type {
   TextSummary,
 } from "./types.ts";
 
-/** UTF-8 byte length without allocating a Uint8Array. */
-function utf8ByteLength(str: string): number {
-  let bytes = 0;
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    if (code <= 0x7f) {
-      bytes += 1;
-    } else if (code <= 0x7ff) {
-      bytes += 2;
-    } else if (code >= 0xd800 && code <= 0xdbff) {
-      bytes += 4;
-      i++;
-    } else {
-      bytes += 3;
-    }
-  }
-  return bytes;
-}
-
 function computeTextSummary(rope: Rope): TextSummary {
   // lines and chars are O(1) from rope metadata — no allocation or iteration needed.
   const lines = rope.lineCount;
   const chars = rope.length;
   // biome-ignore lint/plugin/no-type-assertion: expect: BufferRow brand for last-row index
   const lastLineLength = rope.line((lines - 1) as BufferRow).length;
-  // bytes requires one O(n) scan of the text, but with no intermediate split().
-  const bytes = utf8ByteLength(rope.text());
+  // byteLength() scans chunks in-place — no full-text allocation.
+  const bytes = rope.byteLength();
   return { lines, bytes, lastLineLength, chars };
 }
 
