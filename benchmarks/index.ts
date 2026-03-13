@@ -12,6 +12,7 @@
 
 import { bufferBenchmarks } from "./buffer.bench.ts";
 import { diffBenchmarks } from "./diff.bench.ts";
+import { diffControllerBenchmarks } from "./diff-controller.bench.ts";
 import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
@@ -27,6 +28,7 @@ const suites: BenchmarkSuite[] = [
   wrapMapBenchmarks,
   editorBenchmarks,
   diffBenchmarks,
+  diffControllerBenchmarks,
 ];
 
 if (!jsonMode) {
