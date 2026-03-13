@@ -972,7 +972,23 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
     }
 
-    // Cross-excerpt: split into per-excerpt edits, applied bottom-to-top
+    // Cross-excerpt within same buffer: edit directly (handles boundary newlines)
+    if (startBuf.excerpt.bufferId === endBuf.excerpt.bufferId) {
+      const removedText = knownRemovedText ?? this._getTextInRange(snap, start, end);
+      this._undoStack.push({
+        edits: [{ editStart: start, removedText, insertedText: newText }],
+        cursorBefore: this._cursor,
+        selectionBefore: this._selection,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
+      }
+      this._redoStack = [];
+      this.multiBuffer.edit(start, end, newText);
+      return true;
+    }
+
+    // Cross-excerpt across different buffers: split into per-excerpt edits, applied bottom-to-top
     const subEdits = this._splitCrossExcerptRange(snap, start, end, startBuf.excerpt, endBuf.excerpt, newText);
     const editOps: EditOp[] = [];
 
