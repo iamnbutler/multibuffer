@@ -749,7 +749,40 @@ describe("MultiBuffer - Snapshot", () => {
     expect(s2.excerpts.length).toBe(2);
   });
 
-  test.todo("anchors work with old snapshots", () => {});
+  test("anchors work with old snapshots", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Create anchor at row 1, col 3 (inside "Line 1")
+    const a = mb.createAnchor(mbPoint(1, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Snapshot taken before any further mutations
+    const s1 = mb.snapshot();
+    const p1 = s1.resolveAnchor(a);
+    expect(p1).toBeDefined();
+    if (p1) expectPoint(p1, 1, 3);
+
+    // Mutate: add a second excerpt from a new buffer
+    const buf2 = createBuffer(createBufferId(), "X\nY\nZ");
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+
+    // Snapshot after mutation — multibuffer now has 6 lines total
+    const s2 = mb.snapshot();
+    expect(s2.lineCount).toBe(6);
+
+    // Anchor still resolves to the same position in s2 (excerpt 1 unchanged)
+    const p2 = s2.resolveAnchor(a);
+    expect(p2).toBeDefined();
+    if (p2) expectPoint(p2, 1, 3);
+
+    // s1 still resolves correctly (snapshot immutability)
+    const p1Again = s1.resolveAnchor(a);
+    expect(p1Again).toBeDefined();
+    if (p1Again) expectPoint(p1Again, 1, 3);
+  });
 });
 
 
@@ -945,7 +978,30 @@ describe("MultiBuffer - Performance", () => {
     expect(durationMs).toBeLessThan(1);
   });
 
-  test.todo("anchor resolution is fast", () => {});
+  test("anchor resolution is fast", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    for (let i = 0; i < 100; i++) {
+      mb.addExcerpt(buffer, excerptRange(i * 100, i * 100 + 100));
+    }
+
+    // Create 100 anchors scattered across all excerpts
+    const anchors: import("../../src/multibuffer/types.ts").Anchor[] = [];
+    for (let i = 0; i < 100; i++) {
+      const a = mb.createAnchor(mbPoint(i * 100, 0), Bias.Right);
+      if (a) anchors.push(a);
+    }
+    expect(anchors.length).toBe(100);
+
+    const snap = mb.snapshot();
+
+    // Use benchmark() to get a stable average over multiple iterations
+    // rather than a single timing that may be skewed by JIT warm-up.
+    const result = benchmark(() => {
+      snap.resolveAnchors(anchors);
+    }, 100);
+    expect(result.avgMs).toBeLessThan(5);
+  });
 
   test.todo("singleton optimization provides speedup", () => {});
 });
