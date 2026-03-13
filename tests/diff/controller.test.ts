@@ -253,3 +253,43 @@ describe("dispose", () => {
     expect(controller.isEqual).toBe(true);
   });
 });
+
+describe("Editor backspace in diff view", () => {
+  test("backspace at start of insert line merges with previous equal line", async () => {
+    // Scenario: old has "A\nC\n", new has "A\nB\nC\n" (B inserted between A and C)
+    const oldBuffer = createBuffer(createBufferId(), "A\nC\n");
+    const newBuffer = createBuffer(createBufferId(), "A\nB\nC\n");
+
+    // Use context=1 to include adjacent equal lines
+    const controller = createDiffController(oldBuffer, newBuffer, { context: 1 });
+    const mb = controller.multiBuffer;
+
+    // Diff result (with context=0):
+    // Row 0: equal "A" (new row 0)
+    // Row 1: insert "B" (new row 1)
+    // Row 2: equal "C" (new row 2)
+    expect(mb.lineCount).toBe(3);
+    expect(controller.isEqual).toBe(false);
+
+    // Verify the structure
+    const snap = mb.snapshot();
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type for test
+    const lines = snap.lines(0 as import("../../src/multibuffer/types.ts").MultiBufferRow, 3 as import("../../src/multibuffer/types.ts").MultiBufferRow);
+    expect(lines).toEqual(["A", "B", "C"]);
+
+    // Now simulate backspace at start of row 1 (the insert line "B")
+    // This should delete the newline at end of row 0, merging "A" and "B" into "AB"
+    const { Editor } = await import("../../src/editor/editor.ts");
+    const editor = new Editor(mb);
+
+    // Position cursor at start of row 1 (the insert line)
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type for test
+    editor.setCursor({ row: 1 as import("../../src/multibuffer/types.ts").MultiBufferRow, column: 0 });
+
+    // Dispatch backspace
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+
+    // The edit should have been applied - newBuffer should now be "AB\nC\n"
+    expect(newBuffer.snapshot().text()).toBe("AB\nC\n");
+  });
+});
