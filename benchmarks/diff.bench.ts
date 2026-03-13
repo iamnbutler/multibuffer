@@ -76,54 +76,70 @@ export const diffBenchmarks: BenchmarkSuite = {
       fn() {
         diff(small100, small100Modified);
       },
+      iterations: 1000,
     },
     {
       name: "diff - 1K lines, scattered edits",
       fn() {
         diff(medium1k, medium1kScattered);
       },
+      iterations: 100,
+      targetMs: 5,
     },
     {
       name: "diff - 1K lines, insertions",
       fn() {
         diff(medium1k, medium1kInserted);
       },
+      iterations: 100,
+      targetMs: 5,
     },
     {
       name: "diff - 1K lines, deletions",
       fn() {
         diff(medium1k, medium1kDeleted);
       },
+      iterations: 100,
+      targetMs: 5,
     },
     {
       name: "diff - 10K lines, few changes",
       fn() {
         diff(large10k, large10kFewChanges);
       },
+      iterations: 20,
+      targetMs: 50,
     },
     {
       name: "diff - 1K lines, full rewrite (worst case)",
       fn() {
         diff(medium1k, medium1kRewrite);
       },
+      iterations: 10,
+      targetMs: 50,
     },
     {
       name: "diff - identical 1K lines (best case)",
       fn() {
         diff(medium1k, medium1k);
       },
+      iterations: 100,
     },
     {
       name: "unified diff - 1K lines, scattered edits",
       fn() {
         createUnifiedDiff(oldId, medium1k, newId, medium1kScattered);
       },
+      iterations: 100,
+      targetMs: 10,
     },
     {
       name: "unified diff - 10K lines, few changes",
       fn() {
         createUnifiedDiff(oldId, large10k, newId, large10kFewChanges);
       },
+      iterations: 20,
+      targetMs: 50,
     },
     {
       name: "createUnifiedDiffMultiBuffer - 1K lines, scattered edits",
