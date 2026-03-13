@@ -2,10 +2,9 @@
 
 cmds: /home/runner/.bun/bin/bun test / /home/runner/.bun/bin/bun run benchmarks/index.ts / /home/runner/.bun/bin/bun run lint
 install: curl https://bun.sh/install | bash && /home/runner/.bun/bin/bun install --frozen-lockfile
-merged: #48 #51-55 #74 #79 #81 #82 #83 #85 #88 #91 #93 #94 #95 #96
-open_prs: #107 #126 #125 (plus new #130 submitted this run)
+merged: #48 #51-55 #74 #79 #81-85 #88 #91 #93-96 #107 #130 #142
+open_prs: perf-assist/diff-identical-fastpath (2026-03-13)
 monthly: #49
-backlog: 1)_lineColToOffset-cross-chunk 2)diff-worst-case-30ms-myers
-last_run: 2026-03-12 run 23015155184
-bench: 773pass 60-benchmarks insertText-1K 0.089ms insert10K 0.713ms indentLines 0.164ms dedentLines 0.293ms moveLine 0.111ms
-repo_notes: major refactor #104 split src into buffer/multibuffer/editor/renderer; diff module added #105; non-editable excerpts #113; line decorations #114
+backlog: 1)lineColToOffset-cross-chunk 2)diff-worst-case-29ms-myers
+last_run: 2026-03-13 run 23034900603
+bench: 821pass 64-benchmarks insertText-1K 0.091ms insert10K 0.700ms diff-identical 0.51us reDiff-identical 0.029ms reDiff-scattered 0.333ms
