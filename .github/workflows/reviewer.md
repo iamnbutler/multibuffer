@@ -1,7 +1,7 @@
 ---
 description: |
   Adversarial code reviewer that enforces the project's core priorities on every PR.
-  Triggered on pull request events and on-demand via '/review'.
+  Triggered automatically on pull request events.
   - Evaluates accuracy, performance, consistency, and public API UX
   - Hard but fair — pushes back on shortcuts, loose types, sloppy suppressions
   - Uses REQUEST_CHANGES for blocking issues, COMMENT for suggestions
@@ -12,13 +12,11 @@ description: |
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
-  slash_command:
-    name: review
-  reaction: "eyes"
 
 permissions:
   contents: read
   pull-requests: read
+  issues: read
   actions: read
 
 engine: claude
@@ -113,7 +111,7 @@ Suppressions that are almost never legitimate:
 - **Repository**: ${{ github.repository }}
 - **Pull Request**: #${{ github.event.pull_request.number }}
 - **PR Title**: "${{ github.event.pull_request.title }}"
-- **PR Author**: ${{ github.event.pull_request.user.login }}
+- **PR Author**: ${{ github.actor }}
 
 ## Workflow
 
