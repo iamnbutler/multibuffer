@@ -172,6 +172,18 @@ export interface MultiBuffer {
   ): ExcerptId;
   removeExcerpt(excerptId: ExcerptId): void;
   clearExcerpts(): readonly ExcerptId[];
+  /**
+   * Replace all excerpts atomically with a single cache rebuild.
+   * More efficient than clearExcerpts() + N×addExcerpt() when adding
+   * excerpts from multiple buffers at once (e.g. in DiffController.reDiff()).
+   */
+  setExcerpts(
+    entries: ReadonlyArray<{
+      buffer: import("../buffer/types.ts").Buffer;
+      range: ExcerptRange;
+      options?: { hasTrailingNewline?: boolean; editable?: boolean };
+    }>,
+  ): readonly ExcerptId[];
   setExcerptsForBuffer(
     buffer: import("../buffer/types.ts").Buffer,
     ranges: readonly ExcerptRange[],

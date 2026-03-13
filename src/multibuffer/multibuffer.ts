@@ -536,6 +536,40 @@ class MultiBufferImpl implements MultiBuffer {
     return oldIds;
   }
 
+  setExcerpts(
+    entries: ReadonlyArray<{
+      buffer: Buffer;
+      range: ExcerptRange;
+      options?: { hasTrailingNewline?: boolean; editable?: boolean };
+    }>,
+  ): readonly ExcerptId[] {
+    // Remove all existing excerpts without triggering a cache rebuild each time.
+    for (const id of this._order) {
+      this._excerpts.remove(id);
+    }
+    this._order = [];
+
+    // Register all buffers and insert all excerpts without intermediate rebuilds.
+    const newIds: ExcerptId[] = [];
+    for (const { buffer, range, options } of entries) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+      this._buffers.set(buffer.id as string, buffer);
+      const snapshot = buffer.snapshot();
+      const hasTrailing = options?.hasTrailingNewline ?? false;
+      const editable = options?.editable ?? true;
+      // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
+      const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
+      const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
+      this._excerpts.set(id, excerpt);
+      this._order.push(id);
+      newIds.push(id);
+    }
+
+    // Single rebuild at the end instead of N+1 rebuilds.
+    this._rebuildCache();
+    return newIds;
+  }
+
   setExcerptsForBuffer(
     buffer: Buffer,
     ranges: readonly ExcerptRange[],

@@ -70,22 +70,26 @@ export function createDiffController(
     // Run diff
     const diffResult = diff(oldSnap.text(), newSnap.text(), options);
 
-    // Clear all excerpts
-    _multiBuffer.clearExcerpts();
-
     if (diffResult.isEqual) {
-      // Only add excerpt if buffer has actual content
-      if (newSnap.text().length > 0) {
-        _multiBuffer.addExcerpt(
-          newBuffer,
-          makeExcerptRange(0, newSnap.lineCount),
-          { editable: editableEqual },
-        );
-      }
+      // Replace all excerpts atomically (single _rebuildCache call).
+      const entries =
+        newSnap.text().length > 0
+          ? [
+              {
+                buffer: newBuffer,
+                range: makeExcerptRange(0, newSnap.lineCount),
+                options: { editable: editableEqual },
+              },
+            ]
+          : [];
+      _multiBuffer.setExcerpts(entries);
       _decorations = [];
       _isEqual = true;
     } else {
-      // Rebuild excerpts from diff hunks
+      // Build the full excerpt list and decoration list up front, then set
+      // all excerpts in one call (single _rebuildCache instead of N+1).
+      type ExcerptEntry = Parameters<typeof _multiBuffer.setExcerpts>[0][number];
+      const entries: ExcerptEntry[] = [];
       const newDecorations: Decoration[] = [];
       let mbRow = 0;
 
@@ -106,32 +110,32 @@ export function createDiffController(
           if (kind === "delete") {
             const firstRow = firstLine.oldRow;
             if (firstRow !== undefined) {
-              _multiBuffer.addExcerpt(
-                oldBuffer,
-                makeExcerptRange(firstRow, firstRow + lineCount),
-                { editable: false },
-              );
+              entries.push({
+                buffer: oldBuffer,
+                range: makeExcerptRange(firstRow, firstRow + lineCount),
+                options: { editable: false },
+              });
               newDecorations.push(makeDecoration(mbRow, lineCount, DELETE_STYLE));
             }
           } else if (kind === "insert") {
             const firstRow = firstLine.newRow;
             if (firstRow !== undefined) {
-              _multiBuffer.addExcerpt(
-                newBuffer,
-                makeExcerptRange(firstRow, firstRow + lineCount),
-                { editable: true },
-              );
+              entries.push({
+                buffer: newBuffer,
+                range: makeExcerptRange(firstRow, firstRow + lineCount),
+                options: { editable: true },
+              });
               newDecorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
             }
           } else {
             // equal (context lines)
             const firstRow = firstLine.newRow;
             if (firstRow !== undefined) {
-              _multiBuffer.addExcerpt(
-                newBuffer,
-                makeExcerptRange(firstRow, firstRow + lineCount),
-                { editable: editableEqual },
-              );
+              entries.push({
+                buffer: newBuffer,
+                range: makeExcerptRange(firstRow, firstRow + lineCount),
+                options: { editable: editableEqual },
+              });
               // no decoration for equal/context lines
             }
           }
@@ -140,6 +144,7 @@ export function createDiffController(
         }
       }
 
+      _multiBuffer.setExcerpts(entries);
       _decorations = newDecorations;
       _isEqual = false;
     }
