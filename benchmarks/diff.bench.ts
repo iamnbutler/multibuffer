@@ -10,6 +10,7 @@
 
 import { createBuffer } from "../src/buffer/buffer.ts";
 import type { BufferId } from "../src/buffer/types.ts";
+import { createDiffController } from "../src/diff/controller.ts";
 import { diff } from "../src/diff/diff.ts";
 import { createUnifiedDiffMultiBuffer } from "../src/diff/multibuffer.ts";
 import { createUnifiedDiff } from "../src/diff/unified.ts";
@@ -161,5 +162,34 @@ export const diffBenchmarks: BenchmarkSuite = {
       iterations: 10,
       targetMs: 100,
     },
+    (() => {
+      // reDiff on already-identical buffers — live typing convergence case.
+      // Old and new start equal; reDiff should return immediately via the fast path.
+      const oldBuf = createBuffer(oldId, medium1k);
+      const newBuf = createBuffer(newId, medium1k);
+      const ctrl = createDiffController(oldBuf, newBuf);
+      return {
+        name: "reDiff - identical buffers (convergence, fast path)",
+        fn() {
+          ctrl.reDiff();
+        },
+        iterations: 1000,
+        targetMs: 1,
+      };
+    })(),
+    (() => {
+      // reDiff on diverged buffers — live typing, scattered edits case.
+      const oldBuf = createBuffer(oldId, medium1k);
+      const newBuf = createBuffer(newId, medium1kScattered);
+      const ctrl = createDiffController(oldBuf, newBuf);
+      return {
+        name: "reDiff - 1K lines, scattered edits",
+        fn() {
+          ctrl.reDiff();
+        },
+        iterations: 100,
+        targetMs: 10,
+      };
+    })(),
   ],
 };

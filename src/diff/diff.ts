@@ -23,6 +23,9 @@ export function diff(
   newText: string,
   options?: DiffOptions,
 ): DiffResult {
+  // Fast path: identical texts produce no diff — skips split×2 and Myers forward pass.
+  if (oldText === newText) return { hunks: [], isEqual: true };
+
   const ctx = options?.context ?? 3;
   const oldLines = oldText === "" ? [] : oldText.split("\n");
   const newLines = newText === "" ? [] : newText.split("\n");
