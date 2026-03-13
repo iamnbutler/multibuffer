@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/buffer/buffer.ts";
 import { Editor } from "../../src/editor/editor.ts";
 import {
   type InputHandlerOptions,
@@ -16,13 +17,12 @@ import {
   resolveKeyBinding,
 } from "../../src/editor/input-handler.ts";
 import type { KeyBinding, Keymap } from "../../src/editor/types.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import {
   createBufferId,
   excerptRange,
   resetCounters,
 } from "../helpers.ts";
-import { createBuffer } from "../../src/buffer/buffer.ts";
-import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@ function key(
     shiftKey?: boolean;
   } = {},
 ): KeyboardEvent {
+  // biome-ignore lint/plugin/no-type-assertion: expect: test-only partial KeyboardEvent mock
   return {
     key: k,
     metaKey: opts.metaKey ?? false,

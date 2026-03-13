@@ -9,8 +9,8 @@ export {
   createMultiBufferEditor,
   createSingleBufferEditor,
 } from "./factories.ts";
-export type { CommandCallback } from "./input-handler.ts";
-export { InputHandler, keyEventToCommand } from "./input-handler.ts";
+export type { CommandCallback, InputHandlerOptions, KeyBindingResult } from "./input-handler.ts";
+export { InputHandler, keyEventToCommand, normalizeKey, resolveKeyBinding } from "./input-handler.ts";
 export {
   collapseSelection,
   extendSelection,
@@ -25,6 +25,8 @@ export type {
   EditorOptions,
   EditorState,
   Granularity,
+  KeyBinding,
+  Keymap,
   ResolvedEditorState,
 } from "./types.ts";
 export { resolveEditorState } from "./types.ts";

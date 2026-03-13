@@ -20,7 +20,7 @@ import type { Decoration, Measurements } from "../renderer/types.ts";
 import type { Editor } from "./editor.ts";
 import { createSingleBufferEditor } from "./factories.ts";
 import { InputHandler } from "./input-handler.ts";
-import type { EditorOptions } from "./types.ts";
+import type { EditorOptions, Keymap } from "./types.ts";
 
 /** CSS variable name → value map for theming the editor chrome and syntax. */
 export type Theme = Record<string, string>;
@@ -29,6 +29,15 @@ export type Theme = Record<string, string>;
 export interface EditorViewOptions extends EditorOptions {
   /** Custom measurements. Defaults: lineHeight=20, gutterWidth=48. */
   measurements?: Partial<Measurements>;
+  /**
+   * Consumer keymap merged on top of built-in defaults. Consumer wins.
+   * Use `null` to disable a binding; spaces separate chord keys.
+   */
+  keymap?: Keymap;
+  /**
+   * Called when a `{ type: 'custom', action }` command fires from the keymap.
+   */
+  onCustomCommand?: (action: string) => void;
 }
 
 /** The EditorView facade — bundles Editor, DomRenderer, and InputHandler. */
@@ -90,16 +99,23 @@ class EditorViewImpl implements EditorView {
 
     this.editor = createSingleBufferEditor(text, options);
     this.renderer = createDomRenderer(measurements);
-    this.inputHandler = new InputHandler((cmd) => {
-      // Intercept copy/cut to populate the clipboard before the state update
-      if (cmd.type === "copy" || cmd.type === "cut") {
-        const selected = this.editor.getSelectedText();
-        if (selected && typeof navigator !== "undefined") {
-          navigator.clipboard?.writeText(selected);
+    this.inputHandler = new InputHandler(
+      (cmd) => {
+        // Intercept copy/cut to populate the clipboard before the state update
+        if (cmd.type === "copy" || cmd.type === "cut") {
+          const selected = this.editor.getSelectedText();
+          if (selected && typeof navigator !== "undefined") {
+            navigator.clipboard?.writeText(selected);
+          }
         }
-      }
-      this.editor.dispatch(cmd);
-    });
+        this.editor.dispatch(cmd);
+      },
+      { keymap: options?.keymap },
+    );
+
+    if (options?.onCustomCommand) {
+      this.editor.onCustomCommand(options.onCustomCommand);
+    }
 
     // Mount renderer and input handler into the container
     this.renderer.mount(container);
