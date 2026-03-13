@@ -4,7 +4,7 @@
 
 import { createBuffer } from "../src/buffer/buffer.ts";
 import type { BufferId } from "../src/buffer/types.ts";
-import { createUnifiedDiffMultiBuffer } from "../src/diff/multibuffer.ts";
+import { createDiffController } from "../src/diff/controller.ts";
 import { createUnifiedDiff } from "../src/diff/unified.ts";
 import { Editor } from "../src/editor/editor.ts";
 import { InputHandler } from "../src/editor/input-handler.ts";
@@ -506,11 +506,12 @@ async function main() {
   }
 
   /**
-   * Mount an editable diff view using the standard Editor + DomRenderer.
+   * Mount an editable diff view using DiffController for live re-diff on edit.
    * This demonstrates the full diff editing pipeline:
-   * - createUnifiedDiffMultiBuffer builds a MultiBuffer with delete/insert/equal excerpts
+   * - DiffController manages a MultiBuffer with delete/insert/equal excerpts
    * - Delete excerpts are non-editable (from old buffer)
    * - Insert/equal excerpts are editable (from new buffer)
+   * - Edits trigger re-diff: convergence collapses pairs, divergence creates new pairs
    * - DomRenderer in gutterMode: "diff" shows dual line numbers
    */
   function mountEditableDiff(target: HTMLElement): () => void {
@@ -542,8 +543,9 @@ async function main() {
     const oldBuf = createBuffer(oldId, oldText);
     const newBuf = createBuffer(newId, newText);
 
-    // Build the diff MultiBuffer with decorations
-    const { multiBuffer: diffMb, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Create DiffController for live re-diff on edit
+    const diffController = createDiffController(oldBuf, newBuf, { debounceMs: 150 });
+    const diffMb = diffController.multiBuffer;
 
     // Create diff renderer with dual gutter mode
     const diffMeasurements: Measurements = {
@@ -560,7 +562,7 @@ async function main() {
     // Create editor for the diff MultiBuffer
     const diffEditor = new Editor(diffMb);
 
-    // Render function
+    // Render function - uses current decorations from controller
     function renderDiff() {
       const snapshot = diffMb.snapshot();
       diffRenderer.setSnapshot(snapshot);
@@ -580,7 +582,7 @@ async function main() {
         {
           viewport,
           selections: [],
-          decorations,
+          decorations: diffController.decorations,
           excerptHeaders: [],
           focused: true,
         },
@@ -602,8 +604,16 @@ async function main() {
       }
     }
 
-    // Wire editor changes to re-render
-    diffEditor.onChange(renderDiff);
+    // Wire editor changes to re-render AND notify controller for re-diff
+    diffEditor.onChange(() => {
+      renderDiff();
+      diffController.notifyChange();
+    });
+
+    // Subscribe to controller updates (after debounced re-diff)
+    diffController.onUpdate(() => {
+      renderDiff();
+    });
 
     // Wire mouse interactions
     diffRenderer.onClickPosition((clickPoint) => {
@@ -650,6 +660,7 @@ async function main() {
 
     // Return cleanup function
     return () => {
+      diffController.dispose();
       diffRenderer.unmount();
       diffInputHandler.unmount();
     };

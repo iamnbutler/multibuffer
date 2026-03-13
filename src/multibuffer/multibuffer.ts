@@ -526,6 +526,16 @@ class MultiBufferImpl implements MultiBuffer {
     this._rebuildCache();
   }
 
+  clearExcerpts(): readonly ExcerptId[] {
+    const oldIds = [...this._order];
+    for (const id of oldIds) {
+      this._excerpts.remove(id);
+    }
+    this._order = [];
+    this._rebuildCache();
+    return oldIds;
+  }
+
   setExcerptsForBuffer(
     buffer: Buffer,
     ranges: readonly ExcerptRange[],
