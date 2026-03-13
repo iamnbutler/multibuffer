@@ -137,10 +137,10 @@ describe("Editor - Cursor Movement", () => {
     expectPoint(editor.cursor, 2, 3);
   });
 
-  test("onChange fires on cursor move", () => {
+  test("on('change') fires on cursor move", () => {
     const { editor } = setup("Hello");
     let called = false;
-    editor.onChange(() => { called = true; });
+    editor.on("change", () => { called = true; });
     editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
     expect(called).toBe(true);
   });
@@ -172,10 +172,10 @@ describe("Editor - setCursor", () => {
     }
   });
 
-  test("setCursor fires onChange", () => {
+  test("setCursor fires on('change')", () => {
     const { editor } = setup("Hello");
     let called = false;
-    editor.onChange(() => { called = true; });
+    editor.on("change", () => { called = true; });
     editor.setCursor(mbPoint(0, 3));
     expect(called).toBe(true);
   });
