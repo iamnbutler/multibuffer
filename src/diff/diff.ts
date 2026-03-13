@@ -23,16 +23,19 @@ export function diff(
   newText: string,
   options?: DiffOptions,
 ): DiffResult {
+  // Fast path: identical texts skip Myers entirely (O(1) reference check or
+  // O(N) value check, vs O(N) split + O(ND) Myers + O(N) edits scan).
+  // Matters for DiffController.reDiff() on convergence and no-op edits.
+  if (oldText === newText) {
+    return { hunks: [], isEqual: true };
+  }
+
   const ctx = options?.context ?? 3;
   const oldLines = oldText === "" ? [] : oldText.split("\n");
   const newLines = newText === "" ? [] : newText.split("\n");
 
+  // Since oldText !== newText, at least one edit differs — skip edits.every() scan.
   const edits = myersDiff(oldLines, newLines);
-
-  if (edits.every((e) => e.kind === "equal")) {
-    return { hunks: [], isEqual: true };
-  }
-
   const hunks = buildHunks(edits, ctx);
   return { hunks, isEqual: false };
 }
