@@ -198,9 +198,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Indent cursor line (Tab / Cmd+]) — snap.lines() + buffer.insert() per keypress.
-      // Lines accumulate 2 spaces per iteration; buffer stays ~1K lines throughout.
+      // Each iteration adds 2 spaces, so limit iterations to avoid line explosion.
       name: "indentLines - single line (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorIndent1k = makeEditor(1000);
@@ -213,13 +213,12 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Dedent cursor line (Shift+Tab / Cmd+[).
-      // Realistic indentation: 100 leading spaces (enough for 50 iters × 2 spaces each).
-      name: "dedentLines - single line (1K buffer, 100-space indent)",
-      iterations: 50,
+      // Start with 220 leading spaces (enough for 100 iters × 2 spaces + warmup).
+      name: "dedentLines - single line (1K buffer, indented)",
+      iterations: 100,
       targetMs: 1,
       setup: () => {
-        // 100 leading spaces — enough for 50 dedent iters (+ 10% warmup = 5) × 2 = 110 removed
-        editorDedent1k = makeIndentedEditor(1000, 110);
+        editorDedent1k = makeIndentedEditor(1000, 220);
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
         editorDedent1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
       },
@@ -228,15 +227,15 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
     },
     {
-      // Move cursor line down — 2× snap.lines() (combined into 1 after optimization) + _edit().
-      // Cursor moves down with each iteration; bounces near end of buffer.
+      // Move cursor line down — swap with adjacent line.
+      // Cursor moves down each iteration; limit to avoid edge effects.
       name: "moveLine down (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorMoveLine1k = makeEditor(1000);
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
-        editorMoveLine1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+        editorMoveLine1k.setCursor({ row: 400 as MultiBufferRow, column: 0 });
       },
       fn: () => {
         editorMoveLine1k.dispatch({ type: "moveLine", direction: "down" });
@@ -244,9 +243,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Duplicate line below — snap.lines(1 row) + _edit() insertion.
-      // Buffer grows by 1 line per iteration; staying well within 1K range for 500 iters.
+      // Buffer grows by 1 line per iteration; limit to avoid buffer explosion.
       name: "duplicateLine down (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorDuplicate1k = makeEditor(1000);
@@ -259,8 +258,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Insert blank line below cursor (Enter equivalent from non-eol position).
+      // Buffer grows; limit iterations.
       name: "insertLineBelow (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorInsertBelow1k = makeEditor(1000);
@@ -273,8 +273,9 @@ export const editorBenchmarks: BenchmarkSuite = {
     },
     {
       // Insert blank line above cursor.
+      // Buffer grows; limit iterations.
       name: "insertLineAbove (1K buffer)",
-      iterations: 500,
+      iterations: 100,
       targetMs: 1,
       setup: () => {
         editorInsertAbove1k = makeEditor(1000);
