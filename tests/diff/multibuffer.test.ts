@@ -155,3 +155,65 @@ describe("createUnifiedDiffMultiBuffer - line count", () => {
     expect(multiBuffer.lineCount).toBeGreaterThan(0);
   });
 });
+
+describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
+  test("consecutive delete lines form a single excerpt", () => {
+    // Delete 3 consecutive lines: should produce 1 delete excerpt, not 3
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc\nd\ne", "a\ne");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // Expect: equal(a) + delete(b,c,d) + equal(e) = 3 excerpts max (may merge if within context)
+    const deleteExcerpts = excerpts.filter((e) => e.bufferId === oldBuf.id);
+    expect(deleteExcerpts.length).toBe(1);
+    // The delete excerpt should cover 3 lines (b, c, d)
+    const delExcerpt = deleteExcerpts[0];
+    if (!delExcerpt) throw new Error("expected delete excerpt");
+    expect(delExcerpt.endRow - delExcerpt.startRow).toBe(3);
+  });
+
+  test("consecutive insert lines form a single excerpt", () => {
+    // Insert 3 consecutive lines
+    const { oldBuf, newBuf } = makeBuffers("a\ne", "a\nb\nc\nd\ne");
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // All lines from newBuf since this is pure insertion (no deletes)
+    // a + b + c + d + e = 5 lines total in multiBuffer
+    expect(multiBuffer.lineCount).toBe(5);
+    // There should be exactly one insert decoration covering b, c, d (3 lines)
+    const insertDecorations = decorations.filter((d) => d.style?.gutterSign === "+");
+    expect(insertDecorations.length).toBe(1);
+    const insertDec = insertDecorations[0];
+    if (!insertDec) throw new Error("expected insert decoration");
+    const span = num(insertDec.range.end.row) - num(insertDec.range.start.row) + 1;
+    expect(span).toBe(3);
+  });
+
+  test("interleaved changes create separate excerpts", () => {
+    // Change line 1 and line 3 with unchanged line 2 between
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "X\nb\nY");
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Should have: delete(a), insert(X), equal(b), delete(c), insert(Y)
+    // Line count: 5 (both deleted lines appear alongside their replacements)
+    expect(multiBuffer.lineCount).toBe(5);
+    // Should have decorations for both delete and insert groups
+    const deleteDecorations = decorations.filter((d) => d.style?.gutterSign === "−");
+    const insertDecorations = decorations.filter((d) => d.style?.gutterSign === "+");
+    expect(deleteDecorations.length).toBe(2);
+    expect(insertDecorations.length).toBe(2);
+  });
+
+  test("change at file start", () => {
+    const { oldBuf, newBuf } = makeBuffers("old\nsame", "new\nsame");
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Line 0 changed: delete(old), insert(new), equal(same)
+    expect(multiBuffer.lineCount).toBe(3);
+    expect(decorations.length).toBe(2); // one delete, one insert decoration
+  });
+
+  test("change at file end", () => {
+    const { oldBuf, newBuf } = makeBuffers("same\nold", "same\nnew");
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Line 1 changed: equal(same), delete(old), insert(new)
+    expect(multiBuffer.lineCount).toBe(3);
+    expect(decorations.length).toBe(2);
+  });
+});
