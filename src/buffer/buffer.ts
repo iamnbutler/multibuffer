@@ -7,7 +7,6 @@
 
 import { Rope } from "./rope.ts";
 import type {
-  Bias,
   Buffer,
   BufferId,
   BufferOffset,
@@ -17,6 +16,7 @@ import type {
   EditEntry,
   TextSummary,
 } from "./types.ts";
+import { Bias } from "./types.ts";
 
 /** UTF-8 byte length without allocating a Uint8Array. */
 function utf8ByteLength(str: string): number {
@@ -86,7 +86,7 @@ class BufferSnapshotImpl implements BufferSnapshot {
     return { row: line as BufferRow, column: col };
   }
 
-  clipPoint(point: BufferPoint, _bias: Bias): BufferPoint {
+  clipPoint(point: BufferPoint, bias: Bias): BufferPoint {
     const r = point.row;
     if (r >= this.lineCount) {
       const lastRow = this.lineCount - 1;
@@ -99,25 +99,43 @@ class BufferSnapshotImpl implements BufferSnapshot {
       return { row: 0 as BufferRow, column: 0 };
     }
 
-    const lineLen = this._rope.line(r).length;
+    const lineText = this._rope.line(r);
+    const lineLen = lineText.length;
     let col = point.column;
     if (col < 0) col = 0;
     if (col > lineLen) col = lineLen;
+
+    // Snap out of the middle of a UTF-16 surrogate pair.
+    // A low surrogate (0xDC00–0xDFFF) at col means col is inside a 2-unit pair.
+    // Bias.Left  → step back to the high surrogate (col - 1)
+    // Bias.Right → step past the low surrogate (col + 1, clamped to lineLen)
+    if (col > 0 && col < lineLen) {
+      const code = lineText.charCodeAt(col);
+      if (code >= 0xdc00 && code <= 0xdfff) {
+        col = bias === Bias.Left ? col - 1 : Math.min(col + 1, lineLen);
+      }
+    }
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { row: r as BufferRow, column: col };
   }
 
-  clipOffset(offset: BufferOffset, _bias: Bias): BufferOffset {
-    if (offset < 0) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      return 0 as BufferOffset;
+  clipOffset(offset: BufferOffset, bias: Bias): BufferOffset {
+    const clamped = Math.max(0, Math.min(offset, this._rope.length));
+
+    // Snap out of the middle of a UTF-16 surrogate pair.
+    // rope.slice(pos, pos+1) gives the code unit at that offset in O(1).
+    if (clamped > 0 && clamped < this._rope.length) {
+      const code = this._rope.slice(clamped, clamped + 1).charCodeAt(0);
+      if (code >= 0xdc00 && code <= 0xdfff) {
+        const snapped = bias === Bias.Left ? clamped - 1 : clamped + 1;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        return snapped as BufferOffset;
+      }
     }
-    if (offset > this._rope.length) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      return this._rope.length as BufferOffset;
-    }
-    return offset;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    return clamped as BufferOffset;
   }
 }
 
