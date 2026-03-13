@@ -79,15 +79,6 @@ When unavoidable, add a `biome-ignore` comment with an `expect:` explanation (si
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction requires cast
 ```
 
-## Task Tracking
-
-Using spool for task management. Stream: `multibuffer-v0`
-
-```bash
-spool stream show mm3l5j8s-1f7o  # View all tasks
-spool list --stream mm3l5j8s-1f7o  # List open tasks
-```
-
 ## Approach
 
 Types → Tests → Benchmarks → Implementation (TDD)

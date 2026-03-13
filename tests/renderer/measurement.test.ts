@@ -7,8 +7,8 @@
  * - yToVisualRow / yToRow: pixel → row
  * - rowToY: row → pixel
  * - xToColumn: pixel → column
- * - clampScrollTop: scroll bounds enforcement (spool mm3lhpd9-u00r)
- * - calculateScrollTop: scroll strategies (spool mm3lhpe5-g1e7, mm3lhpi9-8bbb)
+ * - clampScrollTop: scroll bounds enforcement
+ * - calculateScrollTop: scroll strategies
  */
 
 import { describe, expect, test } from "bun:test";
@@ -179,7 +179,7 @@ describe("xToColumn", () => {
 });
 
 
-describe("clampScrollTop (spool mm3lhpd9-u00r)", () => {
+describe("clampScrollTop", () => {
   test("zero scrollTop stays at 0", () => {
     expect(clampScrollTop(0, 1000, 200)).toBe(0);
   });
@@ -215,7 +215,7 @@ describe("clampScrollTop (spool mm3lhpd9-u00r)", () => {
 });
 
 
-describe("calculateScrollTop - scroll strategies (spool mm3lhpe5-g1e7, mm3lhpi9-8bbb)", () => {
+describe("calculateScrollTop - scroll strategies", () => {
   // Layout: 50 lines × 20px = 1000px content, 200px viewport
   const LH = 20;
   const VH = 200;
