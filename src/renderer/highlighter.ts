@@ -33,6 +33,18 @@ export interface TreeEdit {
   newEndPosition: Point;
 }
 
+/**
+ * Apply a {@link TreeEdit} descriptor to a tree-sitter `Tree`.
+ *
+ * `tree.edit()` expects the concrete `Edit` class at the type level, but
+ * accepts a plain object with the same fields at runtime. This helper
+ * centralises the single required type assertion so call-sites stay clean.
+ */
+export function applyTreeEdit(tree: Tree, edit: TreeEdit): void {
+  // biome-ignore lint/plugin/no-type-assertion: expect: tree.edit() accepts plain objects at runtime despite the Edit class type
+  tree.edit(edit as import("web-tree-sitter").Edit);
+}
+
 /** Common interface for syntax highlighters. */
 export interface SyntaxHighlighter {
   readonly ready: boolean;
@@ -72,8 +84,7 @@ export class Highlighter implements SyntaxHighlighter {
     if (!this._parser) return;
     const oldTree = this._trees.get(bufferId);
     if (oldTree && edit) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: tree.edit() accepts plain objects at runtime despite the Edit class type
-      oldTree.edit(edit as import("web-tree-sitter").Edit);
+      applyTreeEdit(oldTree, edit);
     }
     const tree = this._parser.parse(text, oldTree);
     if (tree) {

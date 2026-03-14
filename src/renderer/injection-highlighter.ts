@@ -9,7 +9,12 @@ import type {
   Parser as ParserType,
   Tree,
 } from "web-tree-sitter";
-import type { SyntaxHighlighter, Token, TreeEdit } from "./highlighter.ts";
+import {
+  applyTreeEdit,
+  type SyntaxHighlighter,
+  type Token,
+  type TreeEdit,
+} from "./highlighter.ts";
 import { colorForNodeType } from "./theme.ts";
 
 export type { Token };
@@ -128,8 +133,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     const oldParse = this._bufferParses.get(bufferId);
     const oldTree = oldParse?.tree;
     if (oldTree && edit) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: tree.edit() accepts plain objects at runtime despite the Edit class type
-      oldTree.edit(edit as import("web-tree-sitter").Edit);
+      applyTreeEdit(oldTree, edit);
     }
     const tree = primaryParser.parse(text, oldTree);
     if (!tree) {
@@ -145,8 +149,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     const injectionRanges = this._findInjectionRanges(tree.rootNode, text);
 
     // Parse injected content
-    // TODO: Pass old injection trees for incremental parsing. This requires
-    // mapping edit descriptors into each injection's local coordinate space.
     const injections = new Map<string, Tree>();
     for (const range of injectionRanges) {
       const injParser = this._parsers.get(range.language);

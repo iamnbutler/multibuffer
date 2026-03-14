@@ -96,8 +96,8 @@ export const highlighterBenchmarks: BenchmarkSuite = {
       fn: () => {
         // Incremental: apply a small edit then re-parse
         highlighter.parseBuffer("incr-1k", edit1k.modified, edit1k.edit);
-        // Restore original so next iteration has a valid old tree
-        highlighter.parseBuffer("incr-1k", largeSource1k, edit1k.edit);
+        // Restore original via full re-parse so next iteration has a clean old tree
+        highlighter.parseBuffer("incr-1k", largeSource1k);
       },
     },
 
@@ -121,7 +121,8 @@ export const highlighterBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         highlighter.parseBuffer("incr-5k", edit5k.modified, edit5k.edit);
-        highlighter.parseBuffer("incr-5k", largeSource5k, edit5k.edit);
+        // Restore original via full re-parse so next iteration has a clean old tree
+        highlighter.parseBuffer("incr-5k", largeSource5k);
       },
     },
 

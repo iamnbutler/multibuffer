@@ -82,8 +82,10 @@ describe("Highlighter", () => {
       // The first token must end within the line (not extend past)
       expect(tokens[0]?.endColumn).toBeGreaterThan(0);
       expect(tokens[0]?.endColumn).toBeLessThanOrEqual("let b = 2;".length);
-      // Token color should be a CSS variable reference (not a bare hex value)
-      expect(tokens[0]?.color).toContain("var(--syntax-");
+      // Token color should be a keyword even without edit info
+      expect(tokens[0]?.color).toContain("var(--syntax-keyword");
+      // Should have multiple tokens covering the full line structure
+      expect(tokens.length).toBeGreaterThanOrEqual(3);
     });
   });
 
