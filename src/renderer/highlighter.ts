@@ -7,6 +7,7 @@ import type {
   Language,
   Node,
   Parser as ParserType,
+  Point,
   Tree,
 } from "web-tree-sitter";
 import { colorForNodeType } from "./theme.ts";
@@ -17,10 +18,25 @@ export interface Token {
   color: string;
 }
 
+/**
+ * Descriptor for an incremental edit, matching the data fields of
+ * web-tree-sitter's `Edit` class. When provided to `parseBuffer`, the old
+ * tree is updated via `tree.edit()` before being passed to `parser.parse()`,
+ * enabling true incremental parsing.
+ */
+export interface TreeEdit {
+  startIndex: number;
+  oldEndIndex: number;
+  newEndIndex: number;
+  startPosition: Point;
+  oldEndPosition: Point;
+  newEndPosition: Point;
+}
+
 /** Common interface for syntax highlighters. */
 export interface SyntaxHighlighter {
   readonly ready: boolean;
-  parseBuffer(bufferId: string, text: string): void;
+  parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void;
   getLineTokens(bufferId: string, row: number): Token[];
 }
 
@@ -52,9 +68,13 @@ export class Highlighter implements SyntaxHighlighter {
     this._ready = true;
   }
 
-  parseBuffer(bufferId: string, text: string): void {
+  parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void {
     if (!this._parser) return;
     const oldTree = this._trees.get(bufferId);
+    if (oldTree && edit) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: tree.edit() accepts plain objects at runtime despite the Edit class type
+      oldTree.edit(edit as import("web-tree-sitter").Edit);
+    }
     const tree = this._parser.parse(text, oldTree);
     if (tree) {
       this._trees.set(bufferId, tree);
