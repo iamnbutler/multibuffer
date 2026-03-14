@@ -50,6 +50,7 @@ export class Editor {
   private _cursor: MultiBufferPoint;
   private _selection: Selection | undefined;
   private _onChange: (() => void) | null = null;
+  private _onCustomCommand: ((action: string) => void) | null = null;
   private _undoStack: HistoryEntry[] = [];
   private _redoStack: HistoryEntry[] = [];
   private static readonly _MAX_HISTORY = 100;
@@ -253,6 +254,11 @@ export class Editor {
     this._onChange = cb;
   }
 
+  /** Set a callback to be notified when a custom command is dispatched. Pass null to remove. */
+  onCustomCommand(cb: ((action: string) => void) | null): void {
+    this._onCustomCommand = cb;
+  }
+
   /**
    * Return the text content of the current selection, or "" if the
    * selection is collapsed or absent.  Callers use this to populate
@@ -385,6 +391,9 @@ export class Editor {
         }
         break;
       }
+      case "custom":
+        this._onCustomCommand?.(command.action);
+        return; // no state change, no onChange notification
     }
 
     this._onChange?.();
