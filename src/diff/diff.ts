@@ -40,6 +40,29 @@ export function diff(
   return { hunks, isEqual: false };
 }
 
+/**
+ * Compute a line-level diff from pre-split line arrays.
+ *
+ * Use this instead of `diff()` when lines are already available (e.g. from
+ * `BufferSnapshot.lines()`), to avoid building the full text string and
+ * calling `split("\n")`.
+ */
+export function diffLines(
+  oldLines: readonly string[],
+  newLines: readonly string[],
+  options?: DiffOptions,
+): DiffResult {
+  const ctx = options?.context ?? 3;
+  const edits = myersDiff(oldLines, newLines);
+
+  if (edits.every((e) => e.kind === "equal")) {
+    return { hunks: [], isEqual: true };
+  }
+
+  const hunks = buildHunks(edits, ctx);
+  return { hunks, isEqual: false };
+}
+
 /** A raw edit operation from Myers'. */
 interface Edit {
   kind: "equal" | "insert" | "delete";
@@ -52,7 +75,7 @@ interface Edit {
  * Myers' diff algorithm.
  * Returns a flat list of edit operations (equal/insert/delete).
  */
-function myersDiff(oldLines: string[], newLines: string[]): Edit[] {
+function myersDiff(oldLines: readonly string[], newLines: readonly string[]): Edit[] {
   const n = oldLines.length;
   const m = newLines.length;
   const max = n + m;
@@ -114,8 +137,8 @@ function myersDiff(oldLines: string[], newLines: string[]): Edit[] {
 
 function backtrack(
   trace: Int32Array[],
-  oldLines: string[],
-  newLines: string[],
+  oldLines: readonly string[],
+  newLines: readonly string[],
 ): Edit[] {
   const n = oldLines.length;
   const m = newLines.length;
