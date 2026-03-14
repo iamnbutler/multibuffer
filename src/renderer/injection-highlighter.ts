@@ -132,7 +132,14 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       oldTree.edit(edit as import("web-tree-sitter").Edit);
     }
     const tree = primaryParser.parse(text, oldTree);
-    if (!tree) return;
+    if (!tree) {
+      if (oldParse && edit) {
+        // The old tree was mutated by tree.edit() but parse failed —
+        // remove the corrupted parse so subsequent calls don't reuse it.
+        this._bufferParses.delete(bufferId);
+      }
+      return;
+    }
 
     // Find injection ranges
     const injectionRanges = this._findInjectionRanges(tree.rootNode, text);

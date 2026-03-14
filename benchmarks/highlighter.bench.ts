@@ -1,140 +1,140 @@
 /**
  * Highlighter benchmarks.
  *
- * NOTE: The Highlighter uses web-tree-sitter which requires WASM loading.
- * WASM cannot be loaded in the `bun run bench` harness (no browser/WASI
- * environment). These benchmarks therefore measure what CAN be benchmarked
- * synchronously:
+ * Measures the actual tree-sitter parse performance:
+ * - Full parse: fresh parse with no old tree
+ * - Incremental parse: with old tree + TreeEdit descriptor after a small edit
  *
- * - `colorForNodeType` lookups (the hot path during token collection)
- * - `getLineTokens` on an unparsed buffer (early-return path)
- * - Token array generation (simulates _collectTokens output)
- *
- * Full parse and incremental-parse benchmarks require a WASM-capable
- * environment; run the test suite (`bun test`) for correctness validation
- * of incremental parsing.
+ * Uses async `setup` to load tree-sitter WASM (same paths as the test suite).
  */
 
-import type { Token } from "../src/renderer/highlighter.ts";
+import * as path from "node:path";
+import type { TreeEdit } from "../src/renderer/highlighter.ts";
 import { Highlighter } from "../src/renderer/highlighter.ts";
-import { colorForNodeType } from "../src/renderer/theme.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
-/** Representative node types exercised during a TypeScript highlight pass. */
-const NODE_TYPES = [
-  "const",
-  "let",
-  "function",
-  "return",
-  "string_fragment",
-  "number",
-  "comment",
-  "type_identifier",
-  "property_identifier",
-  "=",
-  "(",
-  "true",
-  "this",
-  "identifier", // falls through to "default"
-];
-
-/** Generate a realistic token array for a single line. */
-function generateTokens(count: number): Token[] {
-  const tokens: Token[] = [];
-  let col = 0;
-  for (let i = 0; i < count; i++) {
-    const width = 4 + (i % 6); // variable token widths
-    tokens.push({
-      startColumn: col,
-      endColumn: col + width,
-      color: colorForNodeType(NODE_TYPES[i % NODE_TYPES.length] ?? "identifier"),
-    });
-    col += width + 1; // +1 gap
-  }
-  return tokens;
-}
+const WASM_DIR = path.join(import.meta.dir, "../playground/wasm");
 
 /** Generate a large TypeScript-like source string. */
 function generateLargeSource(lines: number): string {
   return Array.from(
     { length: lines },
-    (_, i) => `const variable${i}: number = ${i}; // line ${i}`,
+    (_, i) =>
+      `const variable${i}: number = ${i}; // line ${i} with some extra text to be realistic`,
   ).join("\n");
 }
 
-const highlighter = new Highlighter();
-
 const largeSource1k = generateLargeSource(1000);
-const largeSource10k = generateLargeSource(10_000);
+const largeSource5k = generateLargeSource(5000);
+
+/**
+ * Apply a small edit at the midpoint of the source: replace "const" with "let"
+ * on the middle line. Returns { modified, edit }.
+ */
+function makeSmallEdit(source: string): { modified: string; edit: TreeEdit } {
+  const lines = source.split("\n");
+  const midLine = Math.floor(lines.length / 2);
+  const linesBefore = lines.slice(0, midLine);
+  const startIndex =
+    linesBefore.reduce((sum, l) => sum + l.length + 1, 0); // +1 for "\n"
+  // Replace "const" (5 chars) with "let" (3 chars) at the start of the middle line
+  const oldWord = "const";
+  const newWord = "let";
+  const modified =
+    source.slice(0, startIndex) +
+    newWord +
+    source.slice(startIndex + oldWord.length);
+
+  const edit: TreeEdit = {
+    startIndex,
+    oldEndIndex: startIndex + oldWord.length,
+    newEndIndex: startIndex + newWord.length,
+    startPosition: { row: midLine, column: 0 },
+    oldEndPosition: { row: midLine, column: oldWord.length },
+    newEndPosition: { row: midLine, column: newWord.length },
+  };
+
+  return { modified, edit };
+}
+
+const edit1k = makeSmallEdit(largeSource1k);
+const edit5k = makeSmallEdit(largeSource5k);
+
+// Shared highlighter initialized by the first benchmark's setup
+let highlighter: Highlighter;
 
 export const highlighterBenchmarks: BenchmarkSuite = {
   name: "Highlighter Operations",
   benchmarks: [
-    // ── colorForNodeType lookup ──────────────────────────────────
+    // ── Full parse (1K lines) ───────────────────────────────────
     {
-      name: "colorForNodeType - keyword",
-      iterations: 100_000,
-      targetMs: 0.001,
-      fn: () => {
-        colorForNodeType("const");
+      name: "Full parse - 1K lines (no old tree)",
+      iterations: 50,
+      targetMs: 20,
+      setup: async () => {
+        highlighter = new Highlighter();
+        await highlighter.init(
+          path.join(WASM_DIR, "tree-sitter.wasm"),
+          path.join(WASM_DIR, "tree-sitter-typescript.wasm"),
+        );
       },
-    },
-    {
-      name: "colorForNodeType - all categories (14 types)",
-      iterations: 50_000,
-      targetMs: 0.01,
       fn: () => {
-        for (const t of NODE_TYPES) {
-          colorForNodeType(t);
-        }
-      },
-    },
-
-    // ── getLineTokens early-return (no tree) ─────────────────────
-    {
-      name: "getLineTokens - unparsed buffer (early return)",
-      iterations: 100_000,
-      targetMs: 0.001,
-      fn: () => {
-        highlighter.getLineTokens("nonexistent", 0);
+        // Parse with a unique bufferId each time so there is no cached old tree
+        highlighter.parseBuffer(`full-1k-${Math.random()}`, largeSource1k);
       },
     },
 
-    // ── Token array generation (simulates _collectTokens output) ─
+    // ── Incremental parse (1K lines) ────────────────────────────
     {
-      name: "Generate 10-token array (short line)",
-      iterations: 50_000,
-      targetMs: 0.005,
+      name: "Incremental parse - 1K lines (old tree + TreeEdit)",
+      iterations: 200,
+      targetMs: 10,
+      setup: () => {
+        // Seed the old tree
+        highlighter.parseBuffer("incr-1k", largeSource1k);
+      },
       fn: () => {
-        generateTokens(10);
+        // Incremental: apply a small edit then re-parse
+        highlighter.parseBuffer("incr-1k", edit1k.modified, edit1k.edit);
+        // Restore original so next iteration has a valid old tree
+        highlighter.parseBuffer("incr-1k", largeSource1k, edit1k.edit);
       },
     },
+
+    // ── Full parse (5K lines) ───────────────────────────────────
     {
-      name: "Generate 50-token array (long line)",
+      name: "Full parse - 5K lines (no old tree)",
+      iterations: 20,
+      targetMs: 100,
+      fn: () => {
+        highlighter.parseBuffer(`full-5k-${Math.random()}`, largeSource5k);
+      },
+    },
+
+    // ── Incremental parse (5K lines) ────────────────────────────
+    {
+      name: "Incremental parse - 5K lines (old tree + TreeEdit)",
+      iterations: 100,
+      targetMs: 50,
+      setup: () => {
+        highlighter.parseBuffer("incr-5k", largeSource5k);
+      },
+      fn: () => {
+        highlighter.parseBuffer("incr-5k", edit5k.modified, edit5k.edit);
+        highlighter.parseBuffer("incr-5k", largeSource5k, edit5k.edit);
+      },
+    },
+
+    // ── getLineTokens after parse (1K lines) ────────────────────
+    {
+      name: "getLineTokens - middle line of 1K-line buffer",
       iterations: 10_000,
-      targetMs: 0.02,
-      fn: () => {
-        generateTokens(50);
+      targetMs: 1,
+      setup: () => {
+        highlighter.parseBuffer("tokens-1k", largeSource1k);
       },
-    },
-
-    // ── parseBuffer without WASM (no-op when parser is null) ─────
-    // This measures the overhead of the parseBuffer code path when
-    // tree-sitter is not initialized (guards + Map lookup).
-    {
-      name: "parseBuffer - no parser (guard overhead, 1K source)",
-      iterations: 50_000,
-      targetMs: 0.001,
       fn: () => {
-        highlighter.parseBuffer("bench-noparse", largeSource1k);
-      },
-    },
-    {
-      name: "parseBuffer - no parser (guard overhead, 10K source)",
-      iterations: 50_000,
-      targetMs: 0.001,
-      fn: () => {
-        highlighter.parseBuffer("bench-noparse-10k", largeSource10k);
+        highlighter.getLineTokens("tokens-1k", 500);
       },
     },
   ],
