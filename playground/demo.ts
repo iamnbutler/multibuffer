@@ -425,6 +425,10 @@ async function main() {
       }
       scenario.build(mb);
       snapshotDirty = true;
+      // Reset scroll to top for the new scenario
+      if (scrollContainer instanceof HTMLElement) {
+        scrollContainer.scrollTop = 0;
+      }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
       editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
     }

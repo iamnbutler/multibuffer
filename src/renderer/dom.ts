@@ -199,8 +199,13 @@ export class DomRenderer implements Renderer {
   }
 
   setSnapshot(snapshot: MultiBufferSnapshot): void {
+    const prevLineCount = this._snapshot?.lineCount ?? -1;
     this._snapshot = snapshot;
-    this._wrapMap = this._buildWrapMap(snapshot);
+    // Only rebuild WrapMap when content actually changed (not cursor-only moves).
+    // This prevents cancelling the lazy WrapMap async completion on every keystroke.
+    if (snapshot.lineCount !== prevLineCount) {
+      this._wrapMap = this._buildWrapMap(snapshot);
+    }
   }
 
   setHighlighter(highlighter: SyntaxHighlighter): void {
