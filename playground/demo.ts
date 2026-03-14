@@ -185,7 +185,7 @@ async function main() {
   }
 
   // Wire editor state changes to re-render
-  editor.onChange(renderAll);
+  editor.on("change", renderAll);
 
   // Wire mouse interactions
   renderer.onClickPosition((clickPoint) => {
@@ -605,7 +605,7 @@ async function main() {
     }
 
     // Wire editor changes to re-render AND notify controller for re-diff
-    diffEditor.onChange(() => {
+    diffEditor.on("change", () => {
       renderDiff();
       diffController.notifyChange();
     });

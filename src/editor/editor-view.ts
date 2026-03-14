@@ -77,6 +77,7 @@ class EditorViewImpl implements EditorView {
   private _container: HTMLElement;
   private _decorations = new Map<string, Decoration[]>();
   private _rafId: number | null = null;
+  private _onEditorChange = () => this._scheduleRender();
 
   constructor(container: HTMLElement, text: string, options?: EditorViewOptions) {
     this._container = container;
@@ -123,7 +124,7 @@ class EditorViewImpl implements EditorView {
     // Wire editor state changes → deferred render
     const initialSnap = this.editor.multiBuffer.snapshot();
     this.renderer.setSnapshot(initialSnap);
-    this.editor.onChange(() => this._scheduleRender());
+    this.editor.on("change", this._onEditorChange);
 
     // Initial render
     this._render();
@@ -149,8 +150,7 @@ class EditorViewImpl implements EditorView {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-    // Detach the onChange listener by replacing it with a no-op
-    this.editor.onChange(() => {});
+    this.editor.off("change", this._onEditorChange);
     this.inputHandler.unmount();
     this.renderer.unmount();
   }
