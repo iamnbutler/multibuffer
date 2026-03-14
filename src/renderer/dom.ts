@@ -54,6 +54,10 @@ export class DomRenderer implements Renderer {
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
+  /** Snapshot version used to build the current _wrapMap (cache key). */
+  private _wrapMapSnapshotVersion = -1;
+  /** Wrap width used to build the current _wrapMap (cache key). */
+  private _wrapMapWrapWidth = 0;
   private _highlighter: SyntaxHighlighter | null = null;
   private _decorations: readonly Decoration[] = [];
   private _onScroll: (() => void) | null = null;
@@ -175,6 +179,8 @@ export class DomRenderer implements Renderer {
     this._rowPool = [];
     this._snapshot = null;
     this._wrapMap = null;
+    this._wrapMapSnapshotVersion = -1;
+    this._wrapMapWrapWidth = 0;
     this._decorations = [];
     this._onScroll = null;
     this._onClick = null;
@@ -190,6 +196,15 @@ export class DomRenderer implements Renderer {
 
   setSnapshot(snapshot: MultiBufferSnapshot): void {
     this._snapshot = snapshot;
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
+    // Reuse the existing WrapMap if the snapshot version and wrap width are unchanged.
+    if (
+      this._wrapMap !== null &&
+      snapshot.version === this._wrapMapSnapshotVersion &&
+      wrapWidth === this._wrapMapWrapWidth
+    ) {
+      return;
+    }
     this._wrapMap = this._buildWrapMap(snapshot);
   }
 
@@ -472,7 +487,11 @@ export class DomRenderer implements Renderer {
 
   private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
     const wrapWidth = this._measurements.wrapWidth;
-    if (!wrapWidth || wrapWidth <= 0) return null;
+    if (!wrapWidth || wrapWidth <= 0) {
+      return null;
+    }
+    this._wrapMapSnapshotVersion = snapshot.version;
+    this._wrapMapWrapWidth = wrapWidth;
     return new WrapMap(snapshot, wrapWidth);
   }
 
