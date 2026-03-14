@@ -28,37 +28,54 @@ const largeSource1k = generateLargeSource(1000);
 const largeSource5k = generateLargeSource(5000);
 
 /**
- * Apply a small edit at the midpoint of the source: replace "const" with "let"
- * on the middle line. Returns { modified, edit }.
+ * Build symmetric forward (const→let) and reverse (let→const) edit descriptors
+ * for the midpoint of the source. Each direction is a valid incremental edit
+ * so benchmarks can alternate without a full re-parse to restore state.
  */
-function makeSmallEdit(source: string): { modified: string; edit: TreeEdit } {
+function makeSymmetricEdits(source: string): {
+  modified: string;
+  forwardEdit: TreeEdit;
+  reverseEdit: TreeEdit;
+} {
   const lines = source.split("\n");
   const midLine = Math.floor(lines.length / 2);
   const linesBefore = lines.slice(0, midLine);
   const startIndex =
     linesBefore.reduce((sum, l) => sum + l.length + 1, 0); // +1 for "\n"
-  // Replace "const" (5 chars) with "let" (3 chars) at the start of the middle line
-  const oldWord = "const";
-  const newWord = "let";
+
+  const constLen = 5; // "const"
+  const letLen = 3;   // "let"
+
   const modified =
     source.slice(0, startIndex) +
-    newWord +
-    source.slice(startIndex + oldWord.length);
+    "let" +
+    source.slice(startIndex + constLen);
 
-  const edit: TreeEdit = {
+  // Forward: const → let
+  const forwardEdit: TreeEdit = {
     startIndex,
-    oldEndIndex: startIndex + oldWord.length,
-    newEndIndex: startIndex + newWord.length,
+    oldEndIndex: startIndex + constLen,
+    newEndIndex: startIndex + letLen,
     startPosition: { row: midLine, column: 0 },
-    oldEndPosition: { row: midLine, column: oldWord.length },
-    newEndPosition: { row: midLine, column: newWord.length },
+    oldEndPosition: { row: midLine, column: constLen },
+    newEndPosition: { row: midLine, column: letLen },
   };
 
-  return { modified, edit };
+  // Reverse: let → const (the inverse operation)
+  const reverseEdit: TreeEdit = {
+    startIndex,
+    oldEndIndex: startIndex + letLen,
+    newEndIndex: startIndex + constLen,
+    startPosition: { row: midLine, column: 0 },
+    oldEndPosition: { row: midLine, column: letLen },
+    newEndPosition: { row: midLine, column: constLen },
+  };
+
+  return { modified, forwardEdit, reverseEdit };
 }
 
-const edit1k = makeSmallEdit(largeSource1k);
-const edit5k = makeSmallEdit(largeSource5k);
+const edits1k = makeSymmetricEdits(largeSource1k);
+const edits5k = makeSymmetricEdits(largeSource5k);
 
 // Shared highlighter initialized by the first benchmark's setup
 let highlighter: Highlighter;
@@ -90,15 +107,30 @@ export const highlighterBenchmarks: BenchmarkSuite = {
       iterations: 200,
       targetMs: 10,
       setup: () => {
-        // Seed the old tree
+        // Seed the old tree with the original source
         highlighter.parseBuffer("incr-1k", largeSource1k);
       },
-      fn: () => {
-        // Incremental: apply a small edit then re-parse
-        highlighter.parseBuffer("incr-1k", edit1k.modified, edit1k.edit);
-        // Restore original via full re-parse so next iteration has a clean old tree
-        highlighter.parseBuffer("incr-1k", largeSource1k);
-      },
+      fn: (() => {
+        // Alternate between forward (const→let) and reverse (let→const) edits
+        // so each fn call measures exactly one incremental parse.
+        let isForward = true;
+        return () => {
+          if (isForward) {
+            highlighter.parseBuffer(
+              "incr-1k",
+              edits1k.modified,
+              edits1k.forwardEdit,
+            );
+          } else {
+            highlighter.parseBuffer(
+              "incr-1k",
+              largeSource1k,
+              edits1k.reverseEdit,
+            );
+          }
+          isForward = !isForward;
+        };
+      })(),
     },
 
     // ── Full parse (5K lines) ───────────────────────────────────
@@ -119,11 +151,27 @@ export const highlighterBenchmarks: BenchmarkSuite = {
       setup: () => {
         highlighter.parseBuffer("incr-5k", largeSource5k);
       },
-      fn: () => {
-        highlighter.parseBuffer("incr-5k", edit5k.modified, edit5k.edit);
-        // Restore original via full re-parse so next iteration has a clean old tree
-        highlighter.parseBuffer("incr-5k", largeSource5k);
-      },
+      fn: (() => {
+        // Alternate between forward (const→let) and reverse (let→const) edits
+        // so each fn call measures exactly one incremental parse.
+        let isForward = true;
+        return () => {
+          if (isForward) {
+            highlighter.parseBuffer(
+              "incr-5k",
+              edits5k.modified,
+              edits5k.forwardEdit,
+            );
+          } else {
+            highlighter.parseBuffer(
+              "incr-5k",
+              largeSource5k,
+              edits5k.reverseEdit,
+            );
+          }
+          isForward = !isForward;
+        };
+      })(),
     },
 
     // ── getLineTokens after parse (1K lines) ────────────────────
