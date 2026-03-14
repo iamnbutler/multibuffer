@@ -1,3 +1,5 @@
+import type { Theme } from "./types.ts";
+
 /**
  * Theme configuration for syntax highlighting.
  * Maps tree-sitter node types to CSS colors.
@@ -445,8 +447,10 @@ export const THEME_CSS_VARIABLES = {
 } as const;
 
 /**
- * Default Gruvbox dark theme values. Consumers can use this as a reference
- * or to apply the default theme programmatically.
+ * Default Gruvbox dark theme values keyed by CSS variable name.
+ * Consumers can use this as a reference or to apply the default theme programmatically
+ * via direct CSS variable assignment.
+ * @see GRUVBOX_DARK_THEME for the typed Theme object form.
  */
 export const GRUVBOX_THEME = {
   // Editor chrome
@@ -471,3 +475,71 @@ export const GRUVBOX_THEME = {
   "--syntax-variable-builtin": GRUVBOX.orange,
   "--syntax-default": GRUVBOX.fg,
 } as const;
+
+/**
+ * Gruvbox dark theme as a typed Theme object.
+ * Pass to createDomRenderer or renderer.setTheme().
+ */
+export const GRUVBOX_DARK_THEME: Theme = {
+  cursor: "#ebdbb2",
+  selection: "rgba(214,153,46,0.25)",
+  gutter: "#665c54",
+  headerBg: "#3c3836",
+  headerBorder: "#504945",
+  headerText: "#a89984",
+  lineBg: "transparent",
+  syntaxKeyword: GRUVBOX.red,
+  syntaxString: GRUVBOX.green,
+  syntaxNumber: GRUVBOX.purple,
+  syntaxComment: GRUVBOX.gray,
+  syntaxType: GRUVBOX.yellow,
+  syntaxFunction: GRUVBOX.aqua,
+  syntaxProperty: GRUVBOX.blue,
+  syntaxOperator: GRUVBOX.orange,
+  syntaxPunctuation: GRUVBOX.fg3,
+  syntaxConstant: GRUVBOX.purple,
+  syntaxVariableBuiltin: GRUVBOX.orange,
+  syntaxDefault: GRUVBOX.fg,
+};
+
+/**
+ * GitHub-inspired light theme.
+ * Pass to createDomRenderer or renderer.setTheme().
+ */
+export const LIGHT_THEME: Theme = {
+  cursor: "#24292e",
+  selection: "rgba(0,92,197,0.15)",
+  gutter: "#959da5",
+  headerBg: "#f6f8fa",
+  headerBorder: "#e1e4e8",
+  headerText: "#6a737d",
+  lineBg: "transparent",
+  syntaxKeyword: "#d73a49",
+  syntaxString: "#032f62",
+  syntaxNumber: "#005cc5",
+  syntaxComment: "#6a737d",
+  syntaxType: "#6f42c1",
+  syntaxFunction: "#6f42c1",
+  syntaxProperty: "#005cc5",
+  syntaxOperator: "#d73a49",
+  syntaxPunctuation: "#24292e",
+  syntaxConstant: "#005cc5",
+  syntaxVariableBuiltin: "#005cc5",
+  syntaxDefault: "#24292e",
+};
+
+/**
+ * Convert a Theme object to a CSS variable map (CSS var name → value).
+ * Useful for bulk applying theme values via style.setProperty().
+ */
+export function themeToVars(theme: Partial<Theme>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of Object.keys(theme) as Array<keyof Theme>) {
+    const cssVar = THEME_CSS_VARIABLES[key];
+    const value = theme[key];
+    if (value !== undefined) {
+      result[cssVar] = value;
+    }
+  }
+  return result;
+}

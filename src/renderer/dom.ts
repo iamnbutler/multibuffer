@@ -13,7 +13,8 @@ import {
   createViewport,
   yToVisualRow,
 } from "./measurement.ts";
-import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
+import { themeToVars } from "./theme.ts";
+import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Theme, Viewport } from "./types.ts";
 import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
 
 /** Slice tokens to a column range, adjusting offsets to be segment-relative. */
@@ -72,6 +73,7 @@ export class DomRenderer implements Renderer {
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
+  private _theme: Partial<Theme> | null = null;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -105,6 +107,11 @@ export class DomRenderer implements Renderer {
 
   mount(container: HTMLElement): void {
     this._container = container;
+
+    // Apply initial theme if one was set before mount
+    if (this._theme) {
+      this._applyThemeVars(container, this._theme);
+    }
 
     // Measure actual character width from the font
     this._charWidth = this._measureCharWidth(container);
@@ -191,6 +198,20 @@ export class DomRenderer implements Renderer {
     // Rebuild wrap map if snapshot exists and wrapping is enabled
     if (this._snapshot) {
       this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+  }
+
+  setTheme(theme: Partial<Theme>): void {
+    this._theme = { ...this._theme, ...theme };
+    if (this._container) {
+      this._applyThemeVars(this._container, theme);
+    }
+  }
+
+  private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
+    const vars = themeToVars(theme);
+    for (const [cssVar, value] of Object.entries(vars)) {
+      container.style.setProperty(cssVar, value);
     }
   }
 
@@ -884,6 +905,10 @@ export class DomRenderer implements Renderer {
   }
 }
 
-export function createDomRenderer(measurements: Measurements): DomRenderer {
-  return new DomRenderer(measurements);
+export function createDomRenderer(measurements: Measurements, theme?: Partial<Theme>): DomRenderer {
+  const renderer = new DomRenderer(measurements);
+  if (theme) {
+    renderer.setTheme(theme);
+  }
+  return renderer;
 }
