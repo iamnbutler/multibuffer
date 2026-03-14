@@ -54,7 +54,8 @@ export class Highlighter implements SyntaxHighlighter {
 
   parseBuffer(bufferId: string, text: string): void {
     if (!this._parser) return;
-    const tree = this._parser.parse(text);
+    const oldTree = this._trees.get(bufferId);
+    const tree = this._parser.parse(text, oldTree);
     if (tree) {
       this._trees.set(bufferId, tree);
     }
