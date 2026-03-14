@@ -465,6 +465,8 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   }
 }
 
+let nextMultiBufferVersion = 0;
+
 class MultiBufferImpl implements MultiBuffer {
   private _excerpts = new SlotMap<Excerpt>();
   private _order: ExcerptId[] = [];
@@ -784,7 +786,7 @@ class MultiBufferImpl implements MultiBuffer {
 
   /** Rebuild the cached ExcerptInfo array and line count. */
   private _rebuildCache(): void {
-    this._version++;
+    this._version = ++nextMultiBufferVersion;
     const infos: ExcerptInfo[] = [];
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     let currentRow = 0 as MultiBufferRow;
