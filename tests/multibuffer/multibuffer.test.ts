@@ -1059,3 +1059,75 @@ describe("clearExcerpts", () => {
     expect(mb.isSingleton).toBe(true);
   });
 });
+
+describe("setExcerpts (batch)", () => {
+  test("replaces all excerpts from multiple buffers atomically", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), "A\nB\nC");
+    const buf2 = createBuffer(createBufferId(), "X\nY");
+
+    // Start with one excerpt
+    mb.addExcerpt(buf1, excerptRange(0, 3));
+    expect(mb.lineCount).toBe(3);
+
+    // Replace with two excerpts from different buffers in one call
+    const ids = mb.setExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2) },
+      { buffer: buf2, range: excerptRange(0, 2) },
+    ]);
+
+    expect(ids.length).toBe(2);
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.lineCount).toBe(4); // 2 from buf1 + 2 from buf2
+    expect(mb.lines(mbRow(0), mbRow(4))).toEqual(["A", "B", "X", "Y"]);
+  });
+
+  test("empty entries clears all excerpts", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    expect(mb.lineCount).toBe(3);
+
+    mb.setExcerpts([]);
+
+    expect(mb.excerpts.length).toBe(0);
+    expect(mb.lineCount).toBe(0);
+  });
+
+  test("respects options per entry", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB");
+
+    mb.setExcerpts([
+      { buffer: buf, range: excerptRange(0, 1), options: { editable: false } },
+      { buffer: buf, range: excerptRange(1, 2), options: { editable: true } },
+    ]);
+
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.excerpts[0]?.editable).toBe(false);
+    expect(mb.excerpts[1]?.editable).toBe(true);
+  });
+
+  test("produces same result as clearExcerpts + addExcerpt sequence", () => {
+    const buf1 = createBuffer(createBufferId(), "L1\nL2\nL3");
+    const buf2 = createBuffer(createBufferId(), "M1\nM2");
+
+    // Reference: classic clear+add pattern
+    const mbRef = createMultiBuffer();
+    mbRef.clearExcerpts();
+    mbRef.addExcerpt(buf1, excerptRange(0, 2));
+    mbRef.addExcerpt(buf2, excerptRange(0, 2));
+
+    // Batch version
+    const mbBatch = createMultiBuffer();
+    mbBatch.setExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2) },
+      { buffer: buf2, range: excerptRange(0, 2) },
+    ]);
+
+    expect(mbBatch.lineCount).toBe(mbRef.lineCount);
+    expect(mbBatch.lines(mbRow(0), mbRow(4))).toEqual(
+      mbRef.lines(mbRow(0), mbRow(4)),
+    );
+  });
+});
