@@ -23,7 +23,7 @@ import { InputHandler } from "./input-handler.ts";
 import type { EditorOptions } from "./types.ts";
 
 /** CSS variable name → value map for theming the editor chrome and syntax. */
-export type Theme = Record<string, string>;
+export type ThemeVars = Record<string, string>;
 
 /** Options for createEditorView. */
 export interface EditorViewOptions extends EditorOptions {
@@ -51,7 +51,7 @@ export interface EditorView {
    * Keys are CSS variable names (e.g. `--editor-cursor`). Use `GRUVBOX_THEME`
    * or `THEME_CSS_VARIABLES` as references.
    */
-  setTheme(theme: Theme): void;
+  setTheme(theme: ThemeVars): void;
 
   /** Unmount the renderer and input handler and release all event listeners. */
   destroy(): void;
@@ -138,7 +138,7 @@ class EditorViewImpl implements EditorView {
     this._scheduleRender();
   }
 
-  setTheme(theme: Theme): void {
+  setTheme(theme: ThemeVars): void {
     for (const [key, value] of Object.entries(theme)) {
       this._container.style.setProperty(key, value);
     }
