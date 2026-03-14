@@ -78,6 +78,10 @@ export class Highlighter implements SyntaxHighlighter {
     const tree = this._parser.parse(text, oldTree);
     if (tree) {
       this._trees.set(bufferId, tree);
+    } else if (oldTree && edit) {
+      // The old tree was mutated by tree.edit() but parse failed —
+      // remove the corrupted tree so subsequent calls don't reuse it.
+      this._trees.delete(bufferId);
     }
   }
 

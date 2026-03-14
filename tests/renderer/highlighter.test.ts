@@ -77,8 +77,13 @@ describe("Highlighter", () => {
 
       const tokens = highlighter.getLineTokens("test-change", 1);
       expect(tokens.length).toBeGreaterThan(0);
-      // 'let' should start at column 0
+      // First token should start at column 0
       expect(tokens[0]?.startColumn).toBe(0);
+      // The first token must end within the line (not extend past)
+      expect(tokens[0]?.endColumn).toBeGreaterThan(0);
+      expect(tokens[0]?.endColumn).toBeLessThanOrEqual("let b = 2;".length);
+      // Token color should be a CSS variable reference (not a bare hex value)
+      expect(tokens[0]?.color).toContain("var(--syntax-");
     });
   });
 
