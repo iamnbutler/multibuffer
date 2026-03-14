@@ -42,6 +42,10 @@ jobs:
 
       - name: Create release branch
         run: |
+          if git ls-remote --exit-code --heads origin "release/v${{ steps.next.outputs.version }}" > /dev/null 2>&1; then
+            echo "::error::Branch release/v${{ steps.next.outputs.version }} already exists. Is a release already in progress?"
+            exit 1
+          fi
           git checkout -b "release/v${{ steps.next.outputs.version }}"
 
       - name: Bump version in package.json

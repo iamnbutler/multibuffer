@@ -46,7 +46,7 @@ jobs:
           PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           echo "tag=$PREV" >> "$GITHUB_OUTPUT"
           if [ -n "$PREV" ]; then
-            PREV_DATE=$(git log -1 --format=%aI "$PREV")
+            PREV_DATE=$(git log -1 --format=%cI "$PREV")
             echo "date=$PREV_DATE" >> "$GITHUB_OUTPUT"
           fi
 
@@ -96,6 +96,8 @@ jobs:
           echo -e "$CHANGES" > /tmp/changes.md
 
       - name: Run benchmarks
+        # Benchmarks are recorded in the release notes but don't block the release.
+        # Target misses show as FAIL rows in the table for visibility.
         run: |
           bun run bench --json > /tmp/bench-results.json
 
@@ -149,4 +151,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run docs-update.lock.yml || true
+          gh workflow run docs-update.lock.yml 2>&1 || echo "Warning: docs-update dispatch failed (non-blocking)"
