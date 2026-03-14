@@ -138,6 +138,8 @@ export interface ExcerptBoundary {
 export interface MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
+  /** Monotonically increasing version; increments on every mutation. */
+  readonly version: number;
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined;
   toBufferPoint(
     point: MultiBufferPoint,

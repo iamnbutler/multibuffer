@@ -31,6 +31,7 @@ import type {
 class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
+  readonly version: number;
   private readonly _excerptData: readonly Excerpt[];
   private readonly _buffers: ReadonlyMap<string, Buffer>;
   private readonly _replacedExcerpts: ReadonlyMap<string, ExcerptId>;
@@ -47,11 +48,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     excerptData: readonly Excerpt[],
     buffers: ReadonlyMap<string, Buffer>,
     replacedExcerpts: ReadonlyMap<string, ExcerptId>,
+    version: number,
   ) {
     this.excerpts = excerpts;
     this._excerptData = excerptData;
     this._buffers = buffers;
     this._replacedExcerpts = replacedExcerpts;
+    this.version = version;
     let total = 0;
     for (const e of excerpts) {
       total += e.endRow - e.startRow;
@@ -469,6 +472,7 @@ class MultiBufferImpl implements MultiBuffer {
   private _cachedLineCount = 0;
   private _buffers = new Map<string, Buffer>();
   private _replacedExcerpts = new Map<string, ExcerptId>();
+  private _version = 0;
 
   get lineCount(): number {
     return this._cachedLineCount;
@@ -494,6 +498,7 @@ class MultiBufferImpl implements MultiBuffer {
       excerptData,
       this._buffers,
       this._replacedExcerpts,
+      this._version,
     );
   }
 
@@ -779,6 +784,7 @@ class MultiBufferImpl implements MultiBuffer {
 
   /** Rebuild the cached ExcerptInfo array and line count. */
   private _rebuildCache(): void {
+    this._version++;
     const infos: ExcerptInfo[] = [];
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     let currentRow = 0 as MultiBufferRow;
