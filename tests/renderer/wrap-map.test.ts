@@ -20,7 +20,7 @@ import {
   WrapMap,
   wrapLine,
 } from "../../src/renderer/wrap-map.ts";
-import { createBufferId, excerptRange, num, resetCounters } from "../helpers.ts";
+import { createBufferId, excerptRange, generateText, num, resetCounters } from "../helpers.ts";
 
 describe("visualWidth", () => {
   test("empty string returns 0", () => {
@@ -349,5 +349,161 @@ describe("WrapMap class", () => {
     const wm = new WrapMap(snap, 4);
     expect(wm.visualRowsForLine(mbRow(0))).toBe(2);
     expect(wm.totalVisualRows).toBe(2);
+  });
+});
+
+describe("lazy construction", () => {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
+  const mbRow = (n: number) => n as MultiBufferRow;
+
+  function makeSnapshot(text: string) {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    return mb.snapshot();
+  }
+
+  beforeEach(() => {
+    resetCounters();
+  });
+
+  test("does not scan all lines when lazy=true", () => {
+    const text = generateText(10_000);
+    const snap = makeSnapshot(text);
+    const start = performance.now();
+    const wm = new WrapMap(snap, 80, { lazy: true });
+    const elapsed = performance.now() - start;
+    // Construction should be near-instant, well under 5ms
+    expect(elapsed).toBeLessThan(5);
+    // Should not be complete yet
+    expect(wm.isComplete).toBe(false);
+  });
+
+  test("computes on-demand for requested rows", () => {
+    const text = "short\naverylongline\nx\nabc\ndef";
+    const snap = makeSnapshot(text);
+    const lazyWm = new WrapMap(snap, 10, { lazy: true });
+    const eagerWm = new WrapMap(snap, 10);
+
+    // Query row 1 — should compute rows 0..1 on demand
+    expect(lazyWm.bufferRowToFirstVisualRow(mbRow(1))).toBe(
+      eagerWm.bufferRowToFirstVisualRow(mbRow(1)),
+    );
+
+    // Query row 3 — should compute rows 0..3 on demand
+    expect(lazyWm.bufferRowToFirstVisualRow(mbRow(3))).toBe(
+      eagerWm.bufferRowToFirstVisualRow(mbRow(3)),
+    );
+  });
+
+  test("computeChunk processes N rows and returns completion status", () => {
+    const text = generateText(100);
+    const snap = makeSnapshot(text);
+    const wm = new WrapMap(snap, 80, { lazy: true });
+
+    // Process first 30 rows — should not be complete
+    const done1 = wm.computeChunk(30);
+    expect(done1).toBe(false);
+
+    // Process another 30 — still not complete
+    const done2 = wm.computeChunk(30);
+    expect(done2).toBe(false);
+
+    // Process remaining rows — should be complete
+    const done3 = wm.computeChunk(100);
+    expect(done3).toBe(true);
+  });
+
+  test("isComplete reflects computation state", () => {
+    const text = generateText(50);
+    const snap = makeSnapshot(text);
+    const wm = new WrapMap(snap, 80, { lazy: true });
+
+    expect(wm.isComplete).toBe(false);
+
+    // Compute everything
+    wm.computeChunk(50);
+    expect(wm.isComplete).toBe(true);
+  });
+
+  test("matches eager results after full computation", () => {
+    // Use lines with wrapping to ensure prefix sum correctness
+    const lines = [
+      "short",
+      "a line that is definitely longer than twenty characters wide",
+      "x",
+      "another moderately long line here for testing",
+      "end",
+    ];
+    const text = lines.join("\n");
+    const snap = makeSnapshot(text);
+    const eagerWm = new WrapMap(snap, 20);
+
+    resetCounters();
+    const snap2 = makeSnapshot(text);
+    const lazyWm = new WrapMap(snap2, 20, { lazy: true });
+
+    // Compute all rows via chunks
+    while (!lazyWm.computeChunk(2)) {
+      // small chunks to exercise incremental path
+    }
+
+    // Compare every row
+    for (let i = 0; i < lines.length; i++) {
+      expect(lazyWm.visualRowsForLine(mbRow(i))).toBe(
+        eagerWm.visualRowsForLine(mbRow(i)),
+      );
+      expect(lazyWm.bufferRowToFirstVisualRow(mbRow(i))).toBe(
+        eagerWm.bufferRowToFirstVisualRow(mbRow(i)),
+      );
+    }
+
+    // Compare total
+    expect(lazyWm.totalVisualRows).toBe(eagerWm.totalVisualRows);
+
+    // Compare visualRowToBufferRow for every visual row
+    for (let vr = 0; vr < eagerWm.totalVisualRows; vr++) {
+      const eagerResult = eagerWm.visualRowToBufferRow(vr);
+      const lazyResult = lazyWm.visualRowToBufferRow(vr);
+      expect(num(lazyResult.mbRow)).toBe(num(eagerResult.mbRow));
+      expect(lazyResult.segment).toBe(eagerResult.segment);
+    }
+  });
+
+  test("visualRowToBufferRow works with incomplete computation", () => {
+    const lines = [
+      "short",
+      "averylongline",
+      "x",
+    ];
+    const text = lines.join("\n");
+    const snap = makeSnapshot(text);
+    const lazyWm = new WrapMap(snap, 10, { lazy: true });
+    const eagerWm = new WrapMap(snap, 10);
+
+    // Query visual row 3 (maps to buffer row 2) without pre-computing
+    const lazyResult = lazyWm.visualRowToBufferRow(3);
+    const eagerResult = eagerWm.visualRowToBufferRow(3);
+    expect(num(lazyResult.mbRow)).toBe(num(eagerResult.mbRow));
+    expect(lazyResult.segment).toBe(eagerResult.segment);
+  });
+
+  test("totalVisualRows returns estimate when not complete", () => {
+    const text = generateText(100);
+    const snap = makeSnapshot(text);
+    const lazyWm = new WrapMap(snap, 80, { lazy: true });
+
+    // Before any computation, estimate is 1 per line = lineCount
+    expect(lazyWm.totalVisualRows).toBe(100);
+
+    // After full computation, should match eager
+    resetCounters();
+    const snap2 = makeSnapshot(text);
+    const eagerWm = new WrapMap(snap2, 80);
+
+    while (!lazyWm.computeChunk(100)) {
+      // compute all
+    }
+    expect(lazyWm.totalVisualRows).toBe(eagerWm.totalVisualRows);
   });
 });

@@ -192,37 +192,87 @@ export function wrapLineCount(text: string, wrapWidth: number): number {
   return count;
 }
 
+export interface WrapMapOptions {
+  lazy?: boolean;
+}
+
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
   private _wrapWidth: number;
-  readonly totalVisualRows: number;
+  private _snapshot: MultiBufferSnapshot;
+  private _lineCount: number;
+  private _computedUpTo: number;
 
-  constructor(snapshot: MultiBufferSnapshot, wrapWidth: number) {
+  constructor(snapshot: MultiBufferSnapshot, wrapWidth: number, options?: WrapMapOptions) {
     this._wrapWidth = wrapWidth;
-    const lineCount = snapshot.lineCount;
+    this._snapshot = snapshot;
+    this._lineCount = snapshot.lineCount;
 
-    // Build prefix sum
-    this._prefix = new Uint32Array(lineCount + 1);
+    // Allocate prefix sum array
+    this._prefix = new Uint32Array(this._lineCount + 1);
     this._prefix[0] = 0;
+    this._computedUpTo = 0;
+
+    if (!options?.lazy) {
+      // Eager mode: compute everything now (original behavior)
+      this._ensureComputedUpTo(this._lineCount);
+    }
+  }
+
+  /** Lazily compute wrap counts for rows [_computedUpTo, endRow). */
+  private _ensureComputedUpTo(endRow: number): void {
+    if (endRow <= this._computedUpTo) return;
+    const target = Math.min(endRow, this._lineCount);
+    if (target <= this._computedUpTo) return;
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for iteration
-    const startRow = 0 as MultiBufferRow;
+    const startRow = this._computedUpTo as MultiBufferRow;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for iteration
-    const endRow = lineCount as MultiBufferRow;
-    const lines = snapshot.lines(startRow, endRow);
+    const endRowBranded = target as MultiBufferRow;
+    const lines = this._snapshot.lines(startRow, endRowBranded);
 
-    for (let i = 0; i < lineCount; i++) {
+    for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLineCount(line, wrapWidth);
-      this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
+      const visualRows = wrapLineCount(line, this._wrapWidth);
+      const rowIdx = this._computedUpTo + i;
+      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + visualRows;
     }
 
-    this.totalVisualRows = this._prefix[lineCount] ?? 0;
+    this._computedUpTo = target;
+  }
+
+  /**
+   * Total visual rows. When lazy and not fully computed, returns an estimate:
+   * computed visual rows + 1 per remaining buffer row.
+   */
+  get totalVisualRows(): number {
+    if (this._computedUpTo >= this._lineCount) {
+      return this._prefix[this._lineCount] ?? 0;
+    }
+    // Estimate: computed rows so far + 1 visual row per remaining buffer row
+    const computedVisualRows = this._prefix[this._computedUpTo] ?? 0;
+    const remainingRows = this._lineCount - this._computedUpTo;
+    return computedVisualRows + remainingRows;
+  }
+
+  /** Whether all rows have been computed. */
+  get isComplete(): boolean {
+    return this._computedUpTo >= this._lineCount;
+  }
+
+  /**
+   * Process up to `chunkSize` more rows. Returns true when all rows are computed.
+   */
+  computeChunk(chunkSize: number): boolean {
+    const target = Math.min(this._computedUpTo + chunkSize, this._lineCount);
+    this._ensureComputedUpTo(target);
+    return this.isComplete;
   }
 
   /** How many visual rows does a buffer row occupy? */
   visualRowsForLine(mbRow: MultiBufferRow): number {
+    this._ensureComputedUpTo(mbRow + 1);
     const next = this._prefix[mbRow + 1];
     const curr = this._prefix[mbRow];
     if (next === undefined || curr === undefined) return 1;
@@ -231,14 +281,27 @@ export class WrapMap {
 
   /** First visual row for a given buffer row. O(1). */
   bufferRowToFirstVisualRow(mbRow: MultiBufferRow): number {
+    this._ensureComputedUpTo(mbRow + 1);
     return this._prefix[mbRow] ?? 0;
   }
 
   /** Convert a visual row to { buffer row, segment index }. O(log n). */
   visualRowToBufferRow(visualRow: number): { mbRow: MultiBufferRow; segment: number } {
-    // Binary search: find largest i where prefix[i] <= visualRow
+    // If not fully computed, compute in chunks until we cover the target visual row
+    if (this._computedUpTo < this._lineCount) {
+      const CHUNK_SIZE = 1000;
+      while (this._computedUpTo < this._lineCount) {
+        const computedVisualRows = this._prefix[this._computedUpTo] ?? 0;
+        if (computedVisualRows > visualRow) break;
+        this._ensureComputedUpTo(this._computedUpTo + CHUNK_SIZE);
+      }
+    }
+
+    // Binary search over the computed portion: find largest i where prefix[i] <= visualRow
+    const searchEnd = this._computedUpTo;
     let lo = 0;
-    let hi = this._prefix.length - 2; // last valid buffer row index
+    let hi = searchEnd - 1; // last valid buffer row index in computed range
+    if (hi < 0) hi = 0;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       if ((this._prefix[mid] ?? 0) <= visualRow) {
