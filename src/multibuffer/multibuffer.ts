@@ -474,7 +474,7 @@ class MultiBufferImpl implements MultiBuffer {
   private _cachedLineCount = 0;
   private _buffers = new Map<string, Buffer>();
   private _replacedExcerpts = new Map<string, ExcerptId>();
-  private _version = 0;
+  private _version = ++nextMultiBufferVersion;
 
   get lineCount(): number {
     return this._cachedLineCount;

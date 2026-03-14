@@ -488,8 +488,6 @@ export class DomRenderer implements Renderer {
   private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
     const wrapWidth = this._measurements.wrapWidth;
     if (!wrapWidth || wrapWidth <= 0) {
-      this._wrapMapSnapshotVersion = snapshot.version;
-      this._wrapMapWrapWidth = 0;
       return null;
     }
     this._wrapMapSnapshotVersion = snapshot.version;
