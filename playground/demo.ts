@@ -116,24 +116,46 @@ async function main() {
   // Set up editor
   const editor = new Editor(mb);
 
+  // Track whether the multibuffer snapshot needs to be pushed to the renderer.
+  // Set true on scenario switch and editor content changes; cleared after setSnapshot.
+  let snapshotDirty = true;
+
   // Render function: refreshes the display from current state
   function renderAll() {
     if (!container) return;
 
-    // Re-parse any buffers whose content has changed since the last parse.
-    // This keeps syntax highlighting correct after edits.
+    // Defer tree-sitter re-parse to after first paint so the frame renders
+    // immediately without blocking on WASM parsing of potentially large buffers.
     if (highlighter.ready) {
+      let needsReParse = false;
       for (const [bufferId, buf] of bufferObjects) {
         const lastVersion = parsedVersions.get(bufferId) ?? -1;
         if (buf.version > lastVersion) {
-          highlighter.parseBuffer(bufferId, buf.snapshot().text());
-          parsedVersions.set(bufferId, buf.version);
+          needsReParse = true;
+          break;
         }
+      }
+      if (needsReParse) {
+        requestAnimationFrame(() => {
+          for (const [bufferId, buf] of bufferObjects) {
+            const lastVersion = parsedVersions.get(bufferId) ?? -1;
+            if (buf.version > lastVersion) {
+              highlighter.parseBuffer(bufferId, buf.snapshot().text());
+              parsedVersions.set(bufferId, buf.version);
+            }
+          }
+          renderAll();
+        });
       }
     }
 
     const snapshot = mb.snapshot();
-    renderer.setSnapshot(snapshot);
+    // Only push the snapshot to the renderer when content has actually changed,
+    // avoiding an O(n) WrapMap rebuild on every renderAll call (e.g. cursor moves).
+    if (snapshotDirty) {
+      renderer.setSnapshot(snapshot);
+      snapshotDirty = false;
+    }
 
     const viewport = createViewport(
       renderer.getScrollTop(),
@@ -185,7 +207,10 @@ async function main() {
   }
 
   // Wire editor state changes to re-render
-  editor.onChange(renderAll);
+  editor.onChange(() => {
+    snapshotDirty = true;
+    renderAll();
+  });
 
   // Wire mouse interactions
   renderer.onClickPosition((clickPoint) => {
@@ -399,6 +424,7 @@ async function main() {
         mb.removeExcerpt(excerptId);
       }
       scenario.build(mb);
+      snapshotDirty = true;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
       editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
     }
