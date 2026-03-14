@@ -42,6 +42,11 @@ interface RowElement {
 }
 
 export class DomRenderer implements Renderer {
+  /** Documents above this line count use lazy WrapMap construction. */
+  static readonly LAZY_WRAP_THRESHOLD = 5000;
+  /** Number of buffer rows to compute per animation frame when completing a lazy WrapMap. */
+  static readonly WRAP_CHUNK_SIZE = 2000;
+
   private _container: HTMLElement | null = null;
   private _scrollContainer: HTMLDivElement | null = null;
   private _spacer: HTMLDivElement | null = null;
@@ -54,6 +59,7 @@ export class DomRenderer implements Renderer {
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
+  private _wrapBuildFrame: number | null = null;
   private _highlighter: SyntaxHighlighter | null = null;
   private _decorations: readonly Decoration[] = [];
   private _onScroll: (() => void) | null = null;
@@ -153,6 +159,10 @@ export class DomRenderer implements Renderer {
   }
 
   unmount(): void {
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
     if (this._scrollContainer) {
       if (this._onScroll) this._scrollContainer.removeEventListener("scroll", this._onScroll);
       if (this._onClick) this._scrollContainer.removeEventListener("mousedown", this._onClick);
@@ -473,7 +483,57 @@ export class DomRenderer implements Renderer {
   private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
     const wrapWidth = this._measurements.wrapWidth;
     if (!wrapWidth || wrapWidth <= 0) return null;
+
+    // Cancel any pending animation frame from a previous snapshot
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
+
+    const useLazy =
+      snapshot.lineCount > DomRenderer.LAZY_WRAP_THRESHOLD &&
+      typeof requestAnimationFrame !== "undefined";
+
+    if (useLazy) {
+      const wrapMap = new WrapMap(snapshot, wrapWidth, { lazy: true });
+      this._scheduleWrapCompletion(wrapMap);
+      return wrapMap;
+    }
+
     return new WrapMap(snapshot, wrapWidth);
+  }
+
+  /**
+   * Incrementally compute the full WrapMap across animation frames.
+   * Each frame processes WRAP_CHUNK_SIZE rows. When complete, the spacer
+   * height is updated to reflect the exact content height.
+   */
+  private _scheduleWrapCompletion(wrapMap: WrapMap): void {
+    this._wrapBuildFrame = requestAnimationFrame(() => {
+      // If the wrapMap was replaced by a newer snapshot, bail out
+      if (this._wrapMap !== wrapMap) {
+        this._wrapBuildFrame = null;
+        return;
+      }
+
+      const complete = wrapMap.computeChunk(DomRenderer.WRAP_CHUNK_SIZE);
+
+      if (complete) {
+        this._wrapBuildFrame = null;
+        // Update spacer height with exact content height
+        if (this._spacer && this._snapshot) {
+          const contentHeight = calculateContentHeight(
+            this._snapshot.lineCount,
+            this._measurements.lineHeight,
+            wrapMap,
+          );
+          this._spacer.style.height = `${contentHeight}px`;
+        }
+      } else {
+        // Schedule next frame
+        this._scheduleWrapCompletion(wrapMap);
+      }
+    });
   }
 
   /**
