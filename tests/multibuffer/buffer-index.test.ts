@@ -80,7 +80,10 @@ describe("buffer-to-excerpt index", () => {
       const buf2Id = mb.addExcerpt(buf2, excerptRange(0, 10));
 
       // Remove the buf1 excerpt
-      mb.removeExcerpt(mb.excerpts[0]!.id);
+      const firstId = mb.excerpts[0]?.id;
+      expect(firstId).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: expect: checked by toBeDefined above
+      mb.removeExcerpt(firstId!);
 
       // buf2 excerpt should still be intact
       expect(mb.excerpts.length).toBe(1);
@@ -143,7 +146,10 @@ describe("buffer-to-excerpt index", () => {
       const allIds = mb.excerpts.map((e) => e.id);
       expect(allIds).toContainEqual(buf2Id);
       // New buf1 excerpt should be there
-      expect(allIds).toContainEqual(newIds[0]);
+      const newId = newIds[0];
+      expect(newId).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: expect: checked by toBeDefined above
+      expect(allIds).toContainEqual(newId!);
     });
 
     test("setting empty ranges removes all excerpts for buffer", () => {
@@ -200,6 +206,7 @@ describe("buffer-to-excerpt index", () => {
         (e) => e.id.index === buf2ExcId.index && e.id.generation === buf2ExcId.generation,
       );
       expect(buf2Exc).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: expect: checked by toBeDefined above
       const buf2Rows = buf2Exc!.endRow - buf2Exc!.startRow;
       expect(buf2Rows).toBe(3);
     });

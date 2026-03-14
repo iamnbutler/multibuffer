@@ -469,6 +469,18 @@ class MultiBufferImpl implements MultiBuffer {
   private _cachedLineCount = 0;
   private _buffers = new Map<string, Buffer>();
   private _replacedExcerpts = new Map<string, ExcerptId>();
+  /**
+   * Reverse index: bufferId → Map<"index:generation", ExcerptId>.
+   * Enables O(k) lookup of all excerpts for a buffer (k = excerpts for that buffer)
+   * instead of O(n) scans through _order in setExcerptsForBuffer and
+   * _refreshExcerptsForBuffer.
+   */
+  private _bufferToExcerpts = new Map<string, Map<string, ExcerptId>>();
+
+  /** Serialize an ExcerptId to a string key. */
+  private static _excKey(id: ExcerptId): string {
+    return `${id.index}:${id.generation}`;
+  }
 
   get lineCount(): number {
     return this._cachedLineCount;
@@ -503,7 +515,8 @@ class MultiBufferImpl implements MultiBuffer {
     options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId {
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
-    this._buffers.set(buffer.id as string, buffer);
+    const bufferId = buffer.id as string;
+    this._buffers.set(bufferId, buffer);
     const snapshot = buffer.snapshot();
     const hasTrailing = options?.hasTrailingNewline ?? false;
     const editable = options?.editable ?? true;
@@ -514,11 +527,29 @@ class MultiBufferImpl implements MultiBuffer {
     const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
     this._excerpts.set(id, excerpt);
     this._order.push(id);
+    // Maintain reverse index
+    let excSet = this._bufferToExcerpts.get(bufferId);
+    if (!excSet) {
+      excSet = new Map<string, ExcerptId>();
+      this._bufferToExcerpts.set(bufferId, excSet);
+    }
+    excSet.set(MultiBufferImpl._excKey(id), id);
     this._rebuildCache();
     return id;
   }
 
   removeExcerpt(excerptId: ExcerptId): void {
+    // Update reverse index before removing from SlotMap (while bufferId is still accessible)
+    const exc = this._excerpts.get(excerptId);
+    if (exc) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+      const bid = exc.bufferId as string;
+      const excSet = this._bufferToExcerpts.get(bid);
+      if (excSet) {
+        excSet.delete(MultiBufferImpl._excKey(excerptId));
+        if (excSet.size === 0) this._bufferToExcerpts.delete(bid);
+      }
+    }
     this._excerpts.remove(excerptId);
     this._order = this._order.filter(
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
@@ -532,6 +563,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.remove(id);
     }
     this._order = [];
+    this._bufferToExcerpts.clear();
     this._rebuildCache();
     return oldIds;
   }
@@ -544,28 +576,22 @@ class MultiBufferImpl implements MultiBuffer {
     const bufferId = buffer.id as string;
     this._buffers.set(bufferId, buffer);
 
-    // 1. Collect old excerpt IDs for this buffer
-    const oldIds: ExcerptId[] = [];
-    for (const id of this._order) {
-      const exc = this._excerpts.get(id);
-      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
-      if (exc && (exc.bufferId as string) === bufferId) {
-        oldIds.push(id);
-      }
-    }
+    // 1. Collect old excerpt IDs for this buffer — O(k) via reverse index
+    const oldExcSet = this._bufferToExcerpts.get(bufferId);
+    const oldIds: ExcerptId[] = oldExcSet ? [...oldExcSet.values()] : [];
 
-    // 2. Remove old excerpts
+    // 2. Remove old excerpts from SlotMap and reverse index
+    const oldKeySet = new Set<string>(oldIds.map(MultiBufferImpl._excKey));
     for (const id of oldIds) {
       this._excerpts.remove(id);
     }
-    this._order = this._order.filter((id) => {
-      const exc = this._excerpts.get(id);
-      return exc !== undefined;
-    });
+    this._order = this._order.filter((id) => !oldKeySet.has(MultiBufferImpl._excKey(id)));
+    this._bufferToExcerpts.delete(bufferId);
 
     // 3. Add new excerpts
     const snapshot = buffer.snapshot();
     const newIds: ExcerptId[] = [];
+    const newExcSet = new Map<string, ExcerptId>();
     for (const range of ranges) {
       // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
       const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
@@ -573,6 +599,10 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       newIds.push(id);
+      newExcSet.set(MultiBufferImpl._excKey(id), id);
+    }
+    if (newExcSet.size > 0) {
+      this._bufferToExcerpts.set(bufferId, newExcSet);
     }
 
     // 4. Build replacement map: each old ID maps to the first new ID
@@ -715,10 +745,13 @@ class MultiBufferImpl implements MultiBuffer {
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
     const bid = buffer.id as string;
 
-    for (const id of this._order) {
+    // O(k) via reverse index instead of O(n) scan through _order
+    const excSet = this._bufferToExcerpts.get(bid);
+    const idsToRefresh = excSet ? [...excSet.values()] : [];
+
+    for (const id of idsToRefresh) {
       const exc = this._excerpts.get(id);
-      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
-      if (!exc || (exc.bufferId as string) !== bid) continue;
+      if (!exc) continue;
 
       let endRow = exc.range.context.end.row;
 
