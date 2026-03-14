@@ -46,6 +46,26 @@ const snap10k = makeSnapshot(10_000);
 // Lines ~40 chars wide; wrap at 20 → each line wraps into 2 visual rows
 const snap1kWrap = makeSnapshot(1000, 40);
 
+// 10K-line snapshot with realistic code-like lines for lazy vs eager benchmarks
+function generateCodeText(lines: number): string {
+  return Array.from(
+    { length: lines },
+    (_, i) => `  fn method_${i}(&self) -> Result<(), Error> { todo!() }`,
+  ).join("\n");
+}
+
+// biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+const codeId = "bench-wrapmap-code" as BufferId;
+
+function makeCodeSnapshot(lines: number) {
+  const buf = createBuffer(codeId, generateCodeText(lines));
+  const mb = createMultiBuffer();
+  mb.addExcerpt(buf, makeRange(lines));
+  return mb.snapshot();
+}
+
+const snap10kCode = makeCodeSnapshot(10_000);
+
 // Sample lines for direct visualWidth / charColToVisualCol benchmarks
 const asciiLine = "const result = someFunction(argument1, argument2);"; // 50 chars, all ASCII
 const cjkLine = "日本語テキスト処理の最適化について"; // 17 CJK chars, 34 cells
@@ -131,6 +151,34 @@ export const wrapMapBenchmarks: BenchmarkSuite = {
       fn: () => {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
         wrapMap1k.visualRowsForLine(500 as MultiBufferRow);
+      },
+    },
+    {
+      name: "WrapMap eager construction - 10K lines",
+      iterations: 10,
+      targetMs: 50,
+      fn: () => {
+        new WrapMap(snap10kCode, 200);
+      },
+    },
+    {
+      name: "WrapMap lazy construction - 10K lines",
+      iterations: 100,
+      targetMs: 1,
+      fn: () => {
+        new WrapMap(snap10kCode, 200, { lazy: true });
+      },
+    },
+    {
+      name: "WrapMap lazy + viewport query (40 rows) - 10K lines",
+      iterations: 100,
+      targetMs: 2,
+      fn: () => {
+        const wm = new WrapMap(snap10kCode, 200, { lazy: true });
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        wm.bufferRowToFirstVisualRow(0 as MultiBufferRow);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        wm.bufferRowToFirstVisualRow(40 as MultiBufferRow);
       },
     },
   ],
