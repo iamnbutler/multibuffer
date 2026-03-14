@@ -8,6 +8,7 @@ description: |
 on:
   schedule: weekly
   workflow_dispatch:
+  skip-if-match: 'is:pr is:open in:title "[docs-update]"'
 
 permissions: read-all
 
@@ -17,8 +18,6 @@ network:
   - node
 
 tracker-id: docs-update
-
-skip-if-match: 'is:pr is:open in:title "[docs-update]"'
 
 imports:
   - shared/formatting.md
