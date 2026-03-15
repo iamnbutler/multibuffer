@@ -475,12 +475,29 @@ class MultiBufferImpl implements MultiBuffer {
   private _buffers = new Map<string, Buffer>();
   private _replacedExcerpts = new Map<string, ExcerptId>();
   private _version = ++nextMultiBufferVersion;
+  /** True when _cachedInfos/_cachedLineCount reflect the current _order and _excerpts state. */
+  private _cacheValid = false;
+
+  /** Mark the cache stale and increment the version on every mutation. */
+  private _markDirty(): void {
+    this._cacheValid = false;
+    this._version = ++nextMultiBufferVersion;
+  }
+
+  /** Rebuild the cache only if it is stale. */
+  private _ensureCache(): void {
+    if (this._cacheValid) return;
+    this._rebuildCache();
+    this._cacheValid = true;
+  }
 
   get lineCount(): number {
+    this._ensureCache();
     return this._cachedLineCount;
   }
 
   get excerpts(): readonly ExcerptInfo[] {
+    this._ensureCache();
     return this._cachedInfos;
   }
 
@@ -489,6 +506,7 @@ class MultiBufferImpl implements MultiBuffer {
   }
 
   snapshot(): MultiBufferSnapshot {
+    this._ensureCache();
     // Copy excerpt data for immutability.
     const excerptData: Excerpt[] = [];
     for (const id of this._order) {
@@ -521,7 +539,7 @@ class MultiBufferImpl implements MultiBuffer {
     const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
     this._excerpts.set(id, excerpt);
     this._order.push(id);
-    this._rebuildCache();
+    this._markDirty();
     return id;
   }
 
@@ -530,7 +548,7 @@ class MultiBufferImpl implements MultiBuffer {
     this._order = this._order.filter(
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
     );
-    this._rebuildCache();
+    this._markDirty();
   }
 
   clearExcerpts(): readonly ExcerptId[] {
@@ -539,7 +557,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.remove(id);
     }
     this._order = [];
-    this._rebuildCache();
+    this._markDirty();
     return oldIds;
   }
 
@@ -592,7 +610,7 @@ class MultiBufferImpl implements MultiBuffer {
       }
     }
 
-    this._rebuildCache();
+    this._markDirty();
     return newIds;
   }
 
@@ -633,7 +651,7 @@ class MultiBufferImpl implements MultiBuffer {
       oldExcerpt.editable,
     );
     this._excerpts.set(excerptId, newExcerpt);
-    this._rebuildCache();
+    this._markDirty();
   }
 
   createAnchor(
@@ -760,7 +778,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.set(id, refreshed);
     }
 
-    this._rebuildCache();
+    this._markDirty();
   }
 
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined {
@@ -784,9 +802,8 @@ class MultiBufferImpl implements MultiBuffer {
     return this.snapshot().lines(startRow, endRow);
   }
 
-  /** Rebuild the cached ExcerptInfo array and line count. */
+  /** Rebuild the cached ExcerptInfo array and line count. Called only by _ensureCache. */
   private _rebuildCache(): void {
-    this._version = ++nextMultiBufferVersion;
     const infos: ExcerptInfo[] = [];
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     let currentRow = 0 as MultiBufferRow;
