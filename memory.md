@@ -1,42 +1,27 @@
 # Test Improver Memory
 
 ## Commands
-- `bun test` / `bun run typecheck` / `bun run lint` (CI only, bun not in runner)
-- CI: install → build:demo → typecheck → lint → test. No coverage.
-- ⚠️ CI does NOT auto-run on bot-created PRs. Trigger manually.
+- `bun test`/`bun run typecheck`/`bun run lint` — CI only (bun not in runner)
+- CI: install→build:demo→typecheck→lint→test. No coverage. Bot PRs need manual CI trigger.
 
 ## Framework
 - bun:test; tests/ mirrors src/; helpers: tests/helpers.ts
-- `offset()` in helpers.ts creates BufferOffset branded type; `num()` unwraps branded types
-- Biome no-type-assertion — biome-ignore for branded casts
-- Module split in #104: src/{buffer,multibuffer,editor,renderer,diff}/
-  Tests: tests/{multibuffer,editor,renderer,diff}/*.test.ts
+- `num()` unwraps branded types; biome-ignore for branded casts
 
-## Recent PR Outcomes
-- #95 MERGED (anchor stability), #88 MERGED (editor coverage gaps)
-- #127 MERGED 2026-03-12 (trailing-newline anchor + selection head-flip)
-- #191 MERGED 2026-03-13 (anchor survives excerpt expansion — my PR)
-- #193 MERGED 2026-03-13 (adjustOffset 27 tests — others)
-- #203 MERGED 2026-03-13 (multibuffer anchor todos: "anchors work with old snapshots" + anchor resolution benchmark)
-- #104: major module split — paths changed
+## Open Test Improver PRs
+- #214 OPEN: buffer property tests (2026-03-14)
+- Branch test-assist/snapshot-version-invariants-1773570737 SUBMITTED (2026-03-15)
 
 ## Backlog
-1. anchor.test.ts "anchor survives excerpt expansion" — ✅ MERGED #191
-2. anchor.test.ts bias-at-excerpt-boundary (3) — BLOCKED (need bias-aware excerptAt)
-3. multibuffer.test.ts "singleton optimization speedup" — still todo (others merged in #203)
-4. edit-proxy.test.ts 2 cross-excerpt — BLOCKED (document unimplemented clipping)
-5. tests/e2e/ Playwright — tracked in #119
-6. Buffer property tests (version monotonicity, snapshot immutability, editsSince) — ✅ PR submitted 2026-03-14 (branch test-assist/buffer-property-tests-1773484261)
+1. anchor bias-at-boundary — BLOCKED (excerptAt not bias-aware)
+2. singleton optimization test — feature unimplemented
+3. edit-proxy cross-excerpt — BLOCKED
+4. e2e Playwright (#119)
 
 ## Round-Robin
-Last: 2026-03-14 (run 23086139614); done: 4,6,7
-Next: 2,3,5,7
+Last run: 2026-03-15 run 23108536068; tasks done: 2,3,7. Next: 4,5,6,7.
 
 ## Notes
-- rope.property.test.ts exists (dependency-free property tests, no fast-check)
-- buffer.property.test.ts NEWLY ADDED this run (same pattern, 4 property suites)
-- expandExcerpt IS implemented (unblocked anchor expansion test)
-- excerptAt is NOT bias-aware (still blocks bias-at-boundary todos)
-- Cross-excerpt same-buffer edits handled in editor._edit() not mb.edit()
-- fast-check approved by maintainer in #80; bun.lock frozen prevents adding dep via runner
-- Many merges 2026-03-13 by other agents: #189 clipPoint bias, #192 bench-history refactor, #148 rope.byteLength
+- snapshot.version: global counter, increments in _rebuildCache(). Same state=same version; different instances=different versions. (tested in snapshot-version PR)
+- fast-check approved #80; bun.lock frozen prevents dep install in runner
+- Merged PRs: #95,#88,#127,#191,#193,#203 (all merged promptly)
