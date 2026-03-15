@@ -43,8 +43,8 @@ function makeSymmetricEdits(source: string): {
   const startIndex =
     linesBefore.reduce((sum, l) => sum + l.length + 1, 0); // +1 for "\n"
 
-  const constLen = 5; // "const"
-  const letLen = 3;   // "let"
+  const constLen = "const".length;
+  const letLen = "let".length;
 
   const modified =
     source.slice(0, startIndex) +
