@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create release PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get current version
+        id: current
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute new version
+        id: next
+        run: |
+          IFS='.' read -r major minor patch <<< "${{ steps.current.outputs.version }}"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          echo "version=${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release branch
+        run: |
+          if git ls-remote --exit-code --heads origin "release/v${{ steps.next.outputs.version }}" > /dev/null 2>&1; then
+            echo "::error::Branch release/v${{ steps.next.outputs.version }} already exists. Is a release already in progress?"
+            exit 1
+          fi
+          git checkout -b "release/v${{ steps.next.outputs.version }}"
+
+      - name: Bump version in package.json
+        run: |
+          jq --arg v "${{ steps.next.outputs.version }}" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Commit and push
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add package.json
+          git commit -m "release: v${{ steps.next.outputs.version }}"
+          git push origin "release/v${{ steps.next.outputs.version }}"
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "release: v${{ steps.next.outputs.version }}" \
+            --body "Bumps version from ${{ steps.current.outputs.version }} to ${{ steps.next.outputs.version }}." \
+            --base main \
+            --head "release/v${{ steps.next.outputs.version }}"

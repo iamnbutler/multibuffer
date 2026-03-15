@@ -1,0 +1,154 @@
+name: Release / Deploy
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    name: Tag and create release
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Find previous tag
+        id: prev
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+          if [ -n "$PREV" ]; then
+            PREV_DATE=$(git log -1 --format=%cI "$PREV")
+            echo "date=$PREV_DATE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect merged PRs
+        id: changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          if [ -n "${{ steps.prev.outputs.date }}" ]; then
+            SEARCH="repo:${REPO} is:pr is:merged merged:>${{ steps.prev.outputs.date }}"
+          else
+            SEARCH="repo:${REPO} is:pr is:merged"
+          fi
+
+          # Fetch PRs as JSON, excluding the release PR itself
+          PRS=$(gh pr list --search "$SEARCH" --json number,title,author --limit 100 \
+            | jq -c '[.[] | select(.title | startswith("release:") | not)]')
+
+          # Categorize
+          FEATURES=$(echo "$PRS" | jq -r '.[] | select(.title | test("^feat")) | "- \(.title) (#\(.number)) @\(.author.login)"')
+          FIXES=$(echo "$PRS" | jq -r '.[] | select(.title | test("^fix")) | "- \(.title) (#\(.number)) @\(.author.login)"')
+          PERF=$(echo "$PRS" | jq -r '.[] | select(.title | test("^perf")) | "- \(.title) (#\(.number)) @\(.author.login)"')
+          OTHER=$(echo "$PRS" | jq -r '.[] | select(.title | test("^(feat|fix|perf)") | not) | "- \(.title) (#\(.number)) @\(.author.login)"')
+
+          # Build changes section
+          CHANGES=""
+          if [ -n "$FEATURES" ]; then
+            CHANGES="${CHANGES}### Features\n\n${FEATURES}\n\n"
+          fi
+          if [ -n "$FIXES" ]; then
+            CHANGES="${CHANGES}### Fixes\n\n${FIXES}\n\n"
+          fi
+          if [ -n "$PERF" ]; then
+            CHANGES="${CHANGES}### Performance\n\n${PERF}\n\n"
+          fi
+          if [ -n "$OTHER" ]; then
+            CHANGES="${CHANGES}### Other\n\n${OTHER}\n\n"
+          fi
+
+          if [ -z "$CHANGES" ]; then
+            CHANGES="No categorized changes."
+          fi
+
+          # Write to file to avoid shell escaping issues
+          echo -e "$CHANGES" > /tmp/changes.md
+
+      - name: Run benchmarks
+        # Benchmarks are recorded in the release notes but don't block the release.
+        # Target misses show as FAIL rows in the table for visibility.
+        run: |
+          bun run bench --json > /tmp/bench-results.json
+
+      - name: Format benchmark table
+        run: |
+          jq -r '
+            ["| Suite | Benchmark | avg | ops/sec | target | status |",
+             "|-------|-----------|-----|---------|--------|--------|"] +
+            [.[] | .suite as $s | .results[] |
+              "| \($s) | \(.name) | \(
+                if .avgMs < 0.01 then "\(.avgMs * 1000 | round)µs"
+                else "\(.avgMs | . * 1000 | round / 1000)ms" end
+              ) | \(.opsPerSec | round | tostring |
+                split("") | reverse | [foreach .[] as $c (
+                  {i: 0, out: []};
+                  .i += 1 | if .i > 3 and (.i % 3 == 1) then .out += [",", $c] else .out += [$c] end;
+                  .out
+                )] | last | reverse | join("")
+              ) | \(if .targetMs then "<\(.targetMs)ms" else "-" end) | \(if .passed then "pass" else "FAIL" end) |"
+            ] | .[]
+          ' /tmp/bench-results.json > /tmp/benchmarks.md
+
+      - name: Render release notes
+        run: |
+          COMPARE_URL="https://github.com/${{ github.repository }}/compare/${{ steps.prev.outputs.tag }}...${{ steps.version.outputs.tag }}"
+          if [ -z "${{ steps.prev.outputs.tag }}" ]; then
+            COMPARE_URL="https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.tag }}"
+          fi
+
+          TEMPLATE=$(cat .github/release-notes-template.md)
+          CHANGES=$(cat /tmp/changes.md)
+          BENCHMARKS=$(cat /tmp/benchmarks.md)
+
+          NOTES="${TEMPLATE}"
+          NOTES="${NOTES//\{\{changes\}\}/$CHANGES}"
+          NOTES="${NOTES//\{\{benchmarks\}\}/$BENCHMARKS}"
+          NOTES="${NOTES//\{\{compare_url\}\}/$COMPARE_URL}"
+
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --draft \
+            --title "${{ steps.version.outputs.tag }}" \
+            --notes-file /tmp/release-notes.md
+
+      - name: Dispatch docs-update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run docs-update.lock.yml 2>&1 || echo "Warning: docs-update dispatch failed (non-blocking)"
