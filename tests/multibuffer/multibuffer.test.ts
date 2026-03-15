@@ -938,6 +938,80 @@ describe("MultiBuffer - Edge Cases", () => {
 });
 
 
+describe("MultiBuffer - Deferred Cache Rebuild", () => {
+  test("lineCount is correct after multiple addExcerpt calls without intermediate reads", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(50));
+    // Add 5 excerpts without reading lineCount in between
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    mb.addExcerpt(buffer, excerptRange(30, 40));
+    mb.addExcerpt(buffer, excerptRange(40, 50));
+    // First read after all mutations must return correct total
+    expect(mb.lineCount).toBe(50);
+    expect(mb.excerpts.length).toBe(5);
+  });
+
+  test("snapshot version is distinct after each mutation", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const v1 = mb.snapshot().version;
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    const v2 = mb.snapshot().version;
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    const v3 = mb.snapshot().version;
+    // Each mutation must yield a strictly greater version
+    expect(v2).toBeGreaterThan(v1);
+    expect(v3).toBeGreaterThan(v2);
+  });
+
+  test("snapshot taken before mutations is unaffected by subsequent mutations", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(10);
+    // Mutate after snapshot
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    // Original snapshot is still valid
+    expect(snap.lineCount).toBe(10);
+    // Live view reflects all mutations
+    expect(mb.lineCount).toBe(30);
+  });
+
+  test("1000 sequential addExcerpts with deferred rebuild completes in <100ms", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    const { durationMs } = time(() => {
+      for (let i = 0; i < 1000; i++) {
+        mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
+      }
+      // Force cache rebuild (counts as one read)
+      void mb.lineCount;
+    });
+    // With O(n²) eager rebuild: 1+2+…+1000 ≈ 500k iterations → slow
+    // With O(n) deferred rebuild: one pass of 1000 → fast
+    expect(durationMs).toBeLessThan(100);
+  });
+
+  test("lineCount and excerpts are consistent after removeExcerpt without intermediate reads", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const id1 = mb.addExcerpt(buffer, excerptRange(0, 10));
+    const id2 = mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    // Remove two excerpts without reading in between
+    mb.removeExcerpt(id1);
+    mb.removeExcerpt(id2);
+    // First read after both removals
+    expect(mb.lineCount).toBe(10);
+    expect(mb.excerpts.length).toBe(1);
+  });
+});
+
 describe("MultiBuffer - Performance", () => {
   test("adding 100 excerpts completes in <10ms", () => {
     const mb = createMultiBuffer();
