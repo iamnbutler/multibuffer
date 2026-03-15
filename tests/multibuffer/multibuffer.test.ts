@@ -1059,3 +1059,90 @@ describe("clearExcerpts", () => {
     expect(mb.isSingleton).toBe(true);
   });
 });
+
+
+describe("MultiBuffer - Snapshot version", () => {
+  // The snapshot version is the key used by DomRenderer to skip rebuilding
+  // WrapMap when nothing has changed (PR #219). These tests verify the
+  // invariants the caching relies on.
+
+  test("version changes after addExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const v0 = mb.snapshot().version;
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after removeExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const id = mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.removeExcerpt(id);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after clearExcerpts", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.clearExcerpts();
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after setExcerptsForBuffer", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 10)]);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after expandExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const id = mb.addExcerpt(buf, excerptRange(5, 10));
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(id, 3, 3);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version is stable: two snapshots from same state share a version", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    const v1 = mb.snapshot().version;
+    expect(v0).toBe(v1);
+  });
+
+  test("different MultiBuffer instances have different initial versions", () => {
+    const mb1 = createMultiBuffer();
+    const mb2 = createMultiBuffer();
+    expect(mb1.snapshot().version).not.toBe(mb2.snapshot().version);
+  });
+
+  test("version increments monotonically across multiple mutations", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const versions: number[] = [];
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(0, 10));
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(10, 20));
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(20, 30));
+    versions.push(mb.snapshot().version);
+    for (let i = 1; i < versions.length; i++) {
+      expect(versions[i]).toBeGreaterThan(versions[i - 1] as number);
+    }
+  });
+});
