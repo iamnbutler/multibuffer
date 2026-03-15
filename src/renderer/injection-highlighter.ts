@@ -137,7 +137,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     }
     const tree = primaryParser.parse(text, oldTree);
     if (!tree) {
-      if (oldParse && edit) {
+      if (oldTree && edit) {
         // The old tree was mutated by tree.edit() but parse failed —
         // remove the corrupted parse so subsequent calls don't reuse it.
         this._bufferParses.delete(bufferId);
