@@ -605,12 +605,15 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.remove(id);
     }
     this._order = [];
+    // Clear the reverse index so stale buffer→excerpt mappings don't persist.
+    this._bufferToExcerpts.clear();
 
     // Register all buffers and insert all excerpts without intermediate rebuilds.
     const newIds: ExcerptId[] = [];
     for (const { buffer, range, options } of entries) {
       // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
-      this._buffers.set(buffer.id as string, buffer);
+      const bufferId = buffer.id as string;
+      this._buffers.set(bufferId, buffer);
       const snapshot = buffer.snapshot();
       const hasTrailing = options?.hasTrailingNewline ?? false;
       const editable = options?.editable ?? true;
@@ -620,6 +623,13 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       newIds.push(id);
+      // Maintain reverse index so _refreshExcerptsForBuffer can find these excerpts.
+      let excSet = this._bufferToExcerpts.get(bufferId);
+      if (!excSet) {
+        excSet = new Map<string, ExcerptId>();
+        this._bufferToExcerpts.set(bufferId, excSet);
+      }
+      excSet.set(MultiBufferImpl._excKey(id), id);
     }
 
     // Single rebuild at the end instead of N+1 rebuilds.

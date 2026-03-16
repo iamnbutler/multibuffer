@@ -1291,4 +1291,39 @@ describe("setExcerpts (batch)", () => {
       mbRef.lines(mbRow(0), mbRow(4)),
     );
   });
+
+  test("edits after setExcerpts reflect in the view (reverse index maintained)", () => {
+    // Regression: setExcerpts previously did not update the _bufferToExcerpts
+    // reverse index, so _refreshExcerptsForBuffer would not find the new excerpts
+    // and edits made after setExcerpts would not appear in lines().
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    const mb = createMultiBuffer();
+
+    // First set — establishes excerpts via setExcerpts
+    mb.setExcerpts([{ buffer: buf, range: excerptRange(0, 3) }]);
+    expect(mb.lines(mbRow(0), mbRow(3))).toEqual(["A", "B", "C"]);
+
+    // Edit should propagate through the refresh path
+    mb.edit(mbPoint(0, 0), mbPoint(0, 1), "Z");
+    expect(mb.lines(mbRow(0), mbRow(3))).toEqual(["Z", "B", "C"]);
+  });
+
+  test("setExcerpts followed by setExcerpts clears stale reverse index", () => {
+    // Regression: calling setExcerpts twice should not accumulate stale entries
+    // in the reverse index for the buffers replaced in the first call.
+    const buf1 = createBuffer(createBufferId(), "Old\nData");
+    const buf2 = createBuffer(createBufferId(), "New\nData");
+    const mb = createMultiBuffer();
+
+    mb.setExcerpts([{ buffer: buf1, range: excerptRange(0, 2) }]);
+    expect(mb.lines(mbRow(0), mbRow(2))).toEqual(["Old", "Data"]);
+
+    // Replace with a different buffer entirely
+    mb.setExcerpts([{ buffer: buf2, range: excerptRange(0, 2) }]);
+    expect(mb.lines(mbRow(0), mbRow(2))).toEqual(["New", "Data"]);
+
+    // An edit to buf2 must be visible (reverse index correctly points to buf2's excerpts)
+    mb.edit(mbPoint(0, 0), mbPoint(0, 3), "Fresh");
+    expect(mb.lines(mbRow(0), mbRow(2))).toEqual(["Fresh", "Data"]);
+  });
 });
