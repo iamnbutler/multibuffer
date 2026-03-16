@@ -6,6 +6,8 @@
  * - Visible lines fetch: <1ms for viewport
  * - Position conversion: <0.01ms
  * - 100 excerpts: <10ms initialization
+ * - 500 excerpts: <50ms initialization
+ * - 1000 excerpts: <100ms initialization
  * - Anchor resolution: <0.01ms single, <1ms batch 100
  */
 
@@ -48,6 +50,16 @@ let mb100: MultiBuffer;
 let snap100: MultiBufferSnapshot;
 let totalRows100: number;
 let anchors: Anchor[];
+
+let mb500: MultiBuffer;
+let snap500: MultiBufferSnapshot;
+let totalRows500: number;
+let anchors500: Anchor[];
+
+let mb1000: MultiBuffer;
+let snap1000: MultiBufferSnapshot;
+let totalRows1000: number;
+let anchors1000: Anchor[];
 
 export const multibufferBenchmarks: BenchmarkSuite = {
   name: "MultiBuffer Operations",
@@ -164,6 +176,138 @@ export const multibufferBenchmarks: BenchmarkSuite = {
       targetMs: 0.1,
       fn: () => {
         mb100.snapshot();
+      },
+    },
+
+    // --- 500-excerpt benchmarks ---
+    {
+      name: "Add 500 excerpts",
+      iterations: 20,
+      targetMs: 50,
+      fn: () => {
+        const mb = createMultiBuffer();
+        const buf = createBuffer(id, generateText(5000));
+        for (let i = 0; i < 500; i++) {
+          mb.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+      },
+    },
+    {
+      name: "excerptAt lookup (500 excerpts, random row)",
+      iterations: 10000,
+      targetMs: 0.01,
+      setup: () => {
+        mb500 = createMultiBuffer();
+        const buf = createBuffer(id, generateText(5000));
+        for (let i = 0; i < 500; i++) {
+          mb500.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+        snap500 = mb500.snapshot();
+        totalRows500 = snap500.lineCount;
+        anchors500 = [];
+        for (let i = 0; i < 500; i++) {
+          const row = i * 10 + 5;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          const a = mb500.createAnchor({ row: row as MultiBufferRow, column: 3 }, Bias.Right);
+          if (a) anchors500.push(a);
+        }
+      },
+      fn: () => {
+        const row = Math.floor(Math.random() * totalRows500);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snap500.excerptAt(row as MultiBufferRow);
+      },
+    },
+    {
+      name: "Fetch 50 lines (viewport, 500 excerpts)",
+      iterations: 1000,
+      targetMs: 1,
+      fn: () => {
+        const start = Math.floor(Math.random() * Math.max(1, totalRows500 - 50));
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snap500.lines(start as MultiBufferRow, (start + 50) as MultiBufferRow);
+      },
+    },
+    {
+      name: "Snapshot creation (500 excerpts)",
+      iterations: 200,
+      targetMs: 0.5,
+      fn: () => {
+        mb500.snapshot();
+      },
+    },
+    {
+      name: "Anchor resolution - batch 500 (resolveAnchors)",
+      iterations: 50,
+      targetMs: 5,
+      fn: () => {
+        snap500.resolveAnchors(anchors500);
+      },
+    },
+
+    // --- 1000-excerpt benchmarks ---
+    {
+      name: "Add 1000 excerpts",
+      iterations: 10,
+      targetMs: 100,
+      fn: () => {
+        const mb = createMultiBuffer();
+        const buf = createBuffer(id, generateText(10000));
+        for (let i = 0; i < 1000; i++) {
+          mb.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+      },
+    },
+    {
+      name: "excerptAt lookup (1000 excerpts, random row)",
+      iterations: 10000,
+      targetMs: 0.01,
+      setup: () => {
+        mb1000 = createMultiBuffer();
+        const buf = createBuffer(id, generateText(10000));
+        for (let i = 0; i < 1000; i++) {
+          mb1000.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+        snap1000 = mb1000.snapshot();
+        totalRows1000 = snap1000.lineCount;
+        anchors1000 = [];
+        for (let i = 0; i < 1000; i++) {
+          const row = i * 10 + 5;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          const a = mb1000.createAnchor({ row: row as MultiBufferRow, column: 3 }, Bias.Right);
+          if (a) anchors1000.push(a);
+        }
+      },
+      fn: () => {
+        const row = Math.floor(Math.random() * totalRows1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snap1000.excerptAt(row as MultiBufferRow);
+      },
+    },
+    {
+      name: "Fetch 50 lines (viewport, 1000 excerpts)",
+      iterations: 1000,
+      targetMs: 1,
+      fn: () => {
+        const start = Math.floor(Math.random() * Math.max(1, totalRows1000 - 50));
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        snap1000.lines(start as MultiBufferRow, (start + 50) as MultiBufferRow);
+      },
+    },
+    {
+      name: "Snapshot creation (1000 excerpts)",
+      iterations: 100,
+      targetMs: 1,
+      fn: () => {
+        mb1000.snapshot();
+      },
+    },
+    {
+      name: "Anchor resolution - batch 1000 (resolveAnchors)",
+      iterations: 20,
+      targetMs: 10,
+      fn: () => {
+        snap1000.resolveAnchors(anchors1000);
       },
     },
   ],
