@@ -20,6 +20,19 @@ A range defined by two [anchors](#anchor) (start and end). Because both endpoint
 
 The process of converting an anchor to a current [MultiBufferPoint](#multibufferpoint). Resolution replays edits from the anchor's recorded version to the current version to find the adjusted offset, then converts that offset to a row/column position.
 
+### adjustOffset
+
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
+
+- Offsets before the edit pass through unchanged.
+- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
+- Offsets at the edit start with `Bias.Right` jump past inserted text.
+- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
+
+Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
+
+See: `src/buffer/offset.ts`, `src/multibuffer/anchor.ts`
+
 ### Auto-Indent
 
 A behavior of the `insertNewline` command: the new line automatically receives the same leading whitespace as the current line.
@@ -66,6 +79,18 @@ An immutable snapshot of a buffer's state at a point in time. Snapshots support 
 ### Clipping
 
 The operation of clamping an out-of-bounds point or offset to the nearest valid position within a buffer or multibuffer. Clipping respects [bias](#bias): `Bias.Right` keeps the position at the end of a line rather than beyond it; `Bias.Left` keeps it before the boundary.
+
+### Closer
+
+An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
+
+- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
+- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
+- Closes PRs that are duplicate, spam, or fundamentally broken.
+
+Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+
+See: `.github/workflows/closer.md`
 
 ### Coordinate Systems
 
@@ -229,6 +254,12 @@ An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line or 
 
 See also: [dedentLines](#dedentlines)
 
+### Incremental Parsing
+
+An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) where the previous parse tree is passed to tree-sitter's `parser.parse(text, oldTree)`. Tree-sitter reuses unchanged subtrees instead of re-parsing the entire file on every edit. Enabled by supplying a [TreeEdit](#treeedit) descriptor so the old tree is updated via `tree.edit()` before re-parsing; on large files this eliminates significant per-keystroke overhead.
+
+See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
+
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
@@ -275,7 +306,7 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 
 ### MultiBufferSnapshot
 
-An immutable snapshot of the multibuffer's state. Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns.
+An immutable snapshot of the multibuffer's state. Carries a monotonically increasing `version` counter that increments on every mutation (shared globally across all `MultiBuffer` instances). Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns. The `version` field is used by the DOM renderer to skip `WrapMap` reconstruction when neither the snapshot content nor the wrap width has changed since the last render.
 
 ### Myers' Algorithm
 
@@ -315,6 +346,19 @@ See: `src/editor/editor.ts`
 
 An interface (`src/renderer/types.ts`) that rendering backends implement. A renderer `mount`s into a container element, accepts a `RenderState` and lines, and handles `scrollTo` and `hitTest`. The current implementation targets the DOM; the interface allows future Canvas or WebGPU backends.
 
+### Reviewer
+
+An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
+
+- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
+- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
+- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
+- Up to 25 inline review comments per run, prioritising blocking issues first.
+
+Read-only: never writes implementation code or pushes to branches.
+
+See: `.github/workflows/reviewer.md`
+
 ### Rope
 
 The text storage structure backing each [buffer](#buffer). Splits text into fixed-size chunks (≤ 1024 bytes, preferring newline boundaries); insert/delete/replace return new Rope instances with structural sharing of unchanged chunks. Caches chunk byte offsets as a prefix-sum array for O(log n) line↔offset conversion.
@@ -353,6 +397,17 @@ Both `Buffer` and `MultiBuffer` expose a `snapshot()` method that returns an imm
 
 Displaying a single logical line across multiple visual rows when it exceeds the available column width. Managed by [WrapMap](#wrapmap).
 
+### Surrogate Pair Snapping
+
+The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
+
+- `Bias.Left` — steps back to the high surrogate (the position *before* the supplementary character).
+- `Bias.Right` — steps past the low surrogate (the position *after* the supplementary character).
+
+This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
+
+See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
+
 ---
 
 ## T
@@ -364,6 +419,17 @@ Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`,
 ### Trailing Newline (synthetic)
 
 An artificial newline appended after an excerpt's last line to visually separate it from the next excerpt. Tracked by `Excerpt.hasTrailingNewline`. Position calculations must account for this: the excerpt's effective line count is one greater than its buffer range, but the extra line contains no editable content.
+
+### TreeEdit
+
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
+
+- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
+- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
+
+Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
+
+See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
 ---
 
