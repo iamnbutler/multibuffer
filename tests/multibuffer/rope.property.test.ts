@@ -16,73 +16,15 @@
 
 import { describe, expect, test } from "bun:test";
 import { Rope } from "../../src/buffer/rope.ts";
+import {
+  type EditOp,
+  applyToString,
+  mulberry32,
+  randomOp,
+  randomString,
+} from "../property-helpers.ts";
 
-// ── Deterministic PRNG ────────────────────────────────────────────────────────
-
-/**
- * Mulberry32 PRNG: deterministic, fast, reasonable statistical properties.
- * Returns values in [0, 1).
- */
-function mulberry32(seed: number): () => number {
-  let s = seed;
-  return (): number => {
-    s = (s + 0x6d2b79f5) | 0;
-    let z = Math.imul(s ^ (s >>> 15), 1 | s);
-    z ^= z + Math.imul(z ^ (z >>> 7), 61 | z);
-    return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// ── Random value generators ───────────────────────────────────────────────────
-
-/** ASCII printable chars plus newline (heavy on newlines to exercise multi-line paths). */
-const CHARSET = "abcde fg\n\n\n";
-
-function randomString(rng: () => number, maxLen: number): string {
-  const len = Math.floor(rng() * (maxLen + 1));
-  let result = "";
-  for (let i = 0; i < len; i++) {
-    result += CHARSET[Math.floor(rng() * CHARSET.length)];
-  }
-  return result;
-}
-
-type EditOp =
-  | { type: "insert"; offset: number; text: string }
-  | { type: "delete"; start: number; end: number }
-  | { type: "replace"; start: number; end: number; text: string };
-
-function randomOp(rng: () => number, len: number): EditOp {
-  const kind = Math.floor(rng() * 3);
-  // Clamp to valid range (len may be 0)
-  const a = len > 0 ? Math.floor(rng() * (len + 1)) : 0;
-  const b = len > 0 ? Math.floor(rng() * (len + 1)) : 0;
-  const start = Math.min(a, b);
-  const end = Math.max(a, b);
-  const text = randomString(rng, 8);
-
-  switch (kind) {
-    case 0:
-      return { type: "insert", offset: start, text };
-    case 1:
-      return { type: "delete", start, end };
-    default:
-      return { type: "replace", start, end, text };
-  }
-}
-
-// ── Operation helpers ─────────────────────────────────────────────────────────
-
-function applyToString(s: string, op: EditOp): string {
-  switch (op.type) {
-    case "insert":
-      return s.slice(0, op.offset) + op.text + s.slice(op.offset);
-    case "delete":
-      return s.slice(0, op.start) + s.slice(op.end);
-    case "replace":
-      return s.slice(0, op.start) + op.text + s.slice(op.end);
-  }
-}
+// ── Rope-specific operation helper ────────────────────────────────────────────
 
 function applyToRope(rope: Rope, op: EditOp): Rope {
   switch (op.type) {
