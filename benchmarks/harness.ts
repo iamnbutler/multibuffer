@@ -31,6 +31,8 @@ export interface BenchmarkResult {
   iterations: number;
   totalMs: number;
   avgMs: number;
+  medianMs: number;
+  p95Ms: number;
   minMs: number;
   maxMs: number;
   opsPerSec: number;
@@ -77,11 +79,18 @@ export async function runBenchmark(bench: Benchmark): Promise<BenchmarkResult> {
   const opsPerSec = 1000 / avgMs;
   const passed = bench.targetMs === undefined || avgMs <= bench.targetMs;
 
+  // Percentile stats: sort a copy to preserve insertion order for future use
+  const sorted = times.slice().sort((a, b) => a - b);
+  const medianMs = sorted[Math.floor(sorted.length * 0.5)] ?? avgMs;
+  const p95Ms = sorted[Math.floor(sorted.length * 0.95)] ?? maxMs;
+
   return {
     name: bench.name,
     iterations,
     totalMs,
     avgMs,
+    medianMs,
+    p95Ms,
     minMs,
     maxMs,
     opsPerSec,
@@ -96,13 +105,12 @@ export async function runBenchmark(bench: Benchmark): Promise<BenchmarkResult> {
 export function formatResult(result: BenchmarkResult): string {
   const status = result.passed ? "✓" : "✗";
   const target = result.targetMs !== undefined ? ` (target: <${result.targetMs}ms)` : "";
-  const avgFormatted = result.avgMs < 0.01
-    ? `${(result.avgMs * 1000).toFixed(2)}µs`
-    : `${result.avgMs.toFixed(3)}ms`;
+  const fmtMs = (ms: number) =>
+    ms < 0.01 ? `${(ms * 1000).toFixed(2)}µs` : `${ms.toFixed(3)}ms`;
 
   return [
     `${status} ${result.name}`,
-    `  avg: ${avgFormatted}${target}`,
+    `  avg: ${fmtMs(result.avgMs)}  median: ${fmtMs(result.medianMs)}  p95: ${fmtMs(result.p95Ms)}${target}`,
     `  min: ${result.minMs.toFixed(3)}ms, max: ${result.maxMs.toFixed(3)}ms`,
     `  ops/sec: ${result.opsPerSec.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`,
     `  iterations: ${result.iterations}`,
