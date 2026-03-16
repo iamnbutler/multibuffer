@@ -159,6 +159,15 @@ export interface MultiBufferSnapshot {
 }
 
 /**
+ * Specification for creating a single excerpt in a batch operation.
+ */
+export interface ExcerptSpec {
+  readonly buffer: import("../buffer/types.ts").Buffer;
+  readonly range: ExcerptRange;
+  readonly options?: { hasTrailingNewline?: boolean; editable?: boolean };
+}
+
+/**
  * A multibuffer presents multiple excerpts from one or more buffers
  * as a single unified scrollable view.
  */
@@ -172,6 +181,7 @@ export interface MultiBuffer {
     range: ExcerptRange,
     options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId;
+  addExcerpts(specs: readonly ExcerptSpec[]): readonly ExcerptId[];
   removeExcerpt(excerptId: ExcerptId): void;
   clearExcerpts(): readonly ExcerptId[];
   setExcerptsForBuffer(
