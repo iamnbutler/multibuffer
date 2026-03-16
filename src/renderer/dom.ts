@@ -41,6 +41,120 @@ interface RowElement {
   sign?: HTMLSpanElement;
 }
 
+interface SelectionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Compute the set of axis-aligned highlight rects for a selection range.
+ * Pure function — no DOM side-effects. Used by renderSelection() and tests.
+ *
+ * @param selStart - Selection start (may be after selEnd; normalized internally)
+ * @param selEnd   - Selection end
+ * @param snapshot - Multibuffer snapshot (may be null → returns [])
+ * @param lineHeight - Visual line height in pixels
+ * @param charWidth  - Character width in pixels
+ * @param gutterWidth - Gutter width in pixels
+ * @param wrapWidth  - Wrap width in visual columns (0 = no wrap)
+ * @param wrapMap    - Pre-built WrapMap for the snapshot (null if no wrapping)
+ */
+export function computeSelectionRects(
+  selStart: MultiBufferPoint,
+  selEnd: MultiBufferPoint,
+  snapshot: MultiBufferSnapshot | null,
+  lineHeight: number,
+  charWidth: number,
+  gutterWidth: number,
+  wrapWidth: number,
+  wrapMap: WrapMap | null,
+): SelectionRect[] {
+  if (!snapshot) return [];
+  if (selStart.row === selEnd.row && selStart.column === selEnd.column) return [];
+
+  // Normalize: ensure start ≤ end
+  let start = selStart;
+  let end = selEnd;
+  if (
+    start.row > end.row ||
+    (start.row === end.row && start.column > end.column)
+  ) {
+    start = selEnd;
+    end = selStart;
+  }
+
+  const rects: SelectionRect[] = [];
+
+  for (let r = start.row; r <= end.row; r++) {
+    const visualRowBase = wrapMap
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      ? wrapMap.bufferRowToFirstVisualRow(r as MultiBufferRow)
+      : r;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const nextRow = Math.min(r + 1, snapshot.lineCount) as MultiBufferRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const lineTextArr = snapshot.lines(r as MultiBufferRow, nextRow);
+    const lineTextStr = lineTextArr[0] ?? "";
+    const lineLen = lineTextStr.length;
+
+    const startCharCol = r === start.row ? start.column : 0;
+    const endCharCol = r === end.row ? end.column : lineLen + 1;
+
+    if (wrapWidth > 0) {
+      const segments = wrapLine(lineTextStr, wrapWidth);
+      let charOffset = 0;
+      for (let s = 0; s < segments.length; s++) {
+        const segText = segments[s] ?? "";
+        const segCharStart = charOffset;
+        const segCharEnd = charOffset + segText.length;
+        charOffset = segCharEnd;
+
+        if (startCharCol >= segCharEnd) continue;
+        if (endCharCol <= segCharStart) continue;
+
+        const segSelCharStart = Math.max(startCharCol, segCharStart) - segCharStart;
+        const segSelCharEnd = Math.min(endCharCol, segCharEnd) - segCharStart;
+
+        const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
+        let segEndVisualCol: number;
+        if (endCharCol > lineLen && s === segments.length - 1) {
+          segEndVisualCol = visualWidth(segText) + 0.3;
+        } else {
+          segEndVisualCol = charColToVisualCol(
+            segText,
+            Math.min(segSelCharEnd, segText.length),
+          );
+        }
+
+        rects.push({
+          x: gutterWidth + segStartVisualCol * charWidth,
+          y: (visualRowBase + s) * lineHeight,
+          width: Math.max(0, segEndVisualCol - segStartVisualCol) * charWidth,
+          height: lineHeight,
+        });
+      }
+    } else {
+      const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
+      const endVisualCol =
+        endCharCol > lineTextStr.length
+          ? visualWidth(lineTextStr) + 0.3
+          : charColToVisualCol(lineTextStr, endCharCol);
+
+      rects.push({
+        x: gutterWidth + startVisualCol * charWidth,
+        y: visualRowBase * lineHeight,
+        width: Math.max(0, endVisualCol - startVisualCol) * charWidth,
+        height: lineHeight,
+      });
+    }
+  }
+
+  return rects;
+}
+
 export class DomRenderer implements Renderer {
   private _container: HTMLElement | null = null;
   private _scrollContainer: HTMLDivElement | null = null;
@@ -51,6 +165,7 @@ export class DomRenderer implements Renderer {
   private _blinkStyle: HTMLStyleElement | null = null;
   private _measurements: Measurements;
   private _rowPool: RowElement[] = [];
+  private _selectionPool: HTMLDivElement[] = [];
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
@@ -177,6 +292,7 @@ export class DomRenderer implements Renderer {
     this._selectionLayer = null;
     this._blinkStyle = null;
     this._rowPool = [];
+    this._selectionPool = [];
     this._snapshot = null;
     this._wrapMap = null;
     this._wrapMapSnapshotVersion = -1;
@@ -667,6 +783,15 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  private _ensureSelectionPool(count: number): void {
+    while (this._selectionPool.length < count) {
+      const el = document.createElement("div");
+      el.style.cssText = "position:absolute;display:none;";
+      this._selectionLayer?.appendChild(el);
+      this._selectionPool.push(el);
+    }
+  }
+
   /** Register a callback for single click (cursor placement). */
   onClickPosition(cb: (point: MultiBufferPoint) => void): void {
     this._onClickCallback = cb;
@@ -753,94 +878,35 @@ export class DomRenderer implements Renderer {
   ): void {
     if (!this._selectionLayer) return;
 
-    // Clear old selection highlights
-    this._selectionLayer.textContent = "";
-
-    if (!start || !end) return;
-    if (start.row === end.row && start.column === end.column) return;
-
-    const { lineHeight } = this._measurements;
-    const gutterWidth = this._getEffectiveGutterWidth();
-    const charWidth = this._charWidth;
-
-    // Ensure start is before end
-    let selStart = start;
-    let selEnd = end;
-    if (start.row > end.row || (start.row === end.row && start.column > end.column)) {
-      selStart = end;
-      selEnd = start;
+    // Hide all pooled highlight elements — reuse them below instead of
+    // destroying and re-creating on every frame.
+    for (const el of this._selectionPool) {
+      el.style.display = "none";
     }
 
-    for (let row = selStart.row; row <= selEnd.row; row++) {
-      const visualRowBase = this._wrapMap
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
-        : row;
+    if (!start || !end) return;
 
-      // Get line length for this row
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const nextRow = Math.min(row + 1, this._snapshot?.lineCount ?? 0) as MultiBufferRow;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const lineText = this._snapshot?.lines(row as MultiBufferRow, nextRow);
-      const lineLen = lineText?.[0]?.length ?? 0;
+    const rects = computeSelectionRects(
+      start,
+      end,
+      this._snapshot,
+      this._measurements.lineHeight,
+      this._charWidth,
+      this._getEffectiveGutterWidth(),
+      this._measurements.wrapWidth ?? 0,
+      this._wrapMap,
+    );
 
-      const startCharCol = row === selStart.row ? selStart.column : 0;
-      const endCharCol = row === selEnd.row ? selEnd.column : lineLen + 1;
-      const lineTextStr = lineText?.[0] ?? "";
-      const wrapWidth = this._measurements.wrapWidth ?? 0;
+    if (rects.length === 0) return;
 
-      if (wrapWidth > 0) {
-        // Emit one highlight rect per wrap segment that the selection overlaps.
-        const segments = wrapLine(lineTextStr, wrapWidth);
-        let charOffset = 0;
-        for (let s = 0; s < segments.length; s++) {
-          const segText = segments[s] ?? "";
-          const segCharStart = charOffset;
-          const segCharEnd = charOffset + segText.length;
-          charOffset = segCharEnd;
+    this._ensureSelectionPool(rects.length);
 
-          // Skip segments fully outside [startCharCol, endCharCol)
-          if (startCharCol >= segCharEnd) continue;
-          if (endCharCol <= segCharStart) continue;
-
-          const segSelCharStart = Math.max(startCharCol, segCharStart) - segCharStart;
-          const segSelCharEnd = Math.min(endCharCol, segCharEnd) - segCharStart;
-
-          const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
-          let segEndVisualCol: number;
-          if (endCharCol > lineLen && s === segments.length - 1) {
-            // Row-spanning selection: extend slightly past end to indicate newline
-            segEndVisualCol = visualWidth(segText) + 0.3;
-          } else {
-            segEndVisualCol = charColToVisualCol(segText, Math.min(segSelCharEnd, segText.length));
-          }
-
-          const x = gutterWidth + segStartVisualCol * charWidth;
-          const width = Math.max(0, segEndVisualCol - segStartVisualCol) * charWidth;
-          const y = (visualRowBase + s) * lineHeight;
-
-          const highlight = document.createElement("div");
-          highlight.style.cssText =
-            `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-          this._selectionLayer.appendChild(highlight);
-        }
-      } else {
-        // Non-wrapped path
-        const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
-        const endVisualCol =
-          endCharCol > lineTextStr.length
-            ? visualWidth(lineTextStr) + 0.3 // Small extension for newline indicator
-            : charColToVisualCol(lineTextStr, endCharCol);
-
-        const x = gutterWidth + startVisualCol * charWidth;
-        const width = Math.max(0, endVisualCol - startVisualCol) * charWidth;
-        const y = visualRowBase * lineHeight;
-
-        const highlight = document.createElement("div");
-        highlight.style.cssText =
-          `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-        this._selectionLayer.appendChild(highlight);
-      }
+    for (let i = 0; i < rects.length; i++) {
+      const { x, y, width, height } = rects[i] ?? { x: 0, y: 0, width: 0, height: 0 };
+      const el = this._selectionPool[i];
+      if (!el) continue;
+      el.style.cssText =
+        `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${height}px;`;
     }
   }
 
