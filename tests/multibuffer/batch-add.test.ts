@@ -9,12 +9,11 @@ import { createBuffer } from "../../src/buffer/buffer.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { ExcerptSpec } from "../../src/multibuffer/types.ts";
 import {
-  benchmark,
   createBufferId,
   excerptRange,
   generateText,
-  num,
   resetCounters,
+  time,
 } from "../helpers.ts";
 
 beforeEach(() => {
@@ -43,9 +42,9 @@ describe("MultiBuffer - addExcerpts (batch)", () => {
     // Sequential approach
     const seqMb = createMultiBuffer();
     const seqBuf = createBuffer(createBufferId(), text);
-    const seqId0 = seqMb.addExcerpt(seqBuf, excerptRange(0, 10));
-    const seqId1 = seqMb.addExcerpt(seqBuf, excerptRange(10, 20));
-    const seqId2 = seqMb.addExcerpt(seqBuf, excerptRange(20, 30));
+    const _seqId0 = seqMb.addExcerpt(seqBuf, excerptRange(0, 10));
+    const _seqId1 = seqMb.addExcerpt(seqBuf, excerptRange(10, 20));
+    const _seqId2 = seqMb.addExcerpt(seqBuf, excerptRange(20, 30));
 
     // Batch approach
     const batchMb = createMultiBuffer();
@@ -131,8 +130,8 @@ describe("MultiBuffer - addExcerpts (batch)", () => {
     const specs: ExcerptSpec[] = Array.from({ length: 100 }, (_, i) =>
       ({ buffer: buf, range: excerptRange(i, i + 1) })
     );
-    const ms = benchmark(() => mb.addExcerpts(specs));
-    expect(num(ms)).toBeLessThan(50);
+    const { durationMs } = time(() => mb.addExcerpts(specs));
+    expect(durationMs).toBeLessThan(50);
   });
 
   test("addExcerpts after existing excerpts appends correctly", () => {
