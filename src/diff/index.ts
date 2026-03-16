@@ -1,7 +1,7 @@
 export type { DiffController, DiffControllerOptions } from "./controller.ts";
 export { createDiffController } from "./controller.ts";
 export type { DiffOptions } from "./diff.ts";
-export { diff } from "./diff.ts";
+export { diff, diffLines } from "./diff.ts";
 export type {
   UnifiedDiffMultiBufferOptions,
   UnifiedDiffMultiBufferResult,
