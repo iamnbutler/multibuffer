@@ -72,6 +72,8 @@ export class DomRenderer implements Renderer {
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
+  /** Cursor blink interval in ms, or false to disable blinking. */
+  private _blinkIntervalMs: number | false = 600;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -495,6 +497,12 @@ export class DomRenderer implements Renderer {
     return new WrapMap(snapshot, wrapWidth);
   }
 
+  /** Return the CSS animation string for the cursor based on current blink config. */
+  private _blinkAnimation(): string {
+    if (this._blinkIntervalMs === false) return "none";
+    return `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
+  }
+
   /**
    * Measure the actual character width from the container's font.
    * Uses a test string to get accurate width for monospace fonts.
@@ -732,18 +740,26 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
-    this._cursorEl.style.animation = this._focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._focused ? this._blinkAnimation() : "none";
   }
 
   /** Update focus state — call when the editor gains or loses keyboard focus. */
   setFocused(focused: boolean): void {
     this._focused = focused;
     if (!this._cursorEl || this._cursorEl.style.display === "none") return;
-    this._cursorEl.style.animation = focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = focused ? this._blinkAnimation() : "none";
+  }
+
+  /**
+   * Configure cursor blink interval.
+   *
+   * @param ms - Interval in milliseconds, or `false` to disable blinking entirely.
+   */
+  setCursorBlink(ms: number | false): void {
+    this._blinkIntervalMs = ms;
+    if (this._focused && this._cursorEl && this._cursorEl.style.display !== "none") {
+      this._cursorEl.style.animation = this._blinkAnimation();
+    }
   }
 
   /** Render selection highlight between two multibuffer points. */
