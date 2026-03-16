@@ -90,6 +90,15 @@ export interface Selection {
 }
 
 /**
+ * Specification for a single excerpt in a batch addExcerpts() call.
+ */
+export interface ExcerptSpec {
+  readonly buffer: import("../buffer/types.ts").Buffer;
+  readonly range: ExcerptRange;
+  readonly options?: { hasTrailingNewline?: boolean; editable?: boolean };
+}
+
+/**
  * Range specification for creating an excerpt.
  */
 export interface ExcerptRange {
@@ -172,6 +181,7 @@ export interface MultiBuffer {
     range: ExcerptRange,
     options?: { hasTrailingNewline?: boolean; editable?: boolean },
   ): ExcerptId;
+  addExcerpts(specs: ReadonlyArray<ExcerptSpec>): readonly ExcerptId[];
   removeExcerpt(excerptId: ExcerptId): void;
   clearExcerpts(): readonly ExcerptId[];
   setExcerptsForBuffer(

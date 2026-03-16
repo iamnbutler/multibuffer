@@ -1059,3 +1059,117 @@ describe("clearExcerpts", () => {
     expect(mb.isSingleton).toBe(true);
   });
 });
+
+describe("addExcerpts() batch API", () => {
+  test("empty specs returns empty array and makes no change", () => {
+    const mb = createMultiBuffer();
+    const ids = mb.addExcerpts([]);
+    expect(ids).toEqual([]);
+    expect(mb.lineCount).toBe(0);
+    expect(mb.excerpts.length).toBe(0);
+  });
+
+  test("single spec is equivalent to addExcerpt", () => {
+    const buf = createBuffer(createBufferId(), "alpha\nbeta\ngamma");
+    const mb1 = createMultiBuffer();
+    const mb2 = createMultiBuffer();
+
+    mb1.addExcerpt(buf, excerptRange(0, 2));
+    mb2.addExcerpts([{ buffer: buf, range: excerptRange(0, 2) }]);
+
+    expect(mb1.lineCount).toBe(mb2.lineCount);
+    expect(mb1.excerpts.length).toBe(mb2.excerpts.length);
+    const snap1 = mb1.snapshot();
+    const snap2 = mb2.snapshot();
+    expect(snap1.lines(mbRow(0), mbRow(2))).toEqual(snap2.lines(mbRow(0), mbRow(2)));
+  });
+
+  test("batch-adds multiple excerpts from different buffers", () => {
+    const buf1 = createBuffer(createBufferId(), "foo\nbar");
+    const buf2 = createBuffer(createBufferId(), "baz\nqux\nquux");
+    const mb = createMultiBuffer();
+
+    const ids = mb.addExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2) },
+      { buffer: buf2, range: excerptRange(0, 3) },
+    ]);
+
+    expect(ids.length).toBe(2);
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.lineCount).toBe(5);
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(2))).toEqual(["foo", "bar"]);
+    expect(snap.lines(mbRow(2), mbRow(5))).toEqual(["baz", "qux", "quux"]);
+  });
+
+  test("batch-adds multiple excerpts from the same buffer efficiently", () => {
+    const buf = createBuffer(createBufferId(), "a\nb\nc\nd\ne");
+    const mb = createMultiBuffer();
+
+    const ids = mb.addExcerpts([
+      { buffer: buf, range: excerptRange(0, 2) },
+      { buffer: buf, range: excerptRange(3, 5) },
+    ]);
+
+    expect(ids.length).toBe(2);
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.lineCount).toBe(4);
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(2))).toEqual(["a", "b"]);
+    expect(snap.lines(mbRow(2), mbRow(4))).toEqual(["d", "e"]);
+  });
+
+  test("respects hasTrailingNewline option", () => {
+    const buf1 = createBuffer(createBufferId(), "first\nsecond");
+    const buf2 = createBuffer(createBufferId(), "third\nfourth");
+    const mb = createMultiBuffer();
+
+    mb.addExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2), options: { hasTrailingNewline: true } },
+      { buffer: buf2, range: excerptRange(0, 2) },
+    ]);
+
+    // With trailing newline, excerpt 1 occupies 3 rows (2 content + 1 virtual header)
+    expect(mb.lineCount).toBe(5);
+    const snap = mb.snapshot();
+    const ex0 = snap.excerpts[0];
+    const ex1 = snap.excerpts[1];
+    expect(ex0?.hasTrailingNewline).toBe(true);
+    expect(ex1?.hasTrailingNewline).toBe(false);
+  });
+
+  test("returned IDs are unique and match the excerpt infos in order", () => {
+    const buf = createBuffer(createBufferId(), "line0\nline1\nline2\nline3");
+    const mb = createMultiBuffer();
+
+    const ids = mb.addExcerpts([
+      { buffer: buf, range: excerptRange(0, 2) },
+      { buffer: buf, range: excerptRange(2, 4) },
+    ]);
+
+    expect(ids.length).toBe(2);
+    const [id0, id1] = ids;
+    expect(id0).not.toBeUndefined();
+    expect(id1).not.toBeUndefined();
+    // IDs are distinct
+    expect(id0?.index !== id1?.index || id0?.generation !== id1?.generation).toBe(true);
+    // Each excerpt info references the correct ID in order
+    const snap = mb.snapshot();
+    expect(snap.excerpts[0]?.id).toEqual(id0);
+    expect(snap.excerpts[1]?.id).toEqual(id1);
+  });
+
+  test("addExcerpts after existing excerpts appends correctly", () => {
+    const buf = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    mb.addExcerpts([
+      { buffer: buf, range: excerptRange(1, 2) },
+      { buffer: buf, range: excerptRange(2, 3) },
+    ]);
+
+    expect(mb.excerpts.length).toBe(3);
+    expect(mb.lineCount).toBe(3);
+  });
+});
