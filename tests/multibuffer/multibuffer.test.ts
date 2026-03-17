@@ -1291,4 +1291,17 @@ describe("setExcerpts (batch)", () => {
       mbRef.lines(mbRow(0), mbRow(4)),
     );
   });
+
+  test("edit() reflects in excerpt after setExcerpts()", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "hello");
+
+    mb.setExcerpts([{ buffer: buf, range: excerptRange(0, 1) }]);
+    expect(mb.lines(mbRow(0), mbRow(1))).toEqual(["hello"]);
+
+    // Edit via the multibuffer — requires _bufferToExcerpts to be populated.
+    mb.edit(mbPoint(0, 5), mbPoint(0, 5), " world");
+
+    expect(mb.lines(mbRow(0), mbRow(1))).toEqual(["hello world"]);
+  });
 });
