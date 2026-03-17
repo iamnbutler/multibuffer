@@ -23,6 +23,7 @@ import type {
   ExcerptInfo,
   ExcerptRange,
   MultiBuffer,
+  MultiBufferEventMap,
   MultiBufferPoint,
   MultiBufferRow,
   MultiBufferSnapshot,
@@ -484,6 +485,9 @@ class MultiBufferImpl implements MultiBuffer {
   private _version = ++nextMultiBufferVersion;
   /** True when _cachedInfos/_cachedLineCount reflect the current _order and _excerpts state. */
   private _cacheValid = false;
+  /** Registered listeners per event type. */
+  // biome-ignore lint/suspicious/noExplicitAny: expect: generic event map requires any for heterogeneous callback storage
+  private _listeners = new Map<keyof MultiBufferEventMap, Set<(...args: any[]) => void>>();
 
   /** Serialize an ExcerptId to a string key. */
   private static _excKey(id: ExcerptId): string {
@@ -501,6 +505,39 @@ class MultiBufferImpl implements MultiBuffer {
     if (this._cacheValid) return;
     this._rebuildCache();
     this._cacheValid = true;
+  }
+
+  on<E extends keyof MultiBufferEventMap>(
+    event: E,
+    cb: (...args: MultiBufferEventMap[E]) => void,
+  ): void {
+    let listeners = this._listeners.get(event);
+    if (!listeners) {
+      // biome-ignore lint/suspicious/noExplicitAny: expect: heterogeneous callback set requires any
+      listeners = new Set<(...args: any[]) => void>();
+      this._listeners.set(event, listeners);
+    }
+    listeners.add(cb);
+  }
+
+  off<E extends keyof MultiBufferEventMap>(
+    event: E,
+    cb: (...args: MultiBufferEventMap[E]) => void,
+  ): void {
+    this._listeners.get(event)?.delete(cb);
+  }
+
+  private _emit<E extends keyof MultiBufferEventMap>(
+    event: E,
+    ...args: MultiBufferEventMap[E]
+  ): void {
+    const listeners = this._listeners.get(event);
+    if (!listeners) return;
+    for (const cb of listeners) {
+      // biome-ignore lint/suspicious/noExplicitAny: expect: spread over heterogeneous tuple requires any
+      // biome-ignore lint/plugin/no-type-assertion: expect: heterogeneous callback set requires cast to call with spread args
+      (cb as (...a: any[]) => void)(...args);
+    }
   }
 
   get lineCount(): number {
@@ -560,6 +597,13 @@ class MultiBufferImpl implements MultiBuffer {
     }
     excSet.set(MultiBufferImpl._excKey(id), id);
     this._markDirty();
+    // Ensure cache is fresh so the emitted ExcerptInfo has correct row data.
+    // The new excerpt is always last in _order, so it is last in _cachedInfos.
+    this._ensureCache();
+    const info = this._cachedInfos[this._cachedInfos.length - 1];
+    if (info && info.id.index === id.index && info.id.generation === id.generation) {
+      this._emit("excerptAdded", info);
+    }
     return id;
   }
 
@@ -580,6 +624,8 @@ class MultiBufferImpl implements MultiBuffer {
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
     );
     this._markDirty();
+    // Only emit if the excerpt actually existed (exc !== undefined means it was valid)
+    if (exc) this._emit("excerptRemoved", excerptId);
   }
 
   clearExcerpts(): readonly ExcerptId[] {
@@ -590,6 +636,7 @@ class MultiBufferImpl implements MultiBuffer {
     this._order = [];
     this._bufferToExcerpts.clear();
     this._markDirty();
+    for (const id of oldIds) this._emit("excerptRemoved", id);
     return oldIds;
   }
 
@@ -600,6 +647,9 @@ class MultiBufferImpl implements MultiBuffer {
       options?: { hasTrailingNewline?: boolean; editable?: boolean };
     }>,
   ): readonly ExcerptId[] {
+    // Capture old IDs before clearing for event emission.
+    const oldIds = [...this._order];
+
     // Remove all existing excerpts without triggering a cache rebuild each time.
     for (const id of this._order) {
       this._excerpts.remove(id);
@@ -624,6 +674,12 @@ class MultiBufferImpl implements MultiBuffer {
 
     // Single rebuild at the end instead of N+1 rebuilds.
     this._markDirty();
+
+    // Emit removed events for each old excerpt, then added events for each new one.
+    for (const id of oldIds) this._emit("excerptRemoved", id);
+    this._ensureCache();
+    for (const info of this._cachedInfos) this._emit("excerptAdded", info);
+
     return newIds;
   }
 
@@ -675,6 +731,19 @@ class MultiBufferImpl implements MultiBuffer {
     }
 
     this._markDirty();
+
+    // Emit removed events for old excerpts, then added events for the new ones.
+    for (const id of oldIds) this._emit("excerptRemoved", id);
+    if (newIds.length > 0) {
+      const newKeySet = new Set(newIds.map(MultiBufferImpl._excKey));
+      this._ensureCache();
+      for (const info of this._cachedInfos) {
+        if (newKeySet.has(MultiBufferImpl._excKey(info.id))) {
+          this._emit("excerptAdded", info);
+        }
+      }
+    }
+
     return newIds;
   }
 

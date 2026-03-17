@@ -43,7 +43,7 @@ describe("MultiBuffer observer: excerptAdded", () => {
 
     expect(received).toBeDefined();
     expect(received?.id).toBe(id);
-    expect(received?.endRow - received?.startRow).toBe(10);
+    expect(received && (received.endRow - received.startRow)).toBe(10);
   });
 
   test("fires once per addExcerpt call", () => {
