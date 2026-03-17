@@ -159,6 +159,17 @@ export interface MultiBufferSnapshot {
 }
 
 /**
+ * Event map for MultiBuffer observer callbacks.
+ * Each key maps to the tuple of arguments passed to the callback.
+ */
+export interface MultiBufferEventMap {
+  /** Fires after an excerpt is added. Payload is the new excerpt's public info. */
+  excerptAdded: [info: ExcerptInfo];
+  /** Fires after an excerpt is removed. Payload is the removed excerpt's ID. */
+  excerptRemoved: [id: ExcerptId];
+}
+
+/**
  * A multibuffer presents multiple excerpts from one or more buffers
  * as a single unified scrollable view.
  */
@@ -167,6 +178,16 @@ export interface MultiBuffer {
   readonly excerpts: readonly ExcerptInfo[];
   readonly isSingleton: boolean;
   snapshot(): MultiBufferSnapshot;
+  /** Subscribe to an excerpt lifecycle event. Multiple listeners per event are supported. */
+  on<E extends keyof MultiBufferEventMap>(
+    event: E,
+    cb: (...args: MultiBufferEventMap[E]) => void,
+  ): void;
+  /** Unsubscribe a previously-registered listener. No-op if not registered. */
+  off<E extends keyof MultiBufferEventMap>(
+    event: E,
+    cb: (...args: MultiBufferEventMap[E]) => void,
+  ): void;
   addExcerpt(
     buffer: import("../buffer/types.ts").Buffer,
     range: ExcerptRange,
