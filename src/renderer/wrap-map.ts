@@ -173,15 +173,30 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
  * Equivalent to `wrapLine(text, wrapWidth).length` but avoids building the
  * intermediate `string[]`, eliminating O(segments) slice allocations per line.
  * Used in WrapMap construction where only the count is needed.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) to avoid the iterator
+ * protocol and codePointAt overhead for typical programming text — consistent
+ * with the approach used in visualWidth, wrapLine, and charColToVisualCol.
+ * This also eliminates the separate visualWidth() pre-check, reducing the
+ * common case from two O(n) passes to one.
  */
 export function wrapLineCount(text: string, wrapWidth: number): number {
-  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
-    return 1;
-  }
+  if (wrapWidth <= 0) return 1;
   let count = 1;
   let segVW = 0;
-  for (const char of text) {
-    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    if (c <= 0x7f) {
+      cw = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // High surrogate: decode the full code point from the surrogate pair.
+      const low = text.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+    } else {
+      cw = codePointWidth(c);
+    }
     if (segVW + cw > wrapWidth && segVW > 0) {
       count++;
       segVW = cw;
