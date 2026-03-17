@@ -678,6 +678,32 @@ class MultiBufferImpl implements MultiBuffer {
     return newIds;
   }
 
+  moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void {
+    // No-op if the excerpt doesn't exist
+    if (!this._excerpts.get(id)) return;
+
+    const idKey = MultiBufferImpl._excKey(id);
+    const currentIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === idKey);
+    if (currentIdx === -1) return;
+
+    // Remove from current position
+    this._order.splice(currentIdx, 1);
+
+    if (insertBefore === undefined) {
+      this._order.push(id);
+    } else {
+      const beforeKey = MultiBufferImpl._excKey(insertBefore);
+      const targetIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === beforeKey);
+      if (targetIdx === -1) {
+        // insertBefore not found; append to end
+        this._order.push(id);
+      } else {
+        this._order.splice(targetIdx, 0, id);
+      }
+    }
+    this._markDirty();
+  }
+
   expandExcerpt(
     excerptId: ExcerptId,
     linesBefore: number,
