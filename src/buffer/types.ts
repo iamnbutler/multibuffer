@@ -115,14 +115,6 @@ export interface BufferSnapshot {
     endRow?: BufferRow,
   ): Generator<string, void, undefined>;
 
-  /**
-   * Iterate over raw text chunks without concatenation.
-   *
-   * Use for streaming operations that don't need the full text as a
-   * single string (e.g., export, diff preprocessing, incremental hashing).
-   */
-  textChunks(): Generator<string, void, undefined>;
-
   /** Get the full text */
   text(): string;
 

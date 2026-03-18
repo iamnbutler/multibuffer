@@ -114,8 +114,8 @@ export class Rope {
   text(): string {
     if (this._chunks.length === 1) return this._chunks[0]?.text ?? "";
     let result = "";
-    for (const chunk of this.textChunks()) {
-      result += chunk;
+    for (const c of this._chunks) {
+      result += c.text;
     }
     return result;
   }
@@ -328,7 +328,7 @@ export class Rope {
    * streaming operations (diff, export, search) where you may not need
    * all lines or want to process them incrementally.
    *
-   * O(1) per yield after initial binary search to locate startRow.
+   * O(line_length) per yield (O(1) for lines within a single chunk).
    */
   *lineIterator(
     startRow = 0,
