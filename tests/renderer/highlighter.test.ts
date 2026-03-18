@@ -6,7 +6,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import type { TreeEdit } from "../../src/renderer/highlighter.ts";
-import { Highlighter } from "../../src/renderer/highlighter.ts";
+import {
+  applyTreeEdit,
+  buildHighlightedSpans,
+  Highlighter,
+} from "../../src/renderer/highlighter.ts";
 
 const WASM_DIR = path.join(import.meta.dir, "../../playground/wasm");
 
@@ -156,4 +160,198 @@ describe("Highlighter", () => {
       expect(tokensLine2.length).toBeGreaterThan(0);
     });
   });
+
+  describe("token ordering", () => {
+    it("should return tokens in startColumn order", () => {
+      const code = "const foo = bar + baz;";
+      highlighter.parseBuffer("test-order", code);
+      const tokens = highlighter.getLineTokens("test-order", 0);
+
+      // Verify tokens are sorted by startColumn
+      for (let i = 1; i < tokens.length; i++) {
+        expect(tokens[i]?.startColumn).toBeGreaterThanOrEqual(
+          tokens[i - 1]?.endColumn ?? 0,
+        );
+      }
+    });
+
+    it("should have non-overlapping tokens", () => {
+      const code = "function test(a: number): string { return a.toString(); }";
+      highlighter.parseBuffer("test-overlap", code);
+      const tokens = highlighter.getLineTokens("test-overlap", 0);
+
+      // Verify no tokens overlap
+      for (let i = 1; i < tokens.length; i++) {
+        expect(tokens[i]?.startColumn).toBeGreaterThanOrEqual(
+          tokens[i - 1]?.endColumn ?? 0,
+        );
+      }
+    });
+  });
+});
+
+describe("Highlighter uninitialized", () => {
+  it("should not be ready before init", () => {
+    const highlighter = new Highlighter();
+    expect(highlighter.ready).toBe(false);
+  });
+
+  it("should return early from parseBuffer when parser not initialized", () => {
+    const highlighter = new Highlighter();
+    // Should not throw when called before init
+    highlighter.parseBuffer("test", "const x = 1;");
+    // getLineTokens should return empty array for unparsed buffer
+    const tokens = highlighter.getLineTokens("test", 0);
+    expect(tokens).toEqual([]);
+  });
+});
+
+describe("Highlighter with Markdown", () => {
+  let highlighter: Highlighter;
+
+  beforeAll(async () => {
+    highlighter = new Highlighter();
+    await highlighter.init(
+      path.join(WASM_DIR, "tree-sitter.wasm"),
+      path.join(WASM_DIR, "tree-sitter-markdown.wasm"),
+    );
+  });
+
+  describe("SKIP_CHILDREN nodes (code blocks)", () => {
+    it("should return comment-colored tokens for fenced code block content", () => {
+      const markdown = "# Heading\n\n```typescript\nconst x = 42;\n```\n";
+      highlighter.parseBuffer("test-code-block", markdown);
+
+      // Line 2 is the opening fence "```typescript"
+      const fenceTokens = highlighter.getLineTokens("test-code-block", 2);
+      expect(fenceTokens.length).toBeGreaterThan(0);
+
+      // Line 3 is code content "const x = 42;" - should have comment color
+      // (because SKIP_CHILDREN uses fenced_code_block_delimiter color)
+      const contentTokens = highlighter.getLineTokens("test-code-block", 3);
+      expect(contentTokens.length).toBeGreaterThan(0);
+      expect(contentTokens[0]?.color).toContain("--syntax-comment");
+    });
+
+    it("should return tokens for inline code span", () => {
+      const markdown = "This is `inline code` in text.";
+      highlighter.parseBuffer("test-code-span", markdown);
+      const tokens = highlighter.getLineTokens("test-code-span", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("STYLED_PARENTS nodes (headings, emphasis)", () => {
+    it("should propagate heading color to children", () => {
+      const markdown = "# Hello World\n\nParagraph text.";
+      highlighter.parseBuffer("test-heading", markdown);
+
+      // Line 0 is the heading "# Hello World"
+      const headingTokens = highlighter.getLineTokens("test-heading", 0);
+      expect(headingTokens.length).toBeGreaterThan(0);
+
+      // All tokens in heading should use keyword color (atx_heading maps to keyword)
+      for (const token of headingTokens) {
+        expect(token.color).toContain("--syntax-keyword");
+      }
+    });
+
+    it("should return tokens for emphasis markers", () => {
+      // Note: tree-sitter-markdown (block parser) only tokenizes markers,
+      // not inline text. Full inline parsing requires markdown_inline parser.
+      const markdown = "This is *emphasized text* here.";
+      highlighter.parseBuffer("test-emphasis", markdown);
+      const tokens = highlighter.getLineTokens("test-emphasis", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+
+      // The * markers should be tokenized (typically as operators in markdown)
+      const markerTokens = tokens.filter(
+        (t) => t.startColumn === 8 || t.startColumn === 24,
+      );
+      expect(markerTokens.length).toBe(2);
+    });
+
+    it("should return tokens for strong emphasis markers", () => {
+      // Note: tree-sitter-markdown (block parser) only tokenizes markers.
+      const markdown = "This is **bold text** here.";
+      highlighter.parseBuffer("test-strong", markdown);
+      const tokens = highlighter.getLineTokens("test-strong", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+
+      // The ** markers should be tokenized (2 * at positions 8-10 and 19-21)
+      expect(tokens.length).toBeGreaterThanOrEqual(4);
+    });
+  });
+
+  describe("multi-line nodes", () => {
+    it("should handle nodes spanning multiple lines with correct column bounds", () => {
+      const markdown = "```\nline1\nline2\nline3\n```";
+      highlighter.parseBuffer("test-multiline", markdown);
+
+      // Each line inside the code block should have tokens
+      for (let row = 1; row <= 3; row++) {
+        const tokens = highlighter.getLineTokens("test-multiline", row);
+        expect(tokens.length).toBeGreaterThan(0);
+        // First token on each line should start at column 0
+        expect(tokens[0]?.startColumn).toBe(0);
+      }
+    });
+
+    it("should return empty array for row beyond document", () => {
+      const markdown = "# Test\n";
+      highlighter.parseBuffer("test-bounds", markdown);
+      const tokens = highlighter.getLineTokens("test-bounds", 100);
+      expect(tokens).toEqual([]);
+    });
+  });
+});
+
+describe("applyTreeEdit", () => {
+  let highlighter: Highlighter;
+
+  beforeAll(async () => {
+    highlighter = new Highlighter();
+    await highlighter.init(
+      path.join(WASM_DIR, "tree-sitter.wasm"),
+      path.join(WASM_DIR, "tree-sitter-typescript.wasm"),
+    );
+  });
+
+  it("should be callable as a standalone function", () => {
+    // applyTreeEdit is exported and usable independently
+    expect(typeof applyTreeEdit).toBe("function");
+  });
+
+  it("should work correctly when used via parseBuffer with edit", () => {
+    const original = "let x = 1;";
+    highlighter.parseBuffer("test-apply", original);
+
+    // Change "let" to "const" (0..3 -> 0..5)
+    const modified = "const x = 1;";
+    const edit: TreeEdit = {
+      startIndex: 0,
+      oldEndIndex: 3,
+      newEndIndex: 5,
+      startPosition: { row: 0, column: 0 },
+      oldEndPosition: { row: 0, column: 3 },
+      newEndPosition: { row: 0, column: 5 },
+    };
+
+    highlighter.parseBuffer("test-apply", modified, edit);
+    const tokens = highlighter.getLineTokens("test-apply", 0);
+    expect(tokens.length).toBeGreaterThan(0);
+    // First token should now cover "const" (5 chars)
+    expect(tokens[0]?.startColumn).toBe(0);
+    expect(tokens[0]?.endColumn).toBe(5);
+  });
+});
+
+describe("buildHighlightedSpans", () => {
+  it("should be exported as a function", () => {
+    expect(typeof buildHighlightedSpans).toBe("function");
+  });
+
+  // Note: Full DOM tests for buildHighlightedSpans require a DOM environment
+  // (happy-dom or jsdom). The function creates span elements with colors.
+  // For now, we verify the export and rely on integration tests in the playground.
 });
