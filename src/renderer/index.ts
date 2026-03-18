@@ -1,10 +1,12 @@
 export { createDomRenderer, DomRenderer } from "./dom.ts";
-export type { SyntaxHighlighter, Token, TreeEdit } from "./highlighter.ts";
-export { buildHighlightedSpans, Highlighter } from "./highlighter.ts";
+export type { MultiLanguageHighlighterOptions, SyntaxHighlighter, Token, TreeEdit } from "./highlighter.ts";
+export { buildHighlightedSpans, Highlighter, MultiLanguageHighlighter } from "./highlighter.ts";
 export {
   buildHighlightedSpans as buildHighlightedSpansWithInjection,
   InjectionHighlighter,
 } from "./injection-highlighter.ts";
+export type { LanguageConfig, LanguageId } from "./languages.ts";
+export { DEFAULT_GRAMMAR_URLS, detectLanguage, getGrammarName, isLanguageSupported } from "./languages.ts";
 export {
   calculateContentHeight,
   calculateVisibleRows,
