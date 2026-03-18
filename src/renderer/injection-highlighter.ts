@@ -9,7 +9,12 @@ import type {
   Parser as ParserType,
   Tree,
 } from "web-tree-sitter";
-import type { SyntaxHighlighter, Token } from "./highlighter.ts";
+import {
+  applyTreeEdit,
+  type SyntaxHighlighter,
+  type Token,
+  type TreeEdit,
+} from "./highlighter.ts";
 import { colorForNodeType } from "./theme.ts";
 
 export type { Token };
@@ -115,14 +120,30 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
   /**
    * Parse a buffer and detect injection ranges.
+   *
+   * When `edit` is provided, the old primary tree is updated via `tree.edit()`
+   * before incremental re-parse. Injection sub-parses always do a full parse
+   * because their text subsets change unpredictably with edits.
    */
-  parseBuffer(bufferId: string, text: string): void {
+  parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void {
     const primaryParser = this._parsers.get(this._primaryLanguage ?? "");
     if (!primaryParser) return;
 
-    // Parse with primary language
-    const tree = primaryParser.parse(text);
-    if (!tree) return;
+    // Pass old tree for incremental parsing of the primary language
+    const oldParse = this._bufferParses.get(bufferId);
+    const oldTree = oldParse?.tree;
+    if (oldTree && edit) {
+      applyTreeEdit(oldTree, edit);
+    }
+    const tree = primaryParser.parse(text, oldTree);
+    if (!tree) {
+      if (oldParse && edit) {
+        // The old tree was mutated by tree.edit() but parse failed —
+        // remove the corrupted parse so subsequent calls don't reuse it.
+        this._bufferParses.delete(bufferId);
+      }
+      return;
+    }
 
     // Find injection ranges
     const injectionRanges = this._findInjectionRanges(tree.rootNode, text);
@@ -146,7 +167,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
   /**
    * Get syntax tokens for a specific line of a buffer.
-   * Returns tokens sorted by startColumn with pre-resolved colors.
+   * Returns tokens in startColumn order (guaranteed by depth-first tree traversal).
    */
   getLineTokens(bufferId: string, row: number): Token[] {
     const parse = this._bufferParses.get(bufferId);
@@ -180,7 +201,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       );
     }
 
-    tokens.sort((a, b) => a.startColumn - b.startColumn);
     return tokens;
   }
 

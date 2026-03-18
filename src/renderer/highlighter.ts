@@ -7,6 +7,7 @@ import type {
   Language,
   Node,
   Parser as ParserType,
+  Point,
   Tree,
 } from "web-tree-sitter";
 import { colorForNodeType } from "./theme.ts";
@@ -17,10 +18,37 @@ export interface Token {
   color: string;
 }
 
+/**
+ * Descriptor for an incremental edit, matching the data fields of
+ * web-tree-sitter's `Edit` class. When provided to `parseBuffer`, the old
+ * tree is updated via `tree.edit()` before being passed to `parser.parse()`,
+ * enabling true incremental parsing.
+ */
+export interface TreeEdit {
+  startIndex: number;
+  oldEndIndex: number;
+  newEndIndex: number;
+  startPosition: Point;
+  oldEndPosition: Point;
+  newEndPosition: Point;
+}
+
+/**
+ * Apply a {@link TreeEdit} descriptor to a tree-sitter `Tree`.
+ *
+ * `tree.edit()` expects the concrete `Edit` class at the type level, but
+ * accepts a plain object with the same fields at runtime. This helper
+ * centralises the single required type assertion so call-sites stay clean.
+ */
+export function applyTreeEdit(tree: Tree, edit: TreeEdit): void {
+  // biome-ignore lint/plugin/no-type-assertion: expect: tree.edit() accepts plain objects at runtime despite the Edit class type
+  tree.edit(edit as import("web-tree-sitter").Edit);
+}
+
 /** Common interface for syntax highlighters. */
 export interface SyntaxHighlighter {
   readonly ready: boolean;
-  parseBuffer(bufferId: string, text: string): void;
+  parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void;
   getLineTokens(bufferId: string, row: number): Token[];
 }
 
@@ -52,11 +80,19 @@ export class Highlighter implements SyntaxHighlighter {
     this._ready = true;
   }
 
-  parseBuffer(bufferId: string, text: string): void {
+  parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void {
     if (!this._parser) return;
-    const tree = this._parser.parse(text);
+    const oldTree = this._trees.get(bufferId);
+    if (oldTree && edit) {
+      applyTreeEdit(oldTree, edit);
+    }
+    const tree = this._parser.parse(text, oldTree);
     if (tree) {
       this._trees.set(bufferId, tree);
+    } else if (oldTree && edit) {
+      // The old tree was mutated by tree.edit() but parse failed —
+      // remove the corrupted tree so subsequent calls don't reuse it.
+      this._trees.delete(bufferId);
     }
   }
 

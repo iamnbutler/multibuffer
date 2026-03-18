@@ -64,7 +64,7 @@ async function main() {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
     const buf = createBuffer(src.path as BufferId, src.content);
     bufferObjects.set(src.path, buf);
-    const lineCount = src.content.split("\n").length;
+    const lineCount = buf.snapshot().lineCount;
 
     if (src.path.includes("single-line")) {
       mb.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
@@ -207,7 +207,7 @@ async function main() {
   }
 
   // Wire editor state changes to re-render
-  editor.onChange(() => {
+  editor.on("change", () => {
     snapshotDirty = true;
     renderAll();
   });
@@ -267,7 +267,7 @@ async function main() {
     for (const src of sources) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
       const buf = createBuffer(src.path as BufferId, src.content);
-      const lineCount = src.content.split("\n").length;
+      const lineCount = buf.snapshot().lineCount;
       if (src.path.includes("single-line")) {
         m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
       } else if (src.path.includes("large-file")) {
@@ -289,7 +289,7 @@ async function main() {
         if (!src) return;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
         const buf = createBuffer(src.path as BufferId, src.content);
-        const lineCount = src.content.split("\n").length;
+        const lineCount = buf.snapshot().lineCount;
         m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
       },
     },
@@ -300,7 +300,7 @@ async function main() {
         for (const src of sources) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
           const buf = createBuffer(src.path as BufferId, src.content);
-          const lineCount = src.content.split("\n").length;
+          const lineCount = buf.snapshot().lineCount;
           for (let start = 0; start + 3 <= lineCount; start += 10) {
             m.addExcerpt(buf, range(start, Math.min(start + 3, lineCount)), {
               hasTrailingNewline: true,
@@ -317,7 +317,7 @@ async function main() {
         if (!src) return;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
         const buf = createBuffer(src.path as BufferId, src.content);
-        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+        m.addExcerpt(buf, range(0, buf.snapshot().lineCount), {
           hasTrailingNewline: true,
         });
       },
@@ -330,7 +330,7 @@ async function main() {
         if (!src) return;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
         const buf = createBuffer(src.path as BufferId, src.content);
-        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+        m.addExcerpt(buf, range(0, buf.snapshot().lineCount), {
           hasTrailingNewline: true,
         });
       },
@@ -345,7 +345,7 @@ async function main() {
         if (!src) return;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
         const buf = createBuffer(src.path as BufferId, src.content);
-        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+        m.addExcerpt(buf, range(0, buf.snapshot().lineCount), {
           hasTrailingNewline: true,
         });
       },
@@ -358,7 +358,7 @@ async function main() {
         if (!src) return;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
         const buf = createBuffer(src.path as BufferId, src.content);
-        m.addExcerpt(buf, range(0, src.content.split("\n").length), {
+        m.addExcerpt(buf, range(0, buf.snapshot().lineCount), {
           hasTrailingNewline: true,
         });
       },
@@ -635,7 +635,7 @@ async function main() {
     }
 
     // Wire editor changes to re-render AND notify controller for re-diff
-    diffEditor.onChange(() => {
+    diffEditor.on("change", () => {
       renderDiff();
       diffController.notifyChange();
     });

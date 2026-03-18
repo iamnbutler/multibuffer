@@ -352,6 +352,64 @@ describe("WrapMap class", () => {
   });
 });
 
+describe("WrapMap.segmentCharStart", () => {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
+  const mbRow = (n: number) => n as MultiBufferRow;
+
+  function makeSnapshot(text: string) {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    return mb.snapshot();
+  }
+
+  beforeEach(() => {
+    resetCounters();
+  });
+
+  test("non-wrapping line: segment 0 starts at char offset 0", () => {
+    const snap = makeSnapshot("hello world");
+    const wm = new WrapMap(snap, 80);
+    expect(wm.segmentCharStart(mbRow(0), 0)).toBe(0);
+  });
+
+  test("wrapping ASCII line: segment offsets match wrapLine() boundaries", () => {
+    // "abcdefghij" at wrapWidth=5 → ["abcde","fghij"]
+    const snap = makeSnapshot("abcdefghij");
+    const wm = new WrapMap(snap, 5);
+    expect(wm.segmentCharStart(mbRow(0), 0)).toBe(0); // "abcde" starts at char 0
+    expect(wm.segmentCharStart(mbRow(0), 1)).toBe(5); // "fghij" starts at char 5
+  });
+
+  test("multi-line: segment offsets are per-row (reset to 0 for each new line)", () => {
+    // Line 0: "short" (no wrap at wrapWidth=10)
+    // Line 1: "averylongline" → ["averylongl","ine"] (wraps at 10)
+    const snap = makeSnapshot("short\naverylongline");
+    const wm = new WrapMap(snap, 10);
+    expect(wm.segmentCharStart(mbRow(0), 0)).toBe(0);  // "short" at char 0
+    expect(wm.segmentCharStart(mbRow(1), 0)).toBe(0);  // "averylongl" starts at char 0
+    expect(wm.segmentCharStart(mbRow(1), 1)).toBe(10); // "ine" starts at char 10
+  });
+
+  test("CJK wrapped line: offsets are in UTF-16 code units (1 per CJK char)", () => {
+    // "日日日日" vw=8, wrapWidth=4 → ["日日","日日"]
+    // Each CJK char is 1 UTF-16 code unit, so "日日".length = 2
+    const snap = makeSnapshot("日日日日");
+    const wm = new WrapMap(snap, 4);
+    expect(wm.segmentCharStart(mbRow(0), 0)).toBe(0); // "日日" starts at UTF-16 offset 0
+    expect(wm.segmentCharStart(mbRow(0), 1)).toBe(2); // "日日" starts at UTF-16 offset 2
+  });
+
+  test("three-segment line: all offsets correct", () => {
+    // "abcdefghijklmno" (15 chars) at wrapWidth=5 → ["abcde","fghij","klmno"]
+    const snap = makeSnapshot("abcdefghijklmno");
+    const wm = new WrapMap(snap, 5);
+    expect(wm.segmentCharStart(mbRow(0), 0)).toBe(0);
+    expect(wm.segmentCharStart(mbRow(0), 1)).toBe(5);
+    expect(wm.segmentCharStart(mbRow(0), 2)).toBe(10);
+  });
+});
+
 describe("lazy construction", () => {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
   const mbRow = (n: number) => n as MultiBufferRow;

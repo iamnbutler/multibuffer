@@ -173,15 +173,30 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
  * Equivalent to `wrapLine(text, wrapWidth).length` but avoids building the
  * intermediate `string[]`, eliminating O(segments) slice allocations per line.
  * Used in WrapMap construction where only the count is needed.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) to avoid the iterator
+ * protocol and codePointAt overhead for typical programming text — consistent
+ * with the approach used in visualWidth, wrapLine, and charColToVisualCol.
+ * This also eliminates the separate visualWidth() pre-check, reducing the
+ * common case from two O(n) passes to one.
  */
 export function wrapLineCount(text: string, wrapWidth: number): number {
-  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
-    return 1;
-  }
+  if (wrapWidth <= 0) return 1;
   let count = 1;
   let segVW = 0;
-  for (const char of text) {
-    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    if (c <= 0x7f) {
+      cw = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // High surrogate: decode the full code point from the surrogate pair.
+      const low = text.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+    } else {
+      cw = codePointWidth(c);
+    }
     if (segVW + cw > wrapWidth && segVW > 0) {
       count++;
       segVW = cw;
@@ -199,6 +214,14 @@ export interface WrapMapOptions {
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
+  /**
+   * Flat array of segment char-start offsets, indexed by visual-row index.
+   * For buffer row r and segment s: `charStart = _segCharStart[_prefix[r] + s]`.
+   *
+   * Enables O(1) lookup of a segment's character offset within its line,
+   * eliminating `wrapLine()` recomputation in the hit-test and cursor hot paths.
+   */
+  private _segCharStart: Uint32Array;
   private _wrapWidth: number;
   private _snapshot: MultiBufferSnapshot;
   private _lineCount: number;
@@ -209,8 +232,9 @@ export class WrapMap {
     this._snapshot = snapshot;
     this._lineCount = snapshot.lineCount;
 
-    // Allocate prefix sum array
+    // Allocate prefix sum array and segment char-start offsets.
     this._prefix = new Uint32Array(this._lineCount + 1);
+    this._segCharStart = new Uint32Array(0);
     this._prefix[0] = 0;
     this._computedUpTo = 0;
 
@@ -232,11 +256,30 @@ export class WrapMap {
     const endRowBranded = target as MultiBufferRow;
     const lines = this._snapshot.lines(startRow, endRowBranded);
 
+    // Build prefix sums and collect segment char-start offsets for the new rows.
+    const segCharStartArr: number[] = [];
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLineCount(line, this._wrapWidth);
+      const segments = wrapLine(line, this._wrapWidth);
       const rowIdx = this._computedUpTo + i;
-      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + visualRows;
+      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + segments.length;
+      let charPos = 0;
+      for (const seg of segments) {
+        segCharStartArr.push(charPos);
+        charPos += seg.length;
+      }
+    }
+
+    // Append new segment offsets to the existing _segCharStart array.
+    if (segCharStartArr.length > 0) {
+      const prev = this._segCharStart;
+      const merged = new Uint32Array(prev.length + segCharStartArr.length);
+      merged.set(prev);
+      for (let j = 0; j < segCharStartArr.length; j++) {
+        merged[prev.length + j] = segCharStartArr[j] ?? 0;
+      }
+      this._segCharStart = merged;
     }
 
     this._computedUpTo = target;
@@ -313,6 +356,19 @@ export class WrapMap {
     const segment = visualRow - (this._prefix[lo] ?? 0);
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { mbRow: lo as MultiBufferRow, segment };
+  }
+
+  /**
+   * Character offset (UTF-16 code-unit index) of the first character of
+   * segment `s` within buffer row `mbRow`'s line text. O(1).
+   *
+   * Used by hit-test and cursor rendering to avoid recomputing wrap segments
+   * on every mouse-move event.
+   */
+  segmentCharStart(mbRow: MultiBufferRow, segment: number): number {
+    this._ensureComputedUpTo(mbRow + 1);
+    const baseIdx = this._prefix[mbRow] ?? 0;
+    return this._segCharStart[baseIdx + segment] ?? 0;
   }
 
   /** Total content height in pixels. */

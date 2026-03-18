@@ -154,6 +154,28 @@ export const wrapMapBenchmarks: BenchmarkSuite = {
       },
     },
     {
+      name: "segmentCharStart - O(1) lookup for wrapped line (segment 0)",
+      iterations: 100000,
+      targetMs: 0.001,
+      setup: () => {
+        // Use the wrapping snapshot so segment lookups hit real segments
+        wrapMap1k = new WrapMap(snap1kWrap, 20);
+      },
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        wrapMap1k.segmentCharStart(500 as MultiBufferRow, 0);
+      },
+    },
+    {
+      name: "segmentCharStart - O(1) lookup for wrapped line (segment 1)",
+      iterations: 100000,
+      targetMs: 0.001,
+      fn: () => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        wrapMap1k.segmentCharStart(500 as MultiBufferRow, 1);
+      },
+    },
+    {
       name: "WrapMap eager construction - 10K lines",
       iterations: 10,
       targetMs: 50,

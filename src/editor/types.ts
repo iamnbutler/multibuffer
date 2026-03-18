@@ -15,6 +15,21 @@ import type {
 } from "../multibuffer/types.ts";
 
 /**
+ * Event map for the Editor event emitter.
+ * Keys are event names; values are tuples of callback argument types.
+ */
+export type EditorEventMap = {
+  /** Fires when text content changes. Provides the new snapshot. */
+  textChange: [snapshot: MultiBufferSnapshot];
+  /** Fires when the cursor position changes. Provides new and previous cursor points. */
+  cursorChange: [cursor: MultiBufferPoint, prev: MultiBufferPoint];
+  /** Fires when the selection changes. Provides the new selection (or undefined if none). */
+  selectionChange: [selection: Selection | undefined];
+  /** Fires on any state change. Provides the current cursor and selection. */
+  change: [state: { cursor: MultiBufferPoint; selection: Selection | undefined }];
+};
+
+/**
  * Options for creating an Editor instance.
  * All options are opt-in; omit to use defaults.
  */
@@ -53,7 +68,36 @@ export type EditorCommand =
   | { type: "redo" }
   | { type: "copy" }
   | { type: "cut" }
-  | { type: "paste"; text: string };
+  | { type: "paste"; text: string }
+  /** A consumer-defined command dispatched when a custom keymap binding fires. */
+  | { type: "custom"; action: string };
+
+/**
+ * A single keymap entry.
+ * - `EditorCommand` — execute the command when the key fires
+ * - `null` — disable the key (preventDefault, no command)
+ */
+export type KeyBinding = EditorCommand | null;
+
+/**
+ * A keymap maps normalized key strings to bindings.
+ *
+ * Key strings use the format `[Mod+][Alt+][Shift+]<key>` where:
+ * - `Mod` = Cmd on macOS, Ctrl on Windows/Linux
+ * - Single letter keys are uppercase (`S` not `s`)
+ * - Special keys use their `KeyboardEvent.key` name (`ArrowUp`, `Tab`, etc.)
+ * - Chord bindings use a space separator: `'Mod+K Mod+C'`
+ *
+ * @example
+ * ```ts
+ * const keymap: Keymap = {
+ *   'Mod+S': { type: 'custom', action: 'save' },
+ *   'Mod+Z': null,                                // disable undo
+ *   'Mod+K Mod+C': { type: 'custom', action: 'commentLine' },
+ * }
+ * ```
+ */
+export type Keymap = Record<string, KeyBinding>;
 
 /**
  * The cursor position in the editor.

@@ -138,6 +138,8 @@ export interface ExcerptBoundary {
 export interface MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
+  /** Globally unique version; same version implies same content. Increments on every mutation across all MultiBuffer instances. */
+  readonly version: number;
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined;
   toBufferPoint(
     point: MultiBufferPoint,
@@ -172,6 +174,18 @@ export interface MultiBuffer {
   ): ExcerptId;
   removeExcerpt(excerptId: ExcerptId): void;
   clearExcerpts(): readonly ExcerptId[];
+  /**
+   * Replace all excerpts atomically with a single cache rebuild.
+   * More efficient than clearExcerpts() + N×addExcerpt() when adding
+   * excerpts from multiple buffers at once (e.g. in DiffController.reDiff()).
+   */
+  setExcerpts(
+    entries: ReadonlyArray<{
+      buffer: import("../buffer/types.ts").Buffer;
+      range: ExcerptRange;
+      options?: { hasTrailingNewline?: boolean; editable?: boolean };
+    }>,
+  ): readonly ExcerptId[];
   setExcerptsForBuffer(
     buffer: import("../buffer/types.ts").Buffer,
     ranges: readonly ExcerptRange[],
@@ -181,6 +195,13 @@ export interface MultiBuffer {
     linesBefore: number,
     linesAfter: number,
   ): void;
+  /**
+   * Move an excerpt to a new position in display order.
+   * `insertBefore` is the ID of the excerpt before which `id` will be inserted.
+   * Pass `undefined` to move to the end. No-op if `id` is not found.
+   * If `insertBefore` is not found, the excerpt is appended to the end.
+   */
+  moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void;
   createAnchor(point: MultiBufferPoint, bias: import("../buffer/types.ts").Bias): Anchor | undefined;
   edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void;
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined;
