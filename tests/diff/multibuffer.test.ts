@@ -217,3 +217,51 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
     expect(decorations.length).toBe(2);
   });
 });
+
+describe("createUnifiedDiffMultiBuffer - read-only mode", () => {
+  test("editableInsert: false makes insert lines non-editable", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nc", "a\nb\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: false,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The insert excerpt (line "b") should be non-editable
+    const insertExcerpt = excerpts.find(
+      (e) => e.bufferId === newBuf.id && e.startRow === 1
+    );
+    expect(insertExcerpt?.editable).toBe(false);
+  });
+
+  test("editableInsert: false with editableEqual: false makes all excerpts non-editable", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "a\nX\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: false,
+      editableEqual: false,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // All excerpts should be non-editable
+    expect(excerpts.every((e) => e.editable === false)).toBe(true);
+  });
+
+  test("default editableInsert is true", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nc", "a\nb\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The insert excerpt should be editable by default
+    const newBufExcerpts = excerpts.filter((e) => e.bufferId === newBuf.id);
+    // At least one should be the insert (line "b")
+    expect(newBufExcerpts.some((e) => e.editable === true)).toBe(true);
+  });
+
+  test("delete lines remain non-editable regardless of settings", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "a\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: true,
+      editableEqual: true,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The delete excerpt (from oldBuf) should always be non-editable
+    const deleteExcerpt = excerpts.find((e) => e.bufferId === oldBuf.id);
+    expect(deleteExcerpt?.editable).toBe(false);
+  });
+});

@@ -91,6 +91,31 @@ describe("EditorViewOptions", () => {
     const opts: EditorViewOptions = {};
     expect(opts).toBeDefined();
   });
+
+  test("accepts hideCursor option", () => {
+    const opts: EditorViewOptions = {
+      hideCursor: true,
+    };
+    expect(opts.hideCursor).toBe(true);
+  });
+
+  test("accepts skipInputHandler option", () => {
+    const opts: EditorViewOptions = {
+      skipInputHandler: true,
+    };
+    expect(opts.skipInputHandler).toBe(true);
+  });
+
+  test("hideCursor and skipInputHandler can be combined with readOnly", () => {
+    const opts: EditorViewOptions = {
+      readOnly: true,
+      hideCursor: true,
+      skipInputHandler: true,
+    };
+    expect(opts.readOnly).toBe(true);
+    expect(opts.hideCursor).toBe(true);
+    expect(opts.skipInputHandler).toBe(true);
+  });
 });
 
 // ── Theme type check ────────────────────────────────────────────────────────

@@ -24,6 +24,8 @@ import { diff } from "./diff.ts";
 export interface UnifiedDiffMultiBufferOptions {
   /** Make equal (context) lines editable. Default: true. */
   editableEqual?: boolean;
+  /** Make insert lines editable. Default: true. */
+  editableInsert?: boolean;
 }
 
 export interface UnifiedDiffMultiBufferResult {
@@ -59,6 +61,7 @@ export function createUnifiedDiffMultiBuffer(
   options?: DiffOptions & UnifiedDiffMultiBufferOptions,
 ): UnifiedDiffMultiBufferResult {
   const editableEqual = options?.editableEqual ?? true;
+  const editableInsert = options?.editableInsert ?? true;
   const oldSnap = oldBuffer.snapshot();
   const newSnap = newBuffer.snapshot();
   const result = diff(oldSnap.text(), newSnap.text(), options);
@@ -108,7 +111,7 @@ export function createUnifiedDiffMultiBuffer(
         mb.addExcerpt(
           newBuffer,
           makeExcerptRange(firstRow, firstRow + lineCount),
-          { editable: true },
+          { editable: editableInsert },
         );
         decorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
       } else {

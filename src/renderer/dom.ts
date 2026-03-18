@@ -218,6 +218,8 @@ export class DomRenderer implements Renderer {
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
   private _theme: Partial<Theme> | null = null;
+  /** When true, the cursor is never rendered (for read-only mode). */
+  private _cursorHidden = false;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -918,10 +920,26 @@ export class DomRenderer implements Renderer {
     this._onTripleClickCallback = cb;
   }
 
+  /**
+   * Set whether the cursor should be hidden.
+   * When true, renderCursor() becomes a no-op (for read-only mode).
+   */
+  setCursorHidden(hidden: boolean): void {
+    this._cursorHidden = hidden;
+    if (hidden && this._cursorEl) {
+      this._cursorEl.style.display = "none";
+    }
+  }
+
+  /** Returns true if the cursor is hidden. */
+  get cursorHidden(): boolean {
+    return this._cursorHidden;
+  }
+
   /** Render cursor at a multibuffer point. */
   renderCursor(point: MultiBufferPoint | undefined): void {
     if (!this._cursorEl) return;
-    if (!point) {
+    if (this._cursorHidden || !point) {
       this._cursorEl.style.display = "none";
       return;
     }

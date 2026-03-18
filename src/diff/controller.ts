@@ -25,6 +25,11 @@ export interface DiffControllerOptions
     UnifiedDiffMultiBufferOptions {
   /** Debounce delay in milliseconds. Default: 150. */
   debounceMs?: number;
+  /**
+   * When true, all excerpts are non-editable (both insert and equal lines).
+   * Use this for read-only diff viewers. Default: false.
+   */
+  readOnly?: boolean;
 }
 
 export interface DiffController {
@@ -50,10 +55,17 @@ export function createDiffController(
   options?: DiffControllerOptions,
 ): DiffController {
   const debounceMs = options?.debounceMs ?? 150;
-  const editableEqual = options?.editableEqual ?? true;
+  const readOnly = options?.readOnly ?? false;
+  // In readOnly mode, force all excerpts to be non-editable
+  const editableEqual = readOnly ? false : (options?.editableEqual ?? true);
+  const editableInsert = !readOnly;
 
-  // Initial diff
-  const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, options);
+  // Initial diff (pass readOnly to make all excerpts non-editable)
+  const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, {
+    ...options,
+    editableEqual,
+    editableInsert,
+  });
   const _multiBuffer = result.multiBuffer;
   let _decorations = result.decorations;
   let _isEqual = result.isEqual;
@@ -124,7 +136,7 @@ export function createDiffController(
               entries.push({
                 buffer: newBuffer,
                 range: makeExcerptRange(firstRow, firstRow + lineCount),
-                options: { editable: true },
+                options: { editable: editableInsert },
               });
               newDecorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
             }
