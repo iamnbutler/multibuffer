@@ -468,13 +468,17 @@ export class CanvasRenderer implements Renderer {
       this._spacer.style.height = `${contentHeight}px`;
     }
 
-    // Clear canvas with line background
-    const bgColor = this._resolveColor(this._theme.lineBg === "transparent" ? "#282828" : this._theme.lineBg);
+    // Clear canvas with line background.
+    // When lineBg is "transparent", fall back to headerBg (a darker chrome surface).
+    const bgColor = this._resolveColor(
+      this._theme.lineBg === "transparent" ? this._theme.headerBg : this._theme.lineBg,
+    );
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
 
-    // Draw gutter background
-    ctx.fillStyle = "#282828";
+    // Draw gutter background using the header surface color so it
+    // tracks the active theme instead of being hard-coded.
+    ctx.fillStyle = this._resolveColor(this._theme.headerBg);
     ctx.fillRect(0, 0, gutterWidth, this._canvas.height);
 
     // Build decoration map
@@ -1072,11 +1076,22 @@ export class CanvasRenderer implements Renderer {
 
     const width = this._scrollContainer.clientWidth;
     const height = this._scrollContainer.clientHeight;
-
-    // Handle device pixel ratio for sharp rendering
     const dpr = window.devicePixelRatio || 1;
-    this._canvas.width = width * dpr;
-    this._canvas.height = height * dpr;
+
+    // Only resize when dimensions actually change to avoid resetting
+    // the canvas context (browser spec: any assignment to canvas.width
+    // or canvas.height clears all pixels and resets context state).
+    const targetWidth = width * dpr;
+    const targetHeight = height * dpr;
+    if (
+      this._canvas.width === targetWidth &&
+      this._canvas.height === targetHeight
+    ) {
+      return;
+    }
+
+    this._canvas.width = targetWidth;
+    this._canvas.height = targetHeight;
     this._canvas.style.width = `${width}px`;
     this._canvas.style.height = `${height}px`;
 
