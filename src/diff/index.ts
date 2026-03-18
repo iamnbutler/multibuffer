@@ -6,7 +6,8 @@ export type {
   UnifiedDiffMultiBufferOptions,
   UnifiedDiffMultiBufferResult,
 } from "./multibuffer.ts";
-export { createUnifiedDiffMultiBuffer } from "./multibuffer.ts";
-export type { DiffHunk, DiffKind, DiffLine, DiffResult } from "./types.ts";
+export { createUnifiedDiffMultiBuffer, HUNK_HEADER_STYLE } from "./multibuffer.ts";
+export type { DiffHunk, DiffKind, DiffLine, DiffResult, HunkHeader } from "./types.ts";
+export { formatHunkHeader } from "./types.ts";
 export type { DiffStats, UnifiedDiff, UnifiedDiffLine } from "./unified.ts";
 export { createUnifiedDiff } from "./unified.ts";

@@ -83,6 +83,11 @@ export interface DecorationStyle {
   readonly gutterSign: string;
   /** Color for the gutter sign character */
   readonly gutterSignColor: string;
+  /**
+   * When true, the gutter area spans the full width with no line numbers.
+   * Used for hunk separator lines in diff view.
+   */
+  readonly isHunkSeparator?: boolean;
 }
 
 /**

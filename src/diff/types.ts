@@ -45,3 +45,35 @@ export interface DiffResult {
   /** True if the two texts are identical. */
   readonly isEqual: boolean;
 }
+
+/**
+ * Metadata for a hunk separator line displayed between non-adjacent hunks.
+ * Contains the information needed to render the `@@ -X,Y +A,B @@ context` line.
+ */
+export interface HunkHeader {
+  /** Starting line in the old buffer (1-based for display). */
+  readonly oldStart: number;
+  /** Number of lines from the old buffer in this hunk. */
+  readonly oldCount: number;
+  /** Starting line in the new buffer (1-based for display). */
+  readonly newStart: number;
+  /** Number of lines from the new buffer in this hunk. */
+  readonly newCount: number;
+  /** Optional function/class context extracted from the hunk header. */
+  readonly context?: string;
+}
+
+/**
+ * Format a HunkHeader into the standard unified diff header string.
+ * Example: "@@ -10,5 +12,7 @@ function handleClick()"
+ */
+export function formatHunkHeader(header: HunkHeader): string {
+  const oldPart = header.oldCount === 1
+    ? `${header.oldStart}`
+    : `${header.oldStart},${header.oldCount}`;
+  const newPart = header.newCount === 1
+    ? `${header.newStart}`
+    : `${header.newStart},${header.newCount}`;
+  const contextPart = header.context ? ` ${header.context}` : "";
+  return `@@ -${oldPart} +${newPart} @@${contextPart}`;
+}

@@ -9,7 +9,8 @@
  * directly to DomRenderer (colors delete/insert rows with gutter signs).
  */
 
-import type { Buffer, BufferRange, BufferRow } from "../buffer/types.ts";
+import { createBuffer } from "../buffer/buffer.ts";
+import type { Buffer, BufferId, BufferRange, BufferRow } from "../buffer/types.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
 import type {
   ExcerptRange,
@@ -20,16 +21,26 @@ import type {
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
 import type { DiffOptions } from "./diff.ts";
 import { diff } from "./diff.ts";
+import type { DiffHunk } from "./types.ts";
+import { formatHunkHeader } from "./types.ts";
 
 export interface UnifiedDiffMultiBufferOptions {
   /** Make equal (context) lines editable. Default: true. */
   editableEqual?: boolean;
+  /** Show hunk separator lines between non-adjacent hunks. Default: true. */
+  showHunkSeparators?: boolean;
 }
 
 export interface UnifiedDiffMultiBufferResult {
   readonly multiBuffer: MultiBuffer;
   readonly decorations: readonly Decoration[];
   readonly isEqual: boolean;
+  /**
+   * Buffer holding hunk separator text lines.
+   * Only present when there are multiple hunks and showHunkSeparators is true.
+   * Keep a reference to prevent garbage collection while the MultiBuffer is in use.
+   */
+  readonly separatorBuffer?: Buffer;
 }
 
 const DELETE_STYLE: Partial<DecorationStyle> = {
@@ -47,11 +58,47 @@ const INSERT_STYLE: Partial<DecorationStyle> = {
 };
 
 /**
+ * Style for hunk separator lines.
+ * Muted background, italic text, full-width gutter (no line numbers).
+ */
+export const HUNK_HEADER_STYLE: Partial<DecorationStyle> = {
+  backgroundColor: "rgba(128, 128, 128, 0.08)",
+  gutterBackground: "rgba(128, 128, 128, 0.12)",
+  color: "#888888",
+  fontStyle: "italic",
+  isHunkSeparator: true,
+};
+
+/** Unique buffer ID for hunk separator buffers. */
+let separatorBufferCounter = 0;
+function createSeparatorBufferId(): BufferId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for BufferId
+  return `__hunk_separator_${++separatorBufferCounter}__` as BufferId;
+}
+
+/**
+ * Create a HunkHeader from a DiffHunk.
+ * Converts 0-based internal indices to 1-based display values.
+ */
+function hunkToHeader(hunk: DiffHunk): { oldStart: number; oldCount: number; newStart: number; newCount: number } {
+  return {
+    oldStart: hunk.oldStart + 1, // Convert to 1-based
+    oldCount: hunk.oldCount,
+    newStart: hunk.newStart + 1, // Convert to 1-based
+    newCount: hunk.newCount,
+  };
+}
+
+/**
  * Build a MultiBuffer from a unified diff between two buffers.
  *
  * Only the changed hunks (plus context lines) are included — identical to how
  * `git diff` presents changes. Use `createUnifiedDiff` if you need a flat
  * line-by-line view of the full file instead.
+ *
+ * When there are multiple non-adjacent hunks and showHunkSeparators is true,
+ * separator lines are inserted between hunks showing the hunk header
+ * (e.g., "@@ -10,5 +12,7 @@").
  */
 export function createUnifiedDiffMultiBuffer(
   oldBuffer: Buffer,
@@ -59,6 +106,7 @@ export function createUnifiedDiffMultiBuffer(
   options?: DiffOptions & UnifiedDiffMultiBufferOptions,
 ): UnifiedDiffMultiBufferResult {
   const editableEqual = options?.editableEqual ?? true;
+  const showHunkSeparators = options?.showHunkSeparators ?? true;
   const oldSnap = oldBuffer.snapshot();
   const newSnap = newBuffer.snapshot();
   const result = diff(oldSnap.text(), newSnap.text(), options);
@@ -79,7 +127,42 @@ export function createUnifiedDiffMultiBuffer(
   // Track current multibuffer row offset as we add excerpts.
   let mbRow = 0;
 
-  for (const hunk of result.hunks) {
+  // Create separator buffer if needed (multiple hunks and separators enabled)
+  let separatorBuffer: Buffer | undefined;
+  const hunkCount = result.hunks.length;
+  if (showHunkSeparators && hunkCount > 1) {
+    // Build separator text: one line per hunk after the first
+    const separatorLines: string[] = [];
+    for (let h = 1; h < hunkCount; h++) {
+      const hunk = result.hunks[h];
+      if (hunk) {
+        separatorLines.push(formatHunkHeader(hunkToHeader(hunk)));
+      }
+    }
+    separatorBuffer = createBuffer(
+      createSeparatorBufferId(),
+      separatorLines.join("\n"),
+    );
+  }
+
+  let separatorLineIndex = 0; // Index into separator buffer lines
+
+  for (let hunkIndex = 0; hunkIndex < result.hunks.length; hunkIndex++) {
+    const hunk = result.hunks[hunkIndex];
+    if (!hunk) continue;
+
+    // Insert hunk separator before all hunks except the first
+    if (showHunkSeparators && hunkIndex > 0 && separatorBuffer) {
+      mb.addExcerpt(
+        separatorBuffer,
+        makeExcerptRange(separatorLineIndex, separatorLineIndex + 1),
+        { editable: false },
+      );
+      decorations.push(makeDecoration(mbRow, 1, HUNK_HEADER_STYLE));
+      mbRow += 1;
+      separatorLineIndex += 1;
+    }
+
     let i = 0;
     while (i < hunk.lines.length) {
       const firstLine = hunk.lines[i];
@@ -127,7 +210,7 @@ export function createUnifiedDiffMultiBuffer(
     }
   }
 
-  return { multiBuffer: mb, decorations, isEqual: false };
+  return { multiBuffer: mb, decorations, isEqual: false, separatorBuffer };
 }
 
 /** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
