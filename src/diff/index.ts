@@ -8,6 +8,25 @@ export type {
   UnifiedDiffMultiBufferResult,
 } from "./multibuffer.ts";
 export { createUnifiedDiffMultiBuffer, HUNK_HEADER_STYLE } from "./multibuffer.ts";
-export type { DiffHunk, DiffKind, DiffLine, DiffResult, HunkHeader } from "./types.ts";
+export type { CreateMultiBufferFromPatchOptions } from "./patch.ts";
+export {
+  createMultiBufferFromPatch,
+  createMultiBuffersFromDiff,
+  parsePatch,
+  resetPatchBufferIdCounter,
+} from "./patch.ts";
+export type {
+  DiffHunk,
+  DiffKind,
+  DiffLine,
+  DiffResult,
+  HunkHeader,
+  ParsedPatch,
+  PatchFile,
+  PatchFileStatus,
+  PatchHunk,
+  PatchLine,
+  PatchMultiBufferResult,
+} from "./types.ts";
 export type { DiffStats, UnifiedDiff, UnifiedDiffLine } from "./unified.ts";
 export { createUnifiedDiff } from "./unified.ts";
