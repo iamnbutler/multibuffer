@@ -22,7 +22,6 @@ import { type BracketMatch, findMatchingBracket } from "./bracket-match.ts";
 import { isWordChar, moveCursor, moveCursorVisual } from "./cursor.ts";
 import {
   collapseSelection,
-  extendSelection,
   isCollapsed,
   selectAll,
   selectionAtPoint,
@@ -1336,14 +1335,18 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       if (!isCollapsed(snap, sel)) {
         const range = resolveAnchorRange(snap, sel.range);
         if (range) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
           minRow = Math.min(minRow, range.start.row) as MultiBufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
           maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
         }
       } else {
         const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
         const resolved = snap.resolveAnchor(headAnchor);
         if (resolved) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
           minRow = Math.min(minRow, resolved.row) as MultiBufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
           maxRow = Math.max(maxRow, resolved.row) as MultiBufferRow;
         }
       }

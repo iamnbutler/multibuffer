@@ -3,19 +3,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Editor } from "../../src/editor/editor.ts";
+import type { Editor } from "../../src/editor/editor.ts";
 import { createSingleBufferEditor } from "../../src/editor/factories.ts";
-import type { MultiBufferPoint, MultiBufferRow, Selection } from "../../src/multibuffer/types.ts";
-
-// Helper to create a point
-function mbPoint(row: number, column: number): MultiBufferPoint {
-  return { row: row as MultiBufferRow, column };
-}
+import { mbPoint, mbRow, num } from "../helpers.ts";
 
 // Helper to get text from editor
 function getText(editor: Editor): string {
   const snap = editor.multiBuffer.snapshot();
-  const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
+  const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
   return lines.join("\n");
 }
 
@@ -62,7 +57,7 @@ describe("Multi-cursor - addCursorAbove/Below", () => {
 
     editor.dispatch({ type: "addCursorBelow" });
     expect(editor.selections.length).toBe(2);
-    expect(editor.cursor.row).toBe(1);
+    expect(num(editor.cursor.row)).toBe(1);
     expect(editor.cursor.column).toBe(1);
   });
 
@@ -75,7 +70,7 @@ describe("Multi-cursor - addCursorAbove/Below", () => {
     expect(editor.selections.length).toBe(2);
     // After merge, selections are sorted by position, so primary (last) is the bottom-most
     // The cursor row should still be at row 1 (the original position, which is now primary after sort)
-    expect(editor.cursor.row).toBe(1);
+    expect(num(editor.cursor.row)).toBe(1);
     expect(editor.cursor.column).toBe(1);
   });
 
@@ -105,7 +100,7 @@ describe("Multi-cursor - clearExtraCursors", () => {
     editor.dispatch({ type: "clearExtraCursors" });
     expect(editor.selections.length).toBe(1);
     // Primary cursor (last added) should be at row 2
-    expect(editor.cursor.row).toBe(2);
+    expect(num(editor.cursor.row)).toBe(2);
   });
 
   test("clearExtraCursors on single cursor is no-op", () => {
