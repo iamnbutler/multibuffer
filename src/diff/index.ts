@@ -1,5 +1,13 @@
 export type { DiffController, DiffControllerOptions } from "./controller.ts";
 export { createDiffController } from "./controller.ts";
+export type { DiffEditorView, DiffEditorViewOptions } from "./diff-editor-view.ts";
+export {
+  createDiffEditorView,
+  createDiffEditorViewFromBuffers,
+  mergeDiffDecorations,
+  resolveDiffReadOnlyOptions,
+  resetDiffEditorViewCounter,
+} from "./diff-editor-view.ts";
 export type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
 export { computeIntralineDiff, diff, diffLines, pairDeleteInsertLines } from "./diff.ts";
 export { formatHunkHeader, hunkToHeader } from "./helpers.ts";
