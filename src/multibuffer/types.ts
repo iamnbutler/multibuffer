@@ -181,6 +181,11 @@ export interface MultiBufferSnapshot {
     startRow: MultiBufferRow,
     endRow: MultiBufferRow,
   ): readonly ExcerptBoundary[];
+  /**
+   * Get the starting row for an excerpt by ID.
+   * Returns undefined if the excerpt doesn't exist or has a stale ID.
+   */
+  rowForExcerpt(excerptId: ExcerptId): MultiBufferRow | undefined;
 }
 
 /**
@@ -266,6 +271,11 @@ export interface MultiBuffer {
     point: BufferPoint,
   ): MultiBufferPoint | undefined;
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
+  /**
+   * Get the starting row for an excerpt by ID.
+   * Returns undefined if the excerpt doesn't exist or has a stale ID.
+   */
+  rowForExcerpt(excerptId: ExcerptId): MultiBufferRow | undefined;
 }
 
 /**

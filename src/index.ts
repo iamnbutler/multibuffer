@@ -4,5 +4,6 @@ export * from "./buffer/index.ts";
 export * from "./diff/index.ts";
 export * from "./editor/index.ts";
 export * from "./multibuffer/index.ts";
+export * from "./navigator/index.ts";
 export * from "./renderer/index.ts";
 export * from "./worker/index.ts";

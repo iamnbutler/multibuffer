@@ -14,7 +14,7 @@
  */
 
 import { resolveAnchorRange } from "../multibuffer/anchor.ts";
-import type { MultiBufferRow } from "../multibuffer/types.ts";
+import type { ExcerptId, MultiBufferRow } from "../multibuffer/types.ts";
 import { createDomRenderer } from "../renderer/dom.ts";
 import type { Decoration, Measurements } from "../renderer/types.ts";
 import type { Editor } from "./editor.ts";
@@ -79,6 +79,19 @@ export interface EditorView {
 
   /** Unmount the renderer and input handler and release all event listeners. */
   destroy(): void;
+
+  /**
+   * Scroll to an excerpt by ID.
+   * Returns false if the excerpt doesn't exist.
+   * @param excerptId - The excerpt to scroll to
+   * @param strategy - Where to position the excerpt ("top" | "center" | "bottom" | "nearest")
+   * @param lineOffset - Optional line offset within the excerpt (0-indexed)
+   */
+  scrollToExcerpt(
+    excerptId: import("../multibuffer/types.ts").ExcerptId,
+    strategy?: "top" | "center" | "bottom" | "nearest",
+    lineOffset?: number,
+  ): boolean;
 }
 
 /**
@@ -218,6 +231,22 @@ class EditorViewImpl implements EditorView {
     this.editor.off("change", this._onEditorChange);
     this.inputHandler?.unmount();
     this.renderer.unmount();
+  }
+
+  scrollToExcerpt(
+    excerptId: ExcerptId,
+    strategy: "top" | "center" | "bottom" | "nearest" = "top",
+    lineOffset = 0,
+  ): boolean {
+    const startRow = this.editor.multiBuffer.rowForExcerpt(excerptId);
+    if (startRow === undefined) {
+      return false;
+    }
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row offset
+    const targetRow = (startRow + lineOffset) as MultiBufferRow;
+    this.renderer.scrollTo({ row: targetRow, strategy });
+    return true;
   }
 
   private _scheduleRender(): void {

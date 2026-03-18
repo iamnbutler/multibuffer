@@ -37,6 +37,10 @@
     "./worker": {
       "import": "./src/worker/index.ts",
       "types": "./src/worker/index.ts"
+    },
+    "./navigator": {
+      "import": "./src/navigator/index.ts",
+      "types": "./src/navigator/index.ts"
     }
   },
   "peerDependencies": {

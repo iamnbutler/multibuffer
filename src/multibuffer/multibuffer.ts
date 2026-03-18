@@ -553,6 +553,12 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     }
     return boundaries;
   }
+
+  rowForExcerpt(excerptId: ExcerptId): MultiBufferRow | undefined {
+    const key = `${excerptId.index}:${excerptId.generation}`;
+    const info = this.excerptInfoIndex.get(key);
+    return info?.startRow;
+  }
 }
 
 let nextMultiBufferVersion = 0;
@@ -1047,6 +1053,14 @@ class MultiBufferImpl implements MultiBuffer {
 
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[] {
     return this.snapshot().lines(startRow, endRow);
+  }
+
+  rowForExcerpt(excerptId: ExcerptId): MultiBufferRow | undefined {
+    this._ensureCache();
+    const info = this._cachedInfos.find(
+      (e) => e.id.index === excerptId.index && e.id.generation === excerptId.generation,
+    );
+    return info?.startRow;
   }
 
   /** Rebuild the cached ExcerptInfo array and line count. Called only by _ensureCache. */
