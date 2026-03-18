@@ -17,6 +17,7 @@ import type {
   Selection,
 } from "../multibuffer/types.ts";
 import { Bias } from "../multibuffer/types.ts";
+import { type BracketMatch, findMatchingBracket } from "./bracket-match.ts";
 import { isWordChar, moveCursor } from "./cursor.ts";
 import {
   collapseSelection,
@@ -25,7 +26,7 @@ import {
   selectAll,
   selectionAtPoint,
 } from "./selection.ts";
-import type { Direction, EditorCommand, EditorOptions, Granularity } from "./types.ts";
+import type { Direction, EditorCommand, EditorEventMap, EditorOptions, Granularity } from "./types.ts";
 
 /** A single atomic edit within one excerpt/buffer. */
 interface EditOp {
@@ -49,7 +50,11 @@ export class Editor {
   readonly multiBuffer: MultiBuffer;
   private _cursor: MultiBufferPoint;
   private _selection: Selection | undefined;
-  private _onChange: (() => void) | null = null;
+  // biome-ignore lint/suspicious/noExplicitAny: expect: event emitter internal storage uses any args for heterogeneous listener sets
+  private _listeners: Map<keyof EditorEventMap, Set<(...args: any[]) => void>> = new Map();
+  /** Incremented on every text mutation — used to detect textChange in dispatch(). */
+  private _textVersion = 0;
+  private _onCustomCommand: ((action: string) => void) | null = null;
   private _undoStack: HistoryEntry[] = [];
   private _redoStack: HistoryEntry[] = [];
   private static readonly _MAX_HISTORY = 100;
@@ -61,10 +66,12 @@ export class Editor {
    */
   private _goalColumn: number | undefined = undefined;
   private _readOnly: boolean;
+  private _bracketMatching: boolean;
 
   constructor(multiBuffer: MultiBuffer, options?: EditorOptions) {
     this.multiBuffer = multiBuffer;
     this._readOnly = options?.readOnly ?? false;
+    this._bracketMatching = options?.bracketMatching ?? false;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     this._cursor = { row: 0 as MultiBufferRow, column: 0 };
     this._selection = selectionAtPoint(multiBuffer, this._cursor);
@@ -78,6 +85,17 @@ export class Editor {
   /** Toggle read-only mode at runtime. */
   setReadOnly(value: boolean): void {
     this._readOnly = value;
+  }
+
+  /**
+   * Returns the matching bracket pair for the character at the current cursor
+   * position, or `null` if no bracket is at the cursor, no match is found, or
+   * bracket matching is disabled (`bracketMatching: false` in EditorOptions).
+   */
+  get bracketMatch(): BracketMatch | null {
+    if (!this._bracketMatching) return null;
+    const snap = this.multiBuffer.snapshot();
+    return findMatchingBracket(snap, this._cursor);
   }
 
   get cursor(): MultiBufferPoint {
@@ -113,9 +131,17 @@ export class Editor {
     this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
     const clipped = snap.clipPoint(point, Bias.Left);
+    const prevCursor = this._cursor;
+    const prevSelection = this._selection;
     this._cursor = clipped;
     this._selection = selectionAtPoint(this.multiBuffer, clipped);
-    this._onChange?.();
+    if (!_pointsEqual(this._cursor, prevCursor)) {
+      this._emit("cursorChange", this._cursor, prevCursor);
+    }
+    if (this._selection !== prevSelection) {
+      this._emit("selectionChange", this._selection);
+    }
+    this._emit("change", { cursor: this._cursor, selection: this._selection });
   }
 
   /** Extend selection from current anchor to a new point (for mouse drag). */
@@ -126,6 +152,8 @@ export class Editor {
       return;
     }
 
+    const prevCursor = this._cursor;
+    const prevSelection = this._selection;
     const snap = this.multiBuffer.snapshot();
     const clipped = snap.clipPoint(point, Bias.Left);
 
@@ -156,7 +184,13 @@ export class Editor {
       );
     }
     this._cursor = clipped;
-    this._onChange?.();
+    if (!_pointsEqual(this._cursor, prevCursor)) {
+      this._emit("cursorChange", this._cursor, prevCursor);
+    }
+    if (this._selection !== prevSelection) {
+      this._emit("selectionChange", this._selection);
+    }
+    this._emit("change", { cursor: this._cursor, selection: this._selection });
   }
 
   /** Select the word at a point (for double-click). */
@@ -217,12 +251,20 @@ export class Editor {
     const endAnchor = this.multiBuffer.createAnchor(endPoint, Bias.Right);
     if (!startAnchor || !endAnchor) return;
 
+    const prevCursor = this._cursor;
+    const prevSelection = this._selection;
     this._selection = createSelection(
       createAnchorRange(startAnchor, endAnchor),
       "end",
     );
     this._cursor = endPoint;
-    this._onChange?.();
+    if (!_pointsEqual(this._cursor, prevCursor)) {
+      this._emit("cursorChange", this._cursor, prevCursor);
+    }
+    if (this._selection !== prevSelection) {
+      this._emit("selectionChange", this._selection);
+    }
+    this._emit("change", { cursor: this._cursor, selection: this._selection });
   }
 
   /** Select the entire line at a point (for triple-click). */
@@ -240,17 +282,48 @@ export class Editor {
     const endAnchor = this.multiBuffer.createAnchor(endPoint, Bias.Right);
     if (!startAnchor || !endAnchor) return;
 
+    const prevCursor = this._cursor;
+    const prevSelection = this._selection;
     this._selection = createSelection(
       createAnchorRange(startAnchor, endAnchor),
       "end",
     );
     this._cursor = endPoint;
-    this._onChange?.();
+    if (!_pointsEqual(this._cursor, prevCursor)) {
+      this._emit("cursorChange", this._cursor, prevCursor);
+    }
+    if (this._selection !== prevSelection) {
+      this._emit("selectionChange", this._selection);
+    }
+    this._emit("change", { cursor: this._cursor, selection: this._selection });
   }
 
-  /** Set a callback to be notified after any state change. */
-  onChange(cb: () => void): void {
-    this._onChange = cb;
+  /** Subscribe to a granular editor event. */
+  on<K extends keyof EditorEventMap>(event: K, cb: (...args: EditorEventMap[K]) => void): void {
+    let set = this._listeners.get(event);
+    if (!set) {
+      set = new Set();
+      this._listeners.set(event, set);
+    }
+    set.add(cb);
+  }
+
+  /** Unsubscribe from a granular editor event. */
+  off<K extends keyof EditorEventMap>(event: K, cb: (...args: EditorEventMap[K]) => void): void {
+    this._listeners.get(event)?.delete(cb);
+  }
+
+  private _emit<K extends keyof EditorEventMap>(event: K, ...args: EditorEventMap[K]): void {
+    const set = this._listeners.get(event);
+    if (!set || set.size === 0) return;
+    // biome-ignore lint/suspicious/noExplicitAny: expect: typed event dispatch requires spreading EditorEventMap[K] tuple
+    // biome-ignore lint/plugin/no-type-assertion: expect: typed event dispatch requires cast to spread args
+    for (const cb of set) (cb as (...a: any[]) => void)(...(args as any[]));
+  }
+
+  /** Set a callback to be notified when a custom command is dispatched. Pass null to remove. */
+  onCustomCommand(cb: ((action: string) => void) | null): void {
+    this._onCustomCommand = cb;
   }
 
   /**
@@ -306,6 +379,9 @@ export class Editor {
     if (this._readOnly && _isEditCommand(command.type)) return;
 
     const snap = this.multiBuffer.snapshot();
+    const prevCursor = this._cursor;
+    const prevSelection = this._selection;
+    const prevTextVersion = this._textVersion;
 
     switch (command.type) {
       case "insertText":
@@ -385,9 +461,23 @@ export class Editor {
         }
         break;
       }
+      case "custom":
+        this._onCustomCommand?.(command.action);
+        return; // no state change, no onChange notification
     }
 
-    this._onChange?.();
+    // Emit granular events based on what actually changed
+    const textChanged = this._textVersion !== prevTextVersion;
+    const newSnap = textChanged ? this.multiBuffer.snapshot() : snap;
+    const cursorChanged = !_pointsEqual(this._cursor, prevCursor);
+    const selectionChanged = this._selection !== prevSelection;
+
+    if (textChanged) this._emit("textChange", newSnap);
+    if (cursorChanged) this._emit("cursorChange", this._cursor, prevCursor);
+    if (selectionChanged) this._emit("selectionChange", this._selection);
+    if (textChanged || cursorChanged || selectionChanged) {
+      this._emit("change", { cursor: this._cursor, selection: this._selection });
+    }
   }
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
@@ -962,6 +1052,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
       this._redoStack = [];
       this.multiBuffer.edit(start, end, newText);
+      this._textVersion++;
       return true;
     }
 
@@ -985,6 +1076,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       }
       this._redoStack = [];
       this.multiBuffer.edit(start, end, newText);
+      this._textVersion++;
       return true;
     }
 
@@ -1013,6 +1105,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.shift();
     }
     this._redoStack = [];
+    this._textVersion++;
     return true;
   }
 
@@ -1102,6 +1195,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       });
       this.multiBuffer.edit(edit.editStart, currentEnd, edit.removedText);
     }
+    this._textVersion++;
 
     const inverse: HistoryEntry = {
       edits: inverseOps,
@@ -1134,6 +1228,11 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLine = lines[lines.length - 1] ?? "";
     return { row: newRow, column: lastLine.length };
   }
+}
+
+/** Returns true if two MultiBufferPoints are at the same row and column. */
+function _pointsEqual(a: MultiBufferPoint, b: MultiBufferPoint): boolean {
+  return a.row === b.row && a.column === b.column;
 }
 
 /**

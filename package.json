@@ -1,6 +1,6 @@
 {
   "name": "multibuffer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Lightweight, high-performance text editor component for TypeScript",
   "module": "src/index.ts",
   "main": "src/index.ts",
@@ -32,7 +32,6 @@
     }
   },
   "type": "module",
-  "private": true,
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",

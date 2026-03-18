@@ -5,10 +5,107 @@
  * Maps keyboard events to EditorCommands.
  */
 
-import type { EditorCommand } from "./types.ts";
+import type { EditorCommand, KeyBinding, Keymap } from "./types.ts";
 
 /** Callback invoked when the input handler produces a command. */
 export type CommandCallback = (command: EditorCommand) => void;
+
+/** Options for the InputHandler constructor. */
+export interface InputHandlerOptions {
+  /** Consumer keymap merged on top of built-in defaults. Consumer bindings win. */
+  keymap?: Keymap;
+}
+
+const _isMac =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
+
+/**
+ * Normalize a KeyboardEvent to a canonical key string.
+ *
+ * Format: `[Mod+][Alt+][Shift+]<key>`
+ * - `Mod` = Cmd on macOS, Ctrl on Windows/Linux
+ * - Single-char keys are normalized to uppercase
+ * - Special keys use their `KeyboardEvent.key` name (`ArrowUp`, `Tab`, etc.)
+ *
+ * @example
+ * normalizeKey(e) // ctrl+s → "Mod+S", shift+ArrowUp → "Shift+ArrowUp"
+ */
+export function normalizeKey(e: KeyboardEvent): string {
+  const mod = _isMac ? e.metaKey : e.ctrlKey;
+  const parts: string[] = [];
+  if (mod) parts.push("Mod");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  parts.push(k);
+  return parts.join("+");
+}
+
+/**
+ * Result of looking up a key (or chord continuation) in a keymap.
+ */
+export interface KeyBindingResult {
+  /** Whether the key was handled by the keymap (either matched or is a chord prefix). */
+  matched: boolean;
+  /**
+   * The resolved binding (if matched):
+   * - `EditorCommand` — execute this command
+   * - `null` — key is disabled (preventDefault, no command)
+   * - `undefined` — key starts a chord (pendingChord will be set)
+   */
+  binding?: KeyBinding;
+  /** Updated pending chord state. null means no chord pending. */
+  pendingChord: string | null;
+}
+
+/**
+ * Pure keymap lookup. Handles chord state transitions.
+ *
+ * @param keymap        - Consumer keymap
+ * @param normalizedKey - Normalized current key string
+ * @param pendingChord  - Active chord prefix, or null
+ * @param chordPrefixes - Set of all single keys that start a chord
+ */
+export function resolveKeyBinding(
+  keymap: Keymap,
+  normalizedKey: string,
+  pendingChord: string | null,
+  chordPrefixes: Set<string>,
+): KeyBindingResult {
+  // If a chord is pending, try completing it first
+  if (pendingChord !== null) {
+    const chordKey = `${pendingChord} ${normalizedKey}`;
+    if (Object.hasOwn(keymap, chordKey)) {
+      return { matched: true, binding: keymap[chordKey], pendingChord: null };
+    }
+    // Wrong second key — reset chord and fall through to default handling
+    return { matched: false, pendingChord: null };
+  }
+
+  // Direct keymap match
+  if (Object.hasOwn(keymap, normalizedKey)) {
+    return { matched: true, binding: keymap[normalizedKey], pendingChord: null };
+  }
+
+  // Chord prefix detection
+  if (chordPrefixes.has(normalizedKey)) {
+    return { matched: true, binding: undefined, pendingChord: normalizedKey };
+  }
+
+  return { matched: false, pendingChord: null };
+}
+
+/** Compute the set of keys that are first-key prefixes of chord bindings. */
+function computeChordPrefixes(keymap: Keymap): Set<string> {
+  const prefixes = new Set<string>();
+  for (const k of Object.keys(keymap)) {
+    const spaceIdx = k.indexOf(" ");
+    if (spaceIdx !== -1) {
+      prefixes.add(k.slice(0, spaceIdx));
+    }
+  }
+  return prefixes;
+}
 
 /**
  * Manages a hidden textarea for text input and maps keyboard events to commands.
@@ -19,9 +116,15 @@ export class InputHandler {
   private _onKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private _onInput: ((e: Event) => void) | null = null;
   private _onPaste: ((e: ClipboardEvent) => void) | null = null;
+  private _keymap: Keymap;
+  private _chordPrefixes: Set<string>;
+  private _pendingChord: string | null = null;
+  private _chordTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(onCommand: CommandCallback) {
+  constructor(onCommand: CommandCallback, options?: InputHandlerOptions) {
     this._onCommand = onCommand;
+    this._keymap = options?.keymap ?? {};
+    this._chordPrefixes = computeChordPrefixes(this._keymap);
   }
 
   mount(container: HTMLElement): void {
@@ -79,7 +182,25 @@ export class InputHandler {
   }
 
   blur(): void {
+    this._clearChord();
     this._textarea?.blur();
+  }
+
+  private _clearChord(): void {
+    this._pendingChord = null;
+    if (this._chordTimeoutId !== null) {
+      clearTimeout(this._chordTimeoutId);
+      this._chordTimeoutId = null;
+    }
+  }
+
+  private _startChord(key: string): void {
+    this._pendingChord = key;
+    if (this._chordTimeoutId !== null) clearTimeout(this._chordTimeoutId);
+    this._chordTimeoutId = setTimeout(() => {
+      this._pendingChord = null;
+      this._chordTimeoutId = null;
+    }, 1500);
   }
 
   get hasFocus(): boolean {
@@ -87,6 +208,35 @@ export class InputHandler {
   }
 
   private _handleKeyDown(e: KeyboardEvent): void {
+    const normalized = normalizeKey(e);
+    const result = resolveKeyBinding(
+      this._keymap,
+      normalized,
+      this._pendingChord,
+      this._chordPrefixes,
+    );
+
+    if (result.pendingChord !== null) {
+      // Starting a chord — update state and swallow the key
+      this._startChord(result.pendingChord);
+      e.preventDefault();
+      return;
+    }
+
+    // Clear chord state after any key (whether chord completed or reset)
+    if (this._pendingChord !== null) this._clearChord();
+
+    if (result.matched) {
+      e.preventDefault();
+      if (result.binding !== undefined && result.binding !== null) {
+        this._onCommand(result.binding);
+        if (this._textarea) this._textarea.value = "";
+      }
+      // binding === null means disabled — preventDefault already done, no command
+      return;
+    }
+
+    // Fall through to built-in default bindings
     const cmd = keyEventToCommand(e);
     if (cmd) {
       e.preventDefault();
@@ -116,14 +266,11 @@ export class InputHandler {
   }
 }
 
-const isMac =
-  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
-
 /**
  * Map a keyboard event to an EditorCommand, or undefined if not handled.
  */
 export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
-  const mod = isMac ? e.metaKey : e.ctrlKey;
+  const mod = _isMac ? e.metaKey : e.ctrlKey;
   const alt = e.altKey;
   const shift = e.shiftKey;
 
