@@ -10,6 +10,7 @@ import type {
   Excerpt,
   ExcerptId,
   ExcerptInfo,
+  ExcerptMetadata,
   ExcerptRange,
   MultiBufferRow,
   TextSummary,
@@ -91,6 +92,7 @@ export function createExcerpt(
   range: ExcerptRange,
   hasTrailingNewline: boolean,
   editable = true,
+  metadata?: ExcerptMetadata,
 ): Excerpt {
   const endRow = range.context.end.row;
   if (endRow > buffer.lineCount) {
@@ -107,6 +109,7 @@ export function createExcerpt(
     hasTrailingNewline,
     editable,
     textSummary: computeExcerptSummary(buffer, range),
+    metadata,
   };
 }
 
@@ -129,6 +132,7 @@ export function toExcerptInfo(
     endRow,
     hasTrailingNewline: excerpt.hasTrailingNewline,
     editable: excerpt.editable,
+    metadata: excerpt.metadata,
   };
 }
 
