@@ -20,15 +20,24 @@ import type { Decoration, Measurements } from "../renderer/types.ts";
 import type { Editor } from "./editor.ts";
 import { createSingleBufferEditor } from "./factories.ts";
 import { InputHandler } from "./input-handler.ts";
-import type { EditorOptions } from "./types.ts";
+import type { EditorOptions, Keymap } from "./types.ts";
 
 /** CSS variable name → value map for theming the editor chrome and syntax. */
-export type Theme = Record<string, string>;
+export type ThemeVars = Record<string, string>;
 
 /** Options for createEditorView. */
 export interface EditorViewOptions extends EditorOptions {
   /** Custom measurements. Defaults: lineHeight=20, gutterWidth=48. */
   measurements?: Partial<Measurements>;
+  /**
+   * Consumer keymap merged on top of built-in defaults. Consumer wins.
+   * Use `null` to disable a binding; spaces separate chord keys.
+   */
+  keymap?: Keymap;
+  /**
+   * Called when a `{ type: 'custom', action }` command fires from the keymap.
+   */
+  onCustomCommand?: (action: string) => void;
 }
 
 /** The EditorView facade — bundles Editor, DomRenderer, and InputHandler. */
@@ -51,7 +60,7 @@ export interface EditorView {
    * Keys are CSS variable names (e.g. `--editor-cursor`). Use `GRUVBOX_THEME`
    * or `THEME_CSS_VARIABLES` as references.
    */
-  setTheme(theme: Theme): void;
+  setTheme(theme: ThemeVars): void;
 
   /** Unmount the renderer and input handler and release all event listeners. */
   destroy(): void;
@@ -77,6 +86,7 @@ class EditorViewImpl implements EditorView {
   private _container: HTMLElement;
   private _decorations = new Map<string, Decoration[]>();
   private _rafId: number | null = null;
+  private _onEditorChange = () => this._scheduleRender();
 
   constructor(container: HTMLElement, text: string, options?: EditorViewOptions) {
     this._container = container;
@@ -90,16 +100,23 @@ class EditorViewImpl implements EditorView {
 
     this.editor = createSingleBufferEditor(text, options);
     this.renderer = createDomRenderer(measurements);
-    this.inputHandler = new InputHandler((cmd) => {
-      // Intercept copy/cut to populate the clipboard before the state update
-      if (cmd.type === "copy" || cmd.type === "cut") {
-        const selected = this.editor.getSelectedText();
-        if (selected && typeof navigator !== "undefined") {
-          navigator.clipboard?.writeText(selected);
+    this.inputHandler = new InputHandler(
+      (cmd) => {
+        // Intercept copy/cut to populate the clipboard before the state update
+        if (cmd.type === "copy" || cmd.type === "cut") {
+          const selected = this.editor.getSelectedText();
+          if (selected && typeof navigator !== "undefined") {
+            navigator.clipboard?.writeText(selected);
+          }
         }
-      }
-      this.editor.dispatch(cmd);
-    });
+        this.editor.dispatch(cmd);
+      },
+      { keymap: options?.keymap },
+    );
+
+    if (options?.onCustomCommand) {
+      this.editor.onCustomCommand(options.onCustomCommand);
+    }
 
     // Mount renderer and input handler into the container
     this.renderer.mount(container);
@@ -123,7 +140,7 @@ class EditorViewImpl implements EditorView {
     // Wire editor state changes → deferred render
     const initialSnap = this.editor.multiBuffer.snapshot();
     this.renderer.setSnapshot(initialSnap);
-    this.editor.onChange(() => this._scheduleRender());
+    this.editor.on("change", this._onEditorChange);
 
     // Initial render
     this._render();
@@ -138,7 +155,7 @@ class EditorViewImpl implements EditorView {
     this._scheduleRender();
   }
 
-  setTheme(theme: Theme): void {
+  setTheme(theme: ThemeVars): void {
     for (const [key, value] of Object.entries(theme)) {
       this._container.style.setProperty(key, value);
     }
@@ -149,8 +166,7 @@ class EditorViewImpl implements EditorView {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-    // Detach the onChange listener by replacing it with a no-op
-    this.editor.onChange(() => {});
+    this.editor.off("change", this._onEditorChange);
     this.inputHandler.unmount();
     this.renderer.unmount();
   }

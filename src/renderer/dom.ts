@@ -13,14 +13,38 @@ import {
   createViewport,
   yToVisualRow,
 } from "./measurement.ts";
-import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Viewport } from "./types.ts";
+import { themeToVars } from "./theme.ts";
+import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Theme, Viewport } from "./types.ts";
 import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
 
-/** Slice tokens to a column range, adjusting offsets to be segment-relative. */
-function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
+/**
+ * Slice tokens to a column range, adjusting offsets to be segment-relative.
+ *
+ * Tokens must be sorted by startColumn (guaranteed by the highlighter).
+ * Binary-searches for the first token whose endColumn > segStart, then scans
+ * forward until startColumn >= segEnd — O(log n + k) instead of O(n).
+ *
+ * Exported for unit testing.
+ */
+export function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
+  // Binary search: find the first token with endColumn > segStart.
+  let lo = 0;
+  let hi = tokens.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    // biome-ignore lint/style/noNonNullAssertion: expect: mid is always a valid in-bounds index
+    if (tokens[mid]!.endColumn <= segStart) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
   const result: Token[] = [];
-  for (const t of tokens) {
-    if (t.endColumn <= segStart || t.startColumn >= segEnd) continue;
+  for (let i = lo; i < tokens.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: expect: i is always a valid in-bounds index
+    const t = tokens[i]!;
+    if (t.startColumn >= segEnd) break;
     result.push({
       startColumn: Math.max(0, t.startColumn - segStart),
       endColumn: Math.min(segEnd - segStart, t.endColumn - segStart),
@@ -41,7 +65,126 @@ interface RowElement {
   sign?: HTMLSpanElement;
 }
 
+interface SelectionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Compute the set of axis-aligned highlight rects for a selection range.
+ * Pure function — no DOM side-effects. Used by renderSelection() and tests.
+ *
+ * @param selStart - Selection start (may be after selEnd; normalized internally)
+ * @param selEnd   - Selection end
+ * @param snapshot - Multibuffer snapshot (may be null → returns [])
+ * @param lineHeight - Visual line height in pixels
+ * @param charWidth  - Character width in pixels
+ * @param gutterWidth - Gutter width in pixels
+ * @param wrapWidth  - Wrap width in visual columns (0 = no wrap)
+ * @param wrapMap    - Pre-built WrapMap for the snapshot (null if no wrapping)
+ */
+export function computeSelectionRects(
+  selStart: MultiBufferPoint,
+  selEnd: MultiBufferPoint,
+  snapshot: MultiBufferSnapshot | null,
+  lineHeight: number,
+  charWidth: number,
+  gutterWidth: number,
+  wrapWidth: number,
+  wrapMap: WrapMap | null,
+): SelectionRect[] {
+  if (!snapshot) return [];
+  if (selStart.row === selEnd.row && selStart.column === selEnd.column) return [];
+
+  // Normalize: ensure start ≤ end
+  let start = selStart;
+  let end = selEnd;
+  if (
+    start.row > end.row ||
+    (start.row === end.row && start.column > end.column)
+  ) {
+    start = selEnd;
+    end = selStart;
+  }
+
+  const rects: SelectionRect[] = [];
+
+  for (let r = start.row; r <= end.row; r++) {
+    const visualRowBase = wrapMap
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      ? wrapMap.bufferRowToFirstVisualRow(r as MultiBufferRow)
+      : r;
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const nextRow = Math.min(r + 1, snapshot.lineCount) as MultiBufferRow;
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const lineTextArr = snapshot.lines(r as MultiBufferRow, nextRow);
+    const lineTextStr = lineTextArr[0] ?? "";
+    const lineLen = lineTextStr.length;
+
+    const startCharCol = r === start.row ? start.column : 0;
+    const endCharCol = r === end.row ? end.column : lineLen + 1;
+
+    if (wrapWidth > 0) {
+      const segments = wrapLine(lineTextStr, wrapWidth);
+      let charOffset = 0;
+      for (let s = 0; s < segments.length; s++) {
+        const segText = segments[s] ?? "";
+        const segCharStart = charOffset;
+        const segCharEnd = charOffset + segText.length;
+        charOffset = segCharEnd;
+
+        if (startCharCol >= segCharEnd) continue;
+        if (endCharCol <= segCharStart) continue;
+
+        const segSelCharStart = Math.max(startCharCol, segCharStart) - segCharStart;
+        const segSelCharEnd = Math.min(endCharCol, segCharEnd) - segCharStart;
+
+        const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
+        let segEndVisualCol: number;
+        if (endCharCol > lineLen && s === segments.length - 1) {
+          segEndVisualCol = visualWidth(segText) + 0.3;
+        } else {
+          segEndVisualCol = charColToVisualCol(
+            segText,
+            Math.min(segSelCharEnd, segText.length),
+          );
+        }
+
+        rects.push({
+          x: gutterWidth + segStartVisualCol * charWidth,
+          y: (visualRowBase + s) * lineHeight,
+          width: Math.max(0, segEndVisualCol - segStartVisualCol) * charWidth,
+          height: lineHeight,
+        });
+      }
+    } else {
+      const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
+      const endVisualCol =
+        endCharCol > lineTextStr.length
+          ? visualWidth(lineTextStr) + 0.3
+          : charColToVisualCol(lineTextStr, endCharCol);
+
+      rects.push({
+        x: gutterWidth + startVisualCol * charWidth,
+        y: visualRowBase * lineHeight,
+        width: Math.max(0, endVisualCol - startVisualCol) * charWidth,
+        height: lineHeight,
+      });
+    }
+  }
+
+  return rects;
+}
+
 export class DomRenderer implements Renderer {
+  /** Documents above this line count use lazy WrapMap construction. */
+  static readonly LAZY_WRAP_THRESHOLD = 5000;
+  /** Number of buffer rows to compute per animation frame when completing a lazy WrapMap. */
+  static readonly WRAP_CHUNK_SIZE = 2000;
+
   private _container: HTMLElement | null = null;
   private _scrollContainer: HTMLDivElement | null = null;
   private _spacer: HTMLDivElement | null = null;
@@ -51,9 +194,11 @@ export class DomRenderer implements Renderer {
   private _blinkStyle: HTMLStyleElement | null = null;
   private _measurements: Measurements;
   private _rowPool: RowElement[] = [];
+  private _selectionPool: HTMLDivElement[] = [];
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
   private _wrapMap: WrapMap | null = null;
+  private _wrapBuildFrame: number | null = null;
   /** Snapshot version used to build the current _wrapMap (cache key). */
   private _wrapMapSnapshotVersion = -1;
   /** Wrap width used to build the current _wrapMap (cache key). */
@@ -72,6 +217,7 @@ export class DomRenderer implements Renderer {
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
+  private _theme: Partial<Theme> | null = null;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -105,6 +251,11 @@ export class DomRenderer implements Renderer {
 
   mount(container: HTMLElement): void {
     this._container = container;
+
+    // Apply initial theme if one was set before mount
+    if (this._theme) {
+      this._applyThemeVars(container, this._theme);
+    }
 
     // Measure actual character width from the font
     this._charWidth = this._measureCharWidth(container);
@@ -157,6 +308,10 @@ export class DomRenderer implements Renderer {
   }
 
   unmount(): void {
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
     if (this._scrollContainer) {
       if (this._onScroll) this._scrollContainer.removeEventListener("scroll", this._onScroll);
       if (this._onClick) this._scrollContainer.removeEventListener("mousedown", this._onClick);
@@ -177,6 +332,7 @@ export class DomRenderer implements Renderer {
     this._selectionLayer = null;
     this._blinkStyle = null;
     this._rowPool = [];
+    this._selectionPool = [];
     this._snapshot = null;
     this._wrapMap = null;
     this._wrapMapSnapshotVersion = -1;
@@ -194,10 +350,25 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  setTheme(theme: Partial<Theme>): void {
+    this._theme = { ...this._theme, ...theme };
+    if (this._container) {
+      this._applyThemeVars(this._container, theme);
+    }
+  }
+
+  private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
+    const vars = themeToVars(theme);
+    for (const [cssVar, value] of Object.entries(vars)) {
+      container.style.setProperty(cssVar, value);
+    }
+  }
+
   setSnapshot(snapshot: MultiBufferSnapshot): void {
     this._snapshot = snapshot;
     const wrapWidth = this._measurements.wrapWidth ?? 0;
     // Reuse the existing WrapMap if the snapshot version and wrap width are unchanged.
+    // This prevents cancelling the lazy WrapMap async completion on every keystroke.
     if (
       this._wrapMap !== null &&
       snapshot.version === this._wrapMapSnapshotVersion &&
@@ -414,15 +585,16 @@ export class DomRenderer implements Renderer {
 
     if (this._wrapMap) {
       const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
-      const wrapWidth = this._measurements.wrapWidth ?? 0;
       const lineText = this._getLineText(mbRow);
-      const segments = wrapLine(lineText, wrapWidth);
-      // Compute char offset of this segment by summing prior segment lengths
-      let charOffset = 0;
-      for (let s = 0; s < segment; s++) {
-        charOffset += segments[s]?.length ?? 0;
-      }
-      const segText = segments[segment] ?? "";
+      // Use cached segment char-start offsets — avoids wrapLine() O(n) recomputation
+      // on every mouse-move event.
+      const charOffset = this._wrapMap.segmentCharStart(mbRow, segment);
+      const nextSeg = segment + 1;
+      const segEnd =
+        nextSeg < this._wrapMap.visualRowsForLine(mbRow)
+          ? this._wrapMap.segmentCharStart(mbRow, nextSeg)
+          : lineText.length;
+      const segText = lineText.slice(charOffset, segEnd);
       const charColInSeg = visualColToCharCol(segText, visualColInSegment);
       return { row: mbRow, column: charOffset + charColInSeg };
     }
@@ -492,7 +664,57 @@ export class DomRenderer implements Renderer {
     }
     this._wrapMapSnapshotVersion = snapshot.version;
     this._wrapMapWrapWidth = wrapWidth;
+
+    // Cancel any pending animation frame from a previous snapshot
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
+
+    const useLazy =
+      snapshot.lineCount > DomRenderer.LAZY_WRAP_THRESHOLD &&
+      typeof requestAnimationFrame !== "undefined";
+
+    if (useLazy) {
+      const wrapMap = new WrapMap(snapshot, wrapWidth, { lazy: true });
+      this._scheduleWrapCompletion(wrapMap);
+      return wrapMap;
+    }
+
     return new WrapMap(snapshot, wrapWidth);
+  }
+
+  /**
+   * Incrementally compute the full WrapMap across animation frames.
+   * Each frame processes WRAP_CHUNK_SIZE rows. When complete, the spacer
+   * height is updated to reflect the exact content height.
+   */
+  private _scheduleWrapCompletion(wrapMap: WrapMap): void {
+    this._wrapBuildFrame = requestAnimationFrame(() => {
+      // If the wrapMap was replaced by a newer snapshot, bail out
+      if (this._wrapMap !== wrapMap) {
+        this._wrapBuildFrame = null;
+        return;
+      }
+
+      const complete = wrapMap.computeChunk(DomRenderer.WRAP_CHUNK_SIZE);
+
+      if (complete) {
+        this._wrapBuildFrame = null;
+        // Update spacer height with exact content height
+        if (this._spacer && this._snapshot) {
+          const contentHeight = calculateContentHeight(
+            this._snapshot.lineCount,
+            this._measurements.lineHeight,
+            wrapMap,
+          );
+          this._spacer.style.height = `${contentHeight}px`;
+        }
+      } else {
+        // Schedule next frame
+        this._scheduleWrapCompletion(wrapMap);
+      }
+    });
   }
 
   /**
@@ -667,6 +889,15 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  private _ensureSelectionPool(count: number): void {
+    while (this._selectionPool.length < count) {
+      const el = document.createElement("div");
+      el.style.cssText = "position:absolute;display:none;";
+      this._selectionLayer?.appendChild(el);
+      this._selectionPool.push(el);
+    }
+  }
+
   /** Register a callback for single click (cursor placement). */
   onClickPosition(cb: (point: MultiBufferPoint) => void): void {
     this._onClickCallback = cb;
@@ -707,20 +938,23 @@ export class DomRenderer implements Renderer {
     const lineText = this._getLineText(point.row);
     let displayRow = visualRow;
     let displayVisualCol: number;
-    if (wrapWidth > 0) {
-      const segments = wrapLine(lineText, wrapWidth);
-      // Find which segment contains this char index
-      let charOffset = 0;
+    if (wrapWidth > 0 && this._wrapMap) {
+      // Use cached segment char-start offsets — avoids wrapLine() recomputation
+      // on every cursor repaint (called after every keypress and mouse click).
+      const wm = this._wrapMap;
+      const totalSegs = wm.visualRowsForLine(point.row);
       let segIdx = 0;
-      for (let s = 0; s < segments.length - 1; s++) {
-        const segLen = segments[s]?.length ?? 0;
-        if (charOffset + segLen > point.column) break;
-        charOffset += segLen;
-        segIdx = s + 1;
+      for (let s = 1; s < totalSegs; s++) {
+        if (wm.segmentCharStart(point.row, s) > point.column) break;
+        segIdx = s;
       }
       displayRow = visualRow + segIdx;
-      const segText = segments[segIdx] ?? "";
-      displayVisualCol = charColToVisualCol(segText, point.column - charOffset);
+      const charOffset = wm.segmentCharStart(point.row, segIdx);
+      const segEnd =
+        segIdx + 1 < totalSegs
+          ? wm.segmentCharStart(point.row, segIdx + 1)
+          : lineText.length;
+      displayVisualCol = charColToVisualCol(lineText.slice(charOffset, segEnd), point.column - charOffset);
     } else {
       displayVisualCol = charColToVisualCol(lineText, point.column);
     }
@@ -753,94 +987,35 @@ export class DomRenderer implements Renderer {
   ): void {
     if (!this._selectionLayer) return;
 
-    // Clear old selection highlights
-    this._selectionLayer.textContent = "";
-
-    if (!start || !end) return;
-    if (start.row === end.row && start.column === end.column) return;
-
-    const { lineHeight } = this._measurements;
-    const gutterWidth = this._getEffectiveGutterWidth();
-    const charWidth = this._charWidth;
-
-    // Ensure start is before end
-    let selStart = start;
-    let selEnd = end;
-    if (start.row > end.row || (start.row === end.row && start.column > end.column)) {
-      selStart = end;
-      selEnd = start;
+    // Hide all pooled highlight elements — reuse them below instead of
+    // destroying and re-creating on every frame.
+    for (const el of this._selectionPool) {
+      el.style.display = "none";
     }
 
-    for (let row = selStart.row; row <= selEnd.row; row++) {
-      const visualRowBase = this._wrapMap
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-        ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
-        : row;
+    if (!start || !end) return;
 
-      // Get line length for this row
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const nextRow = Math.min(row + 1, this._snapshot?.lineCount ?? 0) as MultiBufferRow;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const lineText = this._snapshot?.lines(row as MultiBufferRow, nextRow);
-      const lineLen = lineText?.[0]?.length ?? 0;
+    const rects = computeSelectionRects(
+      start,
+      end,
+      this._snapshot,
+      this._measurements.lineHeight,
+      this._charWidth,
+      this._getEffectiveGutterWidth(),
+      this._measurements.wrapWidth ?? 0,
+      this._wrapMap,
+    );
 
-      const startCharCol = row === selStart.row ? selStart.column : 0;
-      const endCharCol = row === selEnd.row ? selEnd.column : lineLen + 1;
-      const lineTextStr = lineText?.[0] ?? "";
-      const wrapWidth = this._measurements.wrapWidth ?? 0;
+    if (rects.length === 0) return;
 
-      if (wrapWidth > 0) {
-        // Emit one highlight rect per wrap segment that the selection overlaps.
-        const segments = wrapLine(lineTextStr, wrapWidth);
-        let charOffset = 0;
-        for (let s = 0; s < segments.length; s++) {
-          const segText = segments[s] ?? "";
-          const segCharStart = charOffset;
-          const segCharEnd = charOffset + segText.length;
-          charOffset = segCharEnd;
+    this._ensureSelectionPool(rects.length);
 
-          // Skip segments fully outside [startCharCol, endCharCol)
-          if (startCharCol >= segCharEnd) continue;
-          if (endCharCol <= segCharStart) continue;
-
-          const segSelCharStart = Math.max(startCharCol, segCharStart) - segCharStart;
-          const segSelCharEnd = Math.min(endCharCol, segCharEnd) - segCharStart;
-
-          const segStartVisualCol = charColToVisualCol(segText, segSelCharStart);
-          let segEndVisualCol: number;
-          if (endCharCol > lineLen && s === segments.length - 1) {
-            // Row-spanning selection: extend slightly past end to indicate newline
-            segEndVisualCol = visualWidth(segText) + 0.3;
-          } else {
-            segEndVisualCol = charColToVisualCol(segText, Math.min(segSelCharEnd, segText.length));
-          }
-
-          const x = gutterWidth + segStartVisualCol * charWidth;
-          const width = Math.max(0, segEndVisualCol - segStartVisualCol) * charWidth;
-          const y = (visualRowBase + s) * lineHeight;
-
-          const highlight = document.createElement("div");
-          highlight.style.cssText =
-            `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-          this._selectionLayer.appendChild(highlight);
-        }
-      } else {
-        // Non-wrapped path
-        const startVisualCol = charColToVisualCol(lineTextStr, startCharCol);
-        const endVisualCol =
-          endCharCol > lineTextStr.length
-            ? visualWidth(lineTextStr) + 0.3 // Small extension for newline indicator
-            : charColToVisualCol(lineTextStr, endCharCol);
-
-        const x = gutterWidth + startVisualCol * charWidth;
-        const width = Math.max(0, endVisualCol - startVisualCol) * charWidth;
-        const y = visualRowBase * lineHeight;
-
-        const highlight = document.createElement("div");
-        highlight.style.cssText =
-          `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${lineHeight}px;`;
-        this._selectionLayer.appendChild(highlight);
-      }
+    for (let i = 0; i < rects.length; i++) {
+      const { x, y, width, height } = rects[i] ?? { x: 0, y: 0, width: 0, height: 0 };
+      const el = this._selectionPool[i];
+      if (!el) continue;
+      el.style.cssText =
+        `position:absolute;background:var(--editor-selection, rgba(214,153,46,0.25));top:${y}px;left:${x}px;width:${width}px;height:${height}px;`;
     }
   }
 
@@ -884,6 +1059,10 @@ export class DomRenderer implements Renderer {
   }
 }
 
-export function createDomRenderer(measurements: Measurements): DomRenderer {
-  return new DomRenderer(measurements);
+export function createDomRenderer(measurements: Measurements, theme?: Partial<Theme>): DomRenderer {
+  const renderer = new DomRenderer(measurements);
+  if (theme) {
+    renderer.setTheme(theme);
+  }
+  return renderer;
 }

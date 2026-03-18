@@ -37,6 +37,8 @@ interface BufferParse {
   tree: Tree;
   injections: Map<string, Tree>; // language -> tree for injected content
   injectionRanges: InjectionRange[];
+  /** Row → injection range index for O(1) lookup in getLineTokens(). */
+  rowIndex: Map<number, InjectionRange>;
 }
 
 /**
@@ -148,6 +150,15 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     // Find injection ranges
     const injectionRanges = this._findInjectionRanges(tree.rootNode, text);
 
+    // Build row → injection range index for O(1) lookup in getLineTokens().
+    // Cost: O(total injected rows), paid once per parse.
+    const rowIndex = new Map<number, InjectionRange>();
+    for (const range of injectionRanges) {
+      for (let row = range.startRow; row <= range.endRow; row++) {
+        rowIndex.set(row, range);
+      }
+    }
+
     // Parse injected content
     const injections = new Map<string, Tree>();
     for (const range of injectionRanges) {
@@ -162,12 +173,12 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       }
     }
 
-    this._bufferParses.set(bufferId, { tree, injections, injectionRanges });
+    this._bufferParses.set(bufferId, { tree, injections, injectionRanges, rowIndex });
   }
 
   /**
    * Get syntax tokens for a specific line of a buffer.
-   * Returns tokens sorted by startColumn with pre-resolved colors.
+   * Returns tokens in startColumn order (guaranteed by depth-first tree traversal).
    */
   getLineTokens(bufferId: string, row: number): Token[] {
     const parse = this._bufferParses.get(bufferId);
@@ -175,10 +186,8 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     const tokens: Token[] = [];
 
-    // Check if this row is inside an injection range
-    const activeInjection = parse.injectionRanges.find(
-      (r) => row >= r.startRow && row <= r.endRow,
-    );
+    // O(1) lookup via pre-built row index (built in parseBuffer).
+    const activeInjection = parse.rowIndex.get(row);
 
     if (activeInjection) {
       // Get tokens from injected language
@@ -201,7 +210,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       );
     }
 
-    tokens.sort((a, b) => a.startColumn - b.startColumn);
     return tokens;
   }
 

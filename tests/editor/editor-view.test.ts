@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type EditorViewOptions,
   mergeDecorations,
-  type Theme,
+  type ThemeVars,
 } from "../../src/editor/editor-view.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import type { Decoration } from "../../src/renderer/types.ts";
@@ -95,9 +95,9 @@ describe("EditorViewOptions", () => {
 
 // ── Theme type check ────────────────────────────────────────────────────────
 
-describe("Theme type", () => {
-  test("Theme is a Record<string, string>", () => {
-    const theme: Theme = {
+describe("ThemeVars type", () => {
+  test("ThemeVars is a Record<string, string>", () => {
+    const theme: ThemeVars = {
       "--editor-cursor": "#ebdbb2",
       "--editor-selection": "rgba(214,153,46,0.25)",
     };

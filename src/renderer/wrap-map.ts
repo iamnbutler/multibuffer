@@ -173,15 +173,30 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
  * Equivalent to `wrapLine(text, wrapWidth).length` but avoids building the
  * intermediate `string[]`, eliminating O(segments) slice allocations per line.
  * Used in WrapMap construction where only the count is needed.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) to avoid the iterator
+ * protocol and codePointAt overhead for typical programming text — consistent
+ * with the approach used in visualWidth, wrapLine, and charColToVisualCol.
+ * This also eliminates the separate visualWidth() pre-check, reducing the
+ * common case from two O(n) passes to one.
  */
 export function wrapLineCount(text: string, wrapWidth: number): number {
-  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
-    return 1;
-  }
+  if (wrapWidth <= 0) return 1;
   let count = 1;
   let segVW = 0;
-  for (const char of text) {
-    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    if (c <= 0x7f) {
+      cw = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // High surrogate: decode the full code point from the surrogate pair.
+      const low = text.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+    } else {
+      cw = codePointWidth(c);
+    }
     if (segVW + cw > wrapWidth && segVW > 0) {
       count++;
       segVW = cw;
@@ -192,37 +207,115 @@ export function wrapLineCount(text: string, wrapWidth: number): number {
   return count;
 }
 
+export interface WrapMapOptions {
+  lazy?: boolean;
+}
+
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
+  /**
+   * Flat array of segment char-start offsets, indexed by visual-row index.
+   * For buffer row r and segment s: `charStart = _segCharStart[_prefix[r] + s]`.
+   *
+   * Enables O(1) lookup of a segment's character offset within its line,
+   * eliminating `wrapLine()` recomputation in the hit-test and cursor hot paths.
+   */
+  private _segCharStart: Uint32Array;
   private _wrapWidth: number;
-  readonly totalVisualRows: number;
+  private _snapshot: MultiBufferSnapshot;
+  private _lineCount: number;
+  private _computedUpTo: number;
 
-  constructor(snapshot: MultiBufferSnapshot, wrapWidth: number) {
+  constructor(snapshot: MultiBufferSnapshot, wrapWidth: number, options?: WrapMapOptions) {
     this._wrapWidth = wrapWidth;
-    const lineCount = snapshot.lineCount;
+    this._snapshot = snapshot;
+    this._lineCount = snapshot.lineCount;
 
-    // Build prefix sum
-    this._prefix = new Uint32Array(lineCount + 1);
+    // Allocate prefix sum array and segment char-start offsets.
+    this._prefix = new Uint32Array(this._lineCount + 1);
+    this._segCharStart = new Uint32Array(0);
     this._prefix[0] = 0;
+    this._computedUpTo = 0;
+
+    if (!options?.lazy) {
+      // Eager mode: compute everything now (original behavior)
+      this._ensureComputedUpTo(this._lineCount);
+    }
+  }
+
+  /** Lazily compute wrap counts for rows [_computedUpTo, endRow). */
+  private _ensureComputedUpTo(endRow: number): void {
+    if (endRow <= this._computedUpTo) return;
+    const target = Math.min(endRow, this._lineCount);
+    if (target <= this._computedUpTo) return;
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for iteration
-    const startRow = 0 as MultiBufferRow;
+    const startRow = this._computedUpTo as MultiBufferRow;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for iteration
-    const endRow = lineCount as MultiBufferRow;
-    const lines = snapshot.lines(startRow, endRow);
+    const endRowBranded = target as MultiBufferRow;
+    const lines = this._snapshot.lines(startRow, endRowBranded);
 
-    for (let i = 0; i < lineCount; i++) {
+    // Build prefix sums and collect segment char-start offsets for the new rows.
+    const segCharStartArr: number[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLineCount(line, wrapWidth);
-      this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
+      const segments = wrapLine(line, this._wrapWidth);
+      const rowIdx = this._computedUpTo + i;
+      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + segments.length;
+      let charPos = 0;
+      for (const seg of segments) {
+        segCharStartArr.push(charPos);
+        charPos += seg.length;
+      }
     }
 
-    this.totalVisualRows = this._prefix[lineCount] ?? 0;
+    // Append new segment offsets to the existing _segCharStart array.
+    if (segCharStartArr.length > 0) {
+      const prev = this._segCharStart;
+      const merged = new Uint32Array(prev.length + segCharStartArr.length);
+      merged.set(prev);
+      for (let j = 0; j < segCharStartArr.length; j++) {
+        merged[prev.length + j] = segCharStartArr[j] ?? 0;
+      }
+      this._segCharStart = merged;
+    }
+
+    this._computedUpTo = target;
+  }
+
+  /**
+   * Total visual rows. When lazy and not fully computed, returns an estimate:
+   * computed visual rows + 1 per remaining buffer row.
+   */
+  get totalVisualRows(): number {
+    if (this._computedUpTo >= this._lineCount) {
+      return this._prefix[this._lineCount] ?? 0;
+    }
+    // Estimate: computed rows so far + 1 visual row per remaining buffer row
+    const computedVisualRows = this._prefix[this._computedUpTo] ?? 0;
+    const remainingRows = this._lineCount - this._computedUpTo;
+    return computedVisualRows + remainingRows;
+  }
+
+  /** Whether all rows have been computed. */
+  get isComplete(): boolean {
+    return this._computedUpTo >= this._lineCount;
+  }
+
+  /**
+   * Process up to `chunkSize` more rows. Returns true when all rows are computed.
+   */
+  computeChunk(chunkSize: number): boolean {
+    const target = Math.min(this._computedUpTo + chunkSize, this._lineCount);
+    this._ensureComputedUpTo(target);
+    return this.isComplete;
   }
 
   /** How many visual rows does a buffer row occupy? */
   visualRowsForLine(mbRow: MultiBufferRow): number {
+    this._ensureComputedUpTo(mbRow + 1);
     const next = this._prefix[mbRow + 1];
     const curr = this._prefix[mbRow];
     if (next === undefined || curr === undefined) return 1;
@@ -231,14 +324,27 @@ export class WrapMap {
 
   /** First visual row for a given buffer row. O(1). */
   bufferRowToFirstVisualRow(mbRow: MultiBufferRow): number {
+    this._ensureComputedUpTo(mbRow + 1);
     return this._prefix[mbRow] ?? 0;
   }
 
   /** Convert a visual row to { buffer row, segment index }. O(log n). */
   visualRowToBufferRow(visualRow: number): { mbRow: MultiBufferRow; segment: number } {
-    // Binary search: find largest i where prefix[i] <= visualRow
+    // If not fully computed, compute in chunks until we cover the target visual row
+    if (this._computedUpTo < this._lineCount) {
+      const CHUNK_SIZE = 1000;
+      while (this._computedUpTo < this._lineCount) {
+        const computedVisualRows = this._prefix[this._computedUpTo] ?? 0;
+        if (computedVisualRows > visualRow) break;
+        this._ensureComputedUpTo(this._computedUpTo + CHUNK_SIZE);
+      }
+    }
+
+    // Binary search over the computed portion: find largest i where prefix[i] <= visualRow
+    const searchEnd = this._computedUpTo;
     let lo = 0;
-    let hi = this._prefix.length - 2; // last valid buffer row index
+    let hi = searchEnd - 1; // last valid buffer row index in computed range
+    if (hi < 0) hi = 0;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       if ((this._prefix[mid] ?? 0) <= visualRow) {
@@ -250,6 +356,19 @@ export class WrapMap {
     const segment = visualRow - (this._prefix[lo] ?? 0);
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { mbRow: lo as MultiBufferRow, segment };
+  }
+
+  /**
+   * Character offset (UTF-16 code-unit index) of the first character of
+   * segment `s` within buffer row `mbRow`'s line text. O(1).
+   *
+   * Used by hit-test and cursor rendering to avoid recomputing wrap segments
+   * on every mouse-move event.
+   */
+  segmentCharStart(mbRow: MultiBufferRow, segment: number): number {
+    this._ensureComputedUpTo(mbRow + 1);
+    const baseIdx = this._prefix[mbRow] ?? 0;
+    return this._segCharStart[baseIdx + segment] ?? 0;
   }
 
   /** Total content height in pixels. */
