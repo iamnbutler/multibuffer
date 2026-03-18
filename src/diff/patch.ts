@@ -6,14 +6,15 @@
  */
 
 import { createBuffer } from "../buffer/buffer.ts";
-import type { Buffer, BufferId, BufferRange, BufferRow } from "../buffer/types.ts";
+import type { Buffer, BufferId } from "../buffer/types.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
-import type {
-  ExcerptRange,
-  MultiBufferRange,
-  MultiBufferRow,
-} from "../multibuffer/types.ts";
-import type { Decoration, DecorationStyle } from "../renderer/types.ts";
+import type { Decoration } from "../renderer/types.ts";
+import {
+  DELETE_STYLE,
+  INSERT_STYLE,
+  makeDecoration,
+  makeExcerptRange,
+} from "./diff-styles.ts";
 import type {
   ParsedPatch,
   PatchFile,
@@ -23,27 +24,7 @@ import type {
   PatchMultiBufferResult,
 } from "./types.ts";
 
-// ============================================================================
-// Decoration styles (matching multibuffer.ts)
-// ============================================================================
-
-const DELETE_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(255, 80, 80, 0.10)",
-  gutterBackground: "rgba(255, 80, 80, 0.18)",
-  gutterSign: "\u2212",
-  gutterSignColor: "#f87171",
-};
-
-const INSERT_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(80, 200, 80, 0.10)",
-  gutterBackground: "rgba(80, 200, 80, 0.18)",
-  gutterSign: "+",
-  gutterSignColor: "#4ade80",
-};
-
-// ============================================================================
 // Patch parsing
-// ============================================================================
 
 /** Regex patterns for parsing unified diffs */
 const DIFF_GIT_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
@@ -467,15 +448,21 @@ function parseHunk(
   };
 }
 
-// ============================================================================
 // MultiBuffer creation from patches
-// ============================================================================
 
 let patchBufferIdCounter = 0;
 
 function createPatchBufferId(): BufferId {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
   return `patch-buffer-${++patchBufferIdCounter}` as BufferId;
+}
+
+/**
+ * Reset the internal buffer ID counter. Useful for test isolation.
+ * @internal
+ */
+export function resetPatchBufferIdCounter(): void {
+  patchBufferIdCounter = 0;
 }
 
 export interface CreateMultiBufferFromPatchOptions {
@@ -513,7 +500,13 @@ export function createMultiBufferFromPatch(
     };
   }
 
-  // Use the first file for single-file patch API
+  if (parsed.files.length > 1) {
+    throw new Error(
+      `createMultiBufferFromPatch received a multi-file patch (${parsed.files.length} files). ` +
+        "Use createMultiBuffersFromDiff for multi-file patches.",
+    );
+  }
+
   const file = parsed.files[0];
   if (!file) {
     throw new Error("Unexpected: no file in parsed patch");
@@ -577,44 +570,88 @@ function createMultiBufferFromPatchFile(
   // Build buffers for old and new content from the patch
   const { oldBuffer, newBuffer, lineMapping } = buildBuffersFromPatch(file);
 
-  // Create the MultiBuffer with excerpts
+  // Create the MultiBuffer with excerpts, batching consecutive same-kind lines
+  // into single excerpts (matching the pattern in multibuffer.ts:82-128).
   const mb = createMultiBuffer();
   const decorations: Decoration[] = [];
   let mbRow = 0;
 
+  // Flatten all hunk lines into a single array for batching across hunks.
+  const allLines: PatchLine[] = [];
   for (const hunk of file.hunks) {
     for (const line of hunk.lines) {
-      if (line.kind === "delete") {
-        // Deletion: add excerpt from old buffer
-        const bufferRow = lineMapping.oldLineToBufferRow.get(line.oldLineNumber ?? 0);
-        if (bufferRow !== undefined) {
-          mb.addExcerpt(oldBuffer, makeExcerptRange(bufferRow, bufferRow + 1), {
-            editable: false,
-          });
-          decorations.push(makeDecoration(mbRow, 1, DELETE_STYLE));
-          mbRow++;
-        }
-      } else if (line.kind === "add") {
-        // Addition: add excerpt from new buffer
-        const bufferRow = lineMapping.newLineToBufferRow.get(line.newLineNumber ?? 0);
-        if (bufferRow !== undefined) {
-          mb.addExcerpt(newBuffer, makeExcerptRange(bufferRow, bufferRow + 1), {
-            editable: false,
-          });
-          decorations.push(makeDecoration(mbRow, 1, INSERT_STYLE));
-          mbRow++;
-        }
-      } else {
-        // Context line: add from new buffer (represents current state)
-        const bufferRow = lineMapping.newLineToBufferRow.get(line.newLineNumber ?? 0);
-        if (bufferRow !== undefined) {
-          mb.addExcerpt(newBuffer, makeExcerptRange(bufferRow, bufferRow + 1), {
-            editable: false,
-          });
-          mbRow++;
-        }
-      }
+      allLines.push(line);
     }
+  }
+
+  let i = 0;
+  while (i < allLines.length) {
+    const firstLine = allLines[i];
+    if (firstLine === undefined) break;
+    const kind = firstLine.kind;
+
+    // Count consecutive lines of the same kind.
+    let lineCount = 0;
+    while (i < allLines.length && allLines[i]?.kind === kind) {
+      i++;
+      lineCount++;
+    }
+
+    if (kind === "delete") {
+      // The parser guarantees oldLineNumber is defined for delete lines.
+      if (firstLine.oldLineNumber === undefined) {
+        throw new Error("Invariant violation: delete line missing oldLineNumber");
+      }
+      const firstBufferRow = lineMapping.oldLineToBufferRow.get(firstLine.oldLineNumber);
+      if (firstBufferRow === undefined) {
+        throw new Error(
+          `Invariant violation: no buffer row mapping for old line ${firstLine.oldLineNumber}`,
+        );
+      }
+      mb.addExcerpt(
+        oldBuffer,
+        makeExcerptRange(firstBufferRow, firstBufferRow + lineCount),
+        { editable: false },
+      );
+      decorations.push(makeDecoration(mbRow, lineCount, DELETE_STYLE));
+    } else if (kind === "add") {
+      // The parser guarantees newLineNumber is defined for add lines.
+      if (firstLine.newLineNumber === undefined) {
+        throw new Error("Invariant violation: add line missing newLineNumber");
+      }
+      const firstBufferRow = lineMapping.newLineToBufferRow.get(firstLine.newLineNumber);
+      if (firstBufferRow === undefined) {
+        throw new Error(
+          `Invariant violation: no buffer row mapping for new line ${firstLine.newLineNumber}`,
+        );
+      }
+      mb.addExcerpt(
+        newBuffer,
+        makeExcerptRange(firstBufferRow, firstBufferRow + lineCount),
+        { editable: false },
+      );
+      decorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
+    } else {
+      // Context lines: add from new buffer (represents current state).
+      // The parser guarantees newLineNumber is defined for context lines.
+      if (firstLine.newLineNumber === undefined) {
+        throw new Error("Invariant violation: context line missing newLineNumber");
+      }
+      const firstBufferRow = lineMapping.newLineToBufferRow.get(firstLine.newLineNumber);
+      if (firstBufferRow === undefined) {
+        throw new Error(
+          `Invariant violation: no buffer row mapping for new line ${firstLine.newLineNumber}`,
+        );
+      }
+      mb.addExcerpt(
+        newBuffer,
+        makeExcerptRange(firstBufferRow, firstBufferRow + lineCount),
+        { editable: false },
+      );
+      // No decoration for context lines.
+    }
+
+    mbRow += lineCount;
   }
 
   return {
@@ -690,31 +727,3 @@ function buildBuffersFromPatch(file: PatchFile): BuildBuffersResult {
   };
 }
 
-/** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
-function makeExcerptRange(startRow: number, endRow: number): ExcerptRange {
-  const bufRange: BufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    start: { row: startRow as BufferRow, column: 0 },
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    end: { row: endRow as BufferRow, column: 0 },
-  };
-  return { context: bufRange, primary: bufRange };
-}
-
-/** Build a line-range decoration covering [startMbRow, startMbRow + lineCount - 1]. */
-function makeDecoration(
-  startMbRow: number,
-  lineCount: number,
-  style: Partial<DecorationStyle>,
-): Decoration {
-  const range: MultiBufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-    start: { row: startMbRow as MultiBufferRow, column: 0 },
-    end: {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-      row: (startMbRow + lineCount - 1) as MultiBufferRow,
-      column: Number.MAX_SAFE_INTEGER,
-    },
-  };
-  return { range, style };
-}

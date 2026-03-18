@@ -16,11 +16,9 @@ import {
   createMultiBuffersFromDiff,
   parsePatch,
 } from "../../src/diff/patch.ts";
-import { num } from "../helpers.ts";
+import { mbRow, num } from "../helpers.ts";
 
-// ============================================================================
 // Test fixtures
-// ============================================================================
 
 const SINGLE_FILE_PATCH = `diff --git a/src/app.ts b/src/app.ts
 index abc123..def456 100644
@@ -146,9 +144,7 @@ index abc123..def456 100644
  export { calculateSum };
 `;
 
-// ============================================================================
 // parsePatch tests
-// ============================================================================
 
 describe("parsePatch - single file", () => {
   test("parses single file patch with additions and deletions", () => {
@@ -337,9 +333,7 @@ describe("parsePatch - edge cases", () => {
   });
 });
 
-// ============================================================================
 // createMultiBufferFromPatch tests
-// ============================================================================
 
 describe("createMultiBufferFromPatch - basic", () => {
   test("creates MultiBuffer from single file patch", () => {
@@ -436,8 +430,7 @@ describe("createMultiBufferFromPatch - line content", () => {
     const result = createMultiBufferFromPatch(SINGLE_FILE_PATCH);
     const snapshot = result.multiBuffer.snapshot();
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type conversion for test
-    const lines = snapshot.lines(0 as import("../../src/multibuffer/types.ts").MultiBufferRow, result.multiBuffer.lineCount as import("../../src/multibuffer/types.ts").MultiBufferRow);
+    const lines = snapshot.lines(mbRow(0), mbRow(result.multiBuffer.lineCount));
 
     // Should contain the import line (context)
     expect(lines.some(l => l.includes('import { foo }'))).toBe(true);
@@ -452,17 +445,29 @@ describe("createMultiBufferFromPatch - line content", () => {
   test("all lines from new file patch are additions", () => {
     const result = createMultiBufferFromPatch(NEW_FILE_PATCH);
 
-    // All decorations should be inserts
+    // All decorations should be inserts (batched into a single decoration)
     expect(result.decorations.every(d => d.style?.gutterSign === "+")).toBe(true);
-    expect(result.decorations.length).toBe(3); // 3 lines added
+    expect(result.decorations.length).toBe(1); // 3 consecutive adds batched into 1 decoration
+    // The single decoration should cover all 3 lines
+    const dec = result.decorations[0];
+    expect(dec).toBeDefined();
+    if (dec) {
+      expect(num(dec.range.end.row) - num(dec.range.start.row) + 1).toBe(3);
+    }
   });
 
   test("all lines from deleted file patch are deletions", () => {
     const result = createMultiBufferFromPatch(DELETED_FILE_PATCH);
 
-    // All decorations should be deletes
+    // All decorations should be deletes (batched into a single decoration)
     expect(result.decorations.every(d => d.style?.gutterSign === "\u2212")).toBe(true);
-    expect(result.decorations.length).toBe(3); // 3 lines deleted
+    expect(result.decorations.length).toBe(1); // 3 consecutive deletes batched into 1 decoration
+    // The single decoration should cover all 3 lines
+    const dec = result.decorations[0];
+    expect(dec).toBeDefined();
+    if (dec) {
+      expect(num(dec.range.end.row) - num(dec.range.start.row) + 1).toBe(3);
+    }
   });
 });
 
@@ -475,9 +480,7 @@ describe("createMultiBufferFromPatch - excerpts are read-only", () => {
   });
 });
 
-// ============================================================================
 // createMultiBuffersFromDiff tests
-// ============================================================================
 
 describe("createMultiBuffersFromDiff - multi file", () => {
   test("creates one result per file", () => {
@@ -525,9 +528,7 @@ describe("createMultiBuffersFromDiff - empty and edge cases", () => {
   });
 });
 
-// ============================================================================
 // Line number tracking tests
-// ============================================================================
 
 describe("patch line numbers", () => {
   test("context lines have both old and new line numbers", () => {
@@ -591,9 +592,7 @@ describe("patch line numbers", () => {
   });
 });
 
-// ============================================================================
 // Real-world git diff format tests
-// ============================================================================
 
 describe("real-world git diff formats", () => {
   test("handles no newline at end of file marker", () => {

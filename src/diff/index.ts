@@ -12,6 +12,7 @@ export {
   createMultiBufferFromPatch,
   createMultiBuffersFromDiff,
   parsePatch,
+  resetPatchBufferIdCounter,
 } from "./patch.ts";
 export type {
   DiffHunk,

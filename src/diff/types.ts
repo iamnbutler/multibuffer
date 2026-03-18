@@ -46,9 +46,7 @@ export interface DiffResult {
   readonly isEqual: boolean;
 }
 
-// ============================================================================
 // Patch parsing types (for parsing unified diff patch strings)
-// ============================================================================
 
 /**
  * A single line in a parsed patch hunk.
