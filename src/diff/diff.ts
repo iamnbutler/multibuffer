@@ -5,7 +5,7 @@
  * changes into hunks with configurable context lines.
  */
 
-import type { DiffHunk, DiffLine, DiffResult } from "./types.ts";
+import type { DiffHunk, DiffLine, DiffResult, IntralineDiff, IntralineRange } from "./types.ts";
 
 export interface DiffOptions {
   /** Number of unchanged context lines around each change (default: 3). */
@@ -284,4 +284,324 @@ function buildHunks(edits: Edit[], context: number): DiffHunk[] {
   }
 
   return hunks;
+}
+
+/**
+ * Options for intraline diff computation.
+ */
+export interface IntralineDiffOptions {
+  /** Maximum line length to process. Lines longer than this skip intraline diff. Default: 1000. */
+  maxLineLength?: number;
+  /** Time budget in milliseconds per line pair. Default: 2. */
+  timeBudgetMs?: number;
+}
+
+/**
+ * Compute character-level differences between two lines.
+ *
+ * Returns column ranges that differ between the old (delete) and new (insert) lines.
+ * Uses common prefix/suffix optimization, then character-level Myers diff on the middle.
+ *
+ * Performance guardrails:
+ * - Skips lines longer than maxLineLength (returns full-line ranges)
+ * - Aborts if computation exceeds timeBudgetMs
+ */
+export function computeIntralineDiff(
+  deleteLine: string,
+  insertLine: string,
+  options?: IntralineDiffOptions,
+): IntralineDiff {
+  const maxLen = options?.maxLineLength ?? 1000;
+  const timeBudget = options?.timeBudgetMs ?? 2;
+
+  // Performance guardrail: skip very long lines (e.g., minified code)
+  if (deleteLine.length > maxLen || insertLine.length > maxLen) {
+    return {
+      deleteRanges: [{ startColumn: 0, endColumn: deleteLine.length }],
+      insertRanges: [{ startColumn: 0, endColumn: insertLine.length }],
+    };
+  }
+
+  // Fast path: identical lines
+  if (deleteLine === insertLine) {
+    return { deleteRanges: [], insertRanges: [] };
+  }
+
+  // Fast path: one line is empty
+  if (deleteLine.length === 0) {
+    return {
+      deleteRanges: [],
+      insertRanges: [{ startColumn: 0, endColumn: insertLine.length }],
+    };
+  }
+  if (insertLine.length === 0) {
+    return {
+      deleteRanges: [{ startColumn: 0, endColumn: deleteLine.length }],
+      insertRanges: [],
+    };
+  }
+
+  const startTime = typeof performance !== "undefined" ? performance.now() : Date.now();
+
+  // Find common prefix
+  let prefixLen = 0;
+  const minLen = Math.min(deleteLine.length, insertLine.length);
+  while (prefixLen < minLen && deleteLine[prefixLen] === insertLine[prefixLen]) {
+    prefixLen++;
+  }
+
+  // Find common suffix (not overlapping with prefix)
+  let suffixLen = 0;
+  while (
+    suffixLen < minLen - prefixLen &&
+    deleteLine[deleteLine.length - 1 - suffixLen] === insertLine[insertLine.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+
+  // Extract the differing middles
+  const deleteMiddle = deleteLine.slice(prefixLen, deleteLine.length - suffixLen);
+  const insertMiddle = insertLine.slice(prefixLen, insertLine.length - suffixLen);
+
+  // If middle is empty on one side, we have a simple insertion or deletion
+  if (deleteMiddle.length === 0 && insertMiddle.length === 0) {
+    return { deleteRanges: [], insertRanges: [] };
+  }
+
+  if (deleteMiddle.length === 0) {
+    return {
+      deleteRanges: [],
+      insertRanges: [{ startColumn: prefixLen, endColumn: prefixLen + insertMiddle.length }],
+    };
+  }
+
+  if (insertMiddle.length === 0) {
+    return {
+      deleteRanges: [{ startColumn: prefixLen, endColumn: prefixLen + deleteMiddle.length }],
+      insertRanges: [],
+    };
+  }
+
+  // For small middles, use character-level Myers diff
+  // For larger middles, just return the whole middle as changed (simpler and faster)
+  const CHAR_DIFF_THRESHOLD = 200;
+  if (deleteMiddle.length <= CHAR_DIFF_THRESHOLD && insertMiddle.length <= CHAR_DIFF_THRESHOLD) {
+    const elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - startTime;
+    if (elapsed < timeBudget) {
+      const charEdits = myersCharDiff(deleteMiddle, insertMiddle);
+      const deleteRanges = mergeCharEdits(charEdits.filter((e) => e.kind === "delete"), prefixLen);
+      const insertRanges = mergeCharEdits(charEdits.filter((e) => e.kind === "insert"), prefixLen);
+      return { deleteRanges, insertRanges };
+    }
+  }
+
+  // Fallback: return the entire differing middle as changed
+  return {
+    deleteRanges: [{ startColumn: prefixLen, endColumn: prefixLen + deleteMiddle.length }],
+    insertRanges: [{ startColumn: prefixLen, endColumn: prefixLen + insertMiddle.length }],
+  };
+}
+
+/** Character-level edit operation. */
+interface CharEdit {
+  kind: "equal" | "insert" | "delete";
+  offset: number; // Offset within the middle string
+  length: number;
+}
+
+/**
+ * Character-level Myers diff between two strings.
+ * Returns a list of edit operations.
+ */
+function myersCharDiff(oldStr: string, newStr: string): CharEdit[] {
+  const n = oldStr.length;
+  const m = newStr.length;
+  const max = n + m;
+
+  if (max === 0) return [];
+
+  const offset = max;
+  const v = new Int32Array(2 * max + 1);
+  v.fill(-1);
+  v[1 + offset] = 0;
+
+  const trace: Int32Array[] = [];
+
+  let found = false;
+  for (let d = 0; d <= max; d++) {
+    if (d > 0) {
+      trace.push(v.slice(offset - d, offset + d + 1));
+    }
+
+    for (let k = -d; k <= d; k += 2) {
+      let x: number;
+      if (k === -d || (k !== d && (v[k - 1 + offset] ?? -1) < (v[k + 1 + offset] ?? -1))) {
+        x = v[k + 1 + offset] ?? 0;
+      } else {
+        x = (v[k - 1 + offset] ?? 0) + 1;
+      }
+
+      let y = x - k;
+
+      while (x < n && y < m && oldStr[x] === newStr[y]) {
+        x++;
+        y++;
+      }
+
+      v[k + offset] = x;
+
+      if (x >= n && y >= m) {
+        found = true;
+        break;
+      }
+    }
+
+    if (found) break;
+  }
+
+  return backtrackCharEdits(trace, oldStr, newStr);
+}
+
+function backtrackCharEdits(
+  trace: Int32Array[],
+  oldStr: string,
+  newStr: string,
+): CharEdit[] {
+  const n = oldStr.length;
+  const m = newStr.length;
+  let x = n;
+  let y = m;
+  const edits: CharEdit[] = [];
+
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const d = i + 1;
+    const vSlice = trace[i];
+    if (!vSlice) continue;
+    const k = x - y;
+
+    const getV = (kk: number): number => vSlice[kk + d] ?? -1;
+
+    let prevK: number;
+    if (k === -d || (k !== d && getV(k - 1) < getV(k + 1))) {
+      prevK = k + 1;
+    } else {
+      prevK = k - 1;
+    }
+
+    const prevX = getV(prevK);
+    const prevY = prevX - prevK;
+
+    // Diagonal moves (equal chars)
+    while (x > prevX && y > prevY) {
+      x--;
+      y--;
+      edits.push({ kind: "equal", offset: x, length: 1 });
+    }
+
+    if (x === prevX) {
+      y--;
+      edits.push({ kind: "insert", offset: y, length: 1 });
+    } else {
+      x--;
+      edits.push({ kind: "delete", offset: x, length: 1 });
+    }
+  }
+
+  // Walk any remaining equal chars
+  while (x > 0 && y > 0) {
+    x--;
+    y--;
+    edits.push({ kind: "equal", offset: x, length: 1 });
+  }
+
+  edits.reverse();
+  return edits;
+}
+
+/**
+ * Merge consecutive same-kind character edits into column ranges.
+ */
+function mergeCharEdits(edits: CharEdit[], baseOffset: number): IntralineRange[] {
+  if (edits.length === 0) return [];
+
+  const ranges: IntralineRange[] = [];
+  let currentStart = -1;
+  let currentEnd = -1;
+
+  for (const edit of edits) {
+    const editStart = baseOffset + edit.offset;
+    const editEnd = editStart + edit.length;
+
+    if (currentStart < 0) {
+      currentStart = editStart;
+      currentEnd = editEnd;
+    } else if (editStart === currentEnd) {
+      // Consecutive: extend current range
+      currentEnd = editEnd;
+    } else {
+      // Gap: push current range and start new one
+      ranges.push({ startColumn: currentStart, endColumn: currentEnd });
+      currentStart = editStart;
+      currentEnd = editEnd;
+    }
+  }
+
+  if (currentStart >= 0) {
+    ranges.push({ startColumn: currentStart, endColumn: currentEnd });
+  }
+
+  return ranges;
+}
+
+/**
+ * Pair adjacent delete and insert lines in a hunk for intraline diffing.
+ *
+ * Returns an array of pairs: [deleteLineIndex, insertLineIndex, deleteLine, insertLine].
+ * Uses a simple strategy: pair consecutive delete/insert runs by position.
+ */
+export function pairDeleteInsertLines(
+  lines: readonly DiffLine[],
+): Array<{ deleteIdx: number; insertIdx: number; deleteLine: DiffLine; insertLine: DiffLine }> {
+  const pairs: Array<{
+    deleteIdx: number;
+    insertIdx: number;
+    deleteLine: DiffLine;
+    insertLine: DiffLine;
+  }> = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    // Find a run of consecutive deletes
+    const deleteStart = i;
+    while (i < lines.length && lines[i]?.kind === "delete") {
+      i++;
+    }
+    const deleteCount = i - deleteStart;
+
+    // Find a run of consecutive inserts immediately following
+    const insertStart = i;
+    while (i < lines.length && lines[i]?.kind === "insert") {
+      i++;
+    }
+    const insertCount = i - insertStart;
+
+    // Pair them up by position (min of the two counts)
+    const pairCount = Math.min(deleteCount, insertCount);
+    for (let j = 0; j < pairCount; j++) {
+      const deleteIdx = deleteStart + j;
+      const insertIdx = insertStart + j;
+      const deleteLine = lines[deleteIdx];
+      const insertLine = lines[insertIdx];
+      if (deleteLine && insertLine) {
+        pairs.push({ deleteIdx, insertIdx, deleteLine, insertLine });
+      }
+    }
+
+    // Skip equal lines
+    while (i < lines.length && lines[i]?.kind === "equal") {
+      i++;
+    }
+  }
+
+  return pairs;
 }

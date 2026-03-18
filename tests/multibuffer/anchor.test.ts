@@ -28,7 +28,9 @@ import {
   excerptRange,
   expectOffset,
   expectPoint,
+  generateText,
   mbPoint,
+  mbRow,
   offset,
   resetCounters,
 } from "../helpers.ts";
@@ -860,5 +862,282 @@ describe("Batch Anchor Resolution", () => {
     const batchResults = snap.resolveAnchors([a1, a2]);
     expect(batchResults[0]).toEqual(snap.resolveAnchor(a1));
     expect(batchResults[1]).toEqual(snap.resolveAnchor(a2));
+  });
+});
+
+
+describe("Viewport-Scoped Anchor Resolution", () => {
+  test("resolveAnchorsInViewport returns undefined for anchors outside viewport", () => {
+    // Create multibuffer with 3 excerpts: rows 0-5, 5-10, 10-15
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    const buf3 = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 5)); // rows 0-5
+    mb.addExcerpt(buf2, excerptRange(0, 5)); // rows 5-10
+    mb.addExcerpt(buf3, excerptRange(0, 5)); // rows 10-15
+
+    // Create anchors in each excerpt
+    const a1 = mb.createAnchor(mbPoint(2, 0), Bias.Right);  // excerpt 1 (rows 0-5)
+    const a2 = mb.createAnchor(mbPoint(7, 0), Bias.Right);  // excerpt 2 (rows 5-10)
+    const a3 = mb.createAnchor(mbPoint(12, 0), Bias.Right); // excerpt 3 (rows 10-15)
+
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    expect(a3).toBeDefined();
+    if (!a1 || !a2 || !a3) return;
+
+    const snap = mb.snapshot();
+    // Viewport covers only rows 5-10 (excerpt 2)
+    const results = snap.resolveAnchorsInViewport([a1, a2, a3], mbRow(5), mbRow(10));
+
+    expect(results).toHaveLength(3);
+    expect(results[0]).toBeUndefined(); // a1 outside viewport
+    expect(results[1]).toBeDefined();   // a2 inside viewport
+    expect(results[2]).toBeUndefined(); // a3 outside viewport
+
+    // Verify the visible anchor matches full resolution
+    if (results[1]) {
+      expectPoint(results[1], 7, 0);
+    }
+  });
+
+  test("resolveAnchorsInViewport resolves all anchors when viewport covers all excerpts", () => {
+    const buf = createBuffer(createBufferId(), generateText(10));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 10));
+
+    const anchors: Anchor[] = [];
+    for (let row = 0; row < 10; row++) {
+      const a = mb.createAnchor(mbPoint(row, 0), Bias.Right);
+      if (a) anchors.push(a);
+    }
+    expect(anchors).toHaveLength(10);
+
+    const snap = mb.snapshot();
+    // Viewport covers all rows
+    const viewportResults = snap.resolveAnchorsInViewport(anchors, mbRow(0), mbRow(10));
+    const fullResults = snap.resolveAnchors(anchors);
+
+    expect(viewportResults).toHaveLength(fullResults.length);
+    for (let i = 0; i < anchors.length; i++) {
+      expect(viewportResults[i]).toEqual(fullResults[i]);
+    }
+  });
+
+  test("resolveAnchorsInViewport handles empty anchor list", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    const result = mb.snapshot().resolveAnchorsInViewport([], mbRow(0), mbRow(1));
+    expect(result).toEqual([]);
+  });
+
+  test("resolveAnchorsInViewport handles empty viewport range", () => {
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 5));
+
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    const snap = mb.snapshot();
+    // Empty viewport (startRow === endRow)
+    const results = snap.resolveAnchorsInViewport([a], mbRow(0), mbRow(0));
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBeUndefined();
+  });
+
+  test("resolveAnchorsInViewport includes excerpt partially overlapping viewport start", () => {
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 5)); // rows 0-5
+    mb.addExcerpt(buf2, excerptRange(0, 5)); // rows 5-10
+
+    const a1 = mb.createAnchor(mbPoint(3, 0), Bias.Right); // excerpt 1, row 3
+    const a2 = mb.createAnchor(mbPoint(7, 0), Bias.Right); // excerpt 2, row 7
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    if (!a1 || !a2) return;
+
+    const snap = mb.snapshot();
+    // Viewport starts mid-way through excerpt 1 (row 3-8)
+    // Excerpt 1 (rows 0-5) overlaps viewport [3, 8) because 5 > 3 and 0 < 8
+    // Excerpt 2 (rows 5-10) overlaps viewport [3, 8) because 10 > 3 and 5 < 8
+    const results = snap.resolveAnchorsInViewport([a1, a2], mbRow(3), mbRow(8));
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toBeDefined(); // excerpt 1 overlaps viewport
+    expect(results[1]).toBeDefined(); // excerpt 2 overlaps viewport
+  });
+
+  test("resolveAnchorsInViewport includes excerpt partially overlapping viewport end", () => {
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 5)); // rows 0-5
+    mb.addExcerpt(buf2, excerptRange(0, 5)); // rows 5-10
+
+    const a1 = mb.createAnchor(mbPoint(2, 0), Bias.Right); // excerpt 1, row 2
+    const a2 = mb.createAnchor(mbPoint(8, 0), Bias.Right); // excerpt 2, row 8
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    if (!a1 || !a2) return;
+
+    const snap = mb.snapshot();
+    // Viewport ends mid-way through excerpt 2 (row 2-7)
+    // Excerpt 1 overlaps because 5 > 2 and 0 < 7
+    // Excerpt 2 overlaps because 10 > 2 and 5 < 7
+    const results = snap.resolveAnchorsInViewport([a1, a2], mbRow(2), mbRow(7));
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toBeDefined(); // excerpt 1 overlaps viewport
+    expect(results[1]).toBeDefined(); // excerpt 2 overlaps viewport
+  });
+
+  test("resolveAnchorsInViewport follows replaced_excerpts chain for viewport check", () => {
+    const buf = createBuffer(createBufferId(), generateText(10));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 5)); // rows 0-5
+
+    // Create anchor in first excerpt
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Replace excerpts — anchor should follow replacement chain
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 5)]); // new excerpt at same position
+
+    const snap = mb.snapshot();
+    // Viewport covers the new excerpt
+    const results = snap.resolveAnchorsInViewport([a], mbRow(0), mbRow(5));
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBeDefined();
+    if (results[0]) {
+      expectPoint(results[0], 2, 0);
+    }
+  });
+
+  test("resolveAnchorsInViewport returns undefined for stale anchors even in viewport", () => {
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(0, 5));
+
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Remove excerpt — anchor becomes stale
+    mb.removeExcerpt(eid);
+
+    const snap = mb.snapshot();
+    const results = snap.resolveAnchorsInViewport([a], mbRow(0), mbRow(5));
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBeUndefined();
+  });
+
+  test("resolveAnchorsInViewport with mixed visible and non-visible anchors from multiple buffers", () => {
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    const buf3 = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 5)); // rows 0-5
+    mb.addExcerpt(buf2, excerptRange(0, 5)); // rows 5-10
+    mb.addExcerpt(buf3, excerptRange(0, 5)); // rows 10-15
+
+    // Create multiple anchors per excerpt
+    const anchors: Anchor[] = [];
+    for (let row = 0; row < 15; row += 2) {
+      const a = mb.createAnchor(mbPoint(row, 0), Bias.Right);
+      if (a) anchors.push(a);
+    }
+    expect(anchors.length).toBeGreaterThan(0);
+
+    const snap = mb.snapshot();
+    // Viewport covers only middle excerpt (rows 5-10)
+    const viewportResults = snap.resolveAnchorsInViewport(anchors, mbRow(5), mbRow(10));
+    const fullResults = snap.resolveAnchors(anchors);
+
+    expect(viewportResults).toHaveLength(anchors.length);
+
+    // Verify: only anchors in the middle excerpt should be resolved
+    for (let i = 0; i < anchors.length; i++) {
+      const anchor = anchors[i];
+      if (!anchor) continue;
+
+      // Get the excerpt info to check if it's in viewport
+      const excerptKey = `${anchor.excerptId.index}:${anchor.excerptId.generation}`;
+      const info = snap.excerpts.find(
+        (e) => `${e.id.index}:${e.id.generation}` === excerptKey
+      );
+
+      if (info && info.endRow > 5 && info.startRow < 10) {
+        // Excerpt overlaps viewport — should match full resolution
+        expect(viewportResults[i]).toEqual(fullResults[i]);
+      } else {
+        // Excerpt doesn't overlap viewport — should be undefined
+        expect(viewportResults[i]).toBeUndefined();
+      }
+    }
+  });
+
+  test("resolveAnchorsInViewport preserves index correspondence", () => {
+    const buf = createBuffer(createBufferId(), generateText(15));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 5));  // rows 0-5
+    mb.addExcerpt(buf, excerptRange(5, 10)); // rows 5-10
+    mb.addExcerpt(buf, excerptRange(10, 15)); // rows 10-15
+
+    const a0 = mb.createAnchor(mbPoint(2, 3), Bias.Right);  // visible
+    const a1 = mb.createAnchor(mbPoint(7, 4), Bias.Right);  // visible
+    const a2 = mb.createAnchor(mbPoint(12, 5), Bias.Right); // not visible
+
+    expect(a0).toBeDefined();
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    if (!a0 || !a1 || !a2) return;
+
+    const snap = mb.snapshot();
+    // Viewport covers first two excerpts
+    const results = snap.resolveAnchorsInViewport([a0, a1, a2], mbRow(0), mbRow(10));
+
+    // Check index correspondence is maintained
+    expect(results[0]).toBeDefined();
+    expect(results[1]).toBeDefined();
+    expect(results[2]).toBeUndefined();
+
+    if (results[0]) expectPoint(results[0], 2, 3);
+    if (results[1]) expectPoint(results[1], 7, 4);
+  });
+
+  test("resolveAnchorsInViewport applies edit replay for visible anchors", () => {
+    const buf = createBuffer(createBufferId(), "ABCDE\nFGHIJ\nKLMNO");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Create anchor at row 1, column 2
+    const a = mb.createAnchor(mbPoint(1, 2), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert text before the anchor position
+    buf.insert(offset(6), "XX"); // Insert at start of row 1
+
+    const snap = mb.snapshot();
+    // Viewport covers all rows
+    const viewportResults = snap.resolveAnchorsInViewport([a], mbRow(0), mbRow(3));
+    const fullResults = snap.resolveAnchors([a]);
+
+    // Both should give same result with edit replay applied
+    expect(viewportResults[0]).toEqual(fullResults[0]);
+    if (viewportResults[0]) {
+      // Original was row 1, col 2. After "XX" insert, should be row 1, col 4
+      expectPoint(viewportResults[0], 1, 4);
+    }
   });
 });

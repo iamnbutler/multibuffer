@@ -341,6 +341,93 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     });
   }
 
+  resolveAnchorsInViewport(
+    anchors: readonly Anchor[],
+    startRow: MultiBufferRow,
+    endRow: MultiBufferRow,
+  ): (MultiBufferPoint | undefined)[] {
+    if (anchors.length === 0) return [];
+
+    // Early exit for empty viewport
+    if (startRow >= endRow) {
+      return anchors.map(() => undefined);
+    }
+
+    const excerptDataCache = this.excerptDataIndex;
+    const excerptInfoCache = this.excerptInfoIndex;
+    const snapshotCache = new Map<string, BufferSnapshot>();
+    const editsCache = new Map<string, readonly EditEntry[]>();
+
+    return anchors.map((anchor) => {
+      // 1. Follow replacement chain to current excerpt ID
+      let currentId = anchor.excerptId;
+      const maxChain = 100;
+      for (let i = 0; i < maxChain; i++) {
+        const key = `${currentId.index}:${currentId.generation}`;
+        const replacement = this._replacedExcerpts.get(key);
+        if (!replacement) break;
+        currentId = replacement;
+      }
+
+      // 2. Quick viewport overlap check via O(1) excerpt info lookup
+      const excerptKey = `${currentId.index}:${currentId.generation}`;
+      const info = excerptInfoCache.get(excerptKey);
+      if (!info) return undefined;
+
+      // Excerpt overlaps viewport if [info.startRow, info.endRow) intersects [startRow, endRow)
+      // i.e., info.endRow > startRow AND info.startRow < endRow
+      if (info.endRow <= startRow || info.startRow >= endRow) {
+        // Excerpt doesn't overlap viewport — skip expensive resolution
+        return undefined;
+      }
+
+      // 3. Find excerpt data for full resolution
+      const initialExcerpt = excerptDataCache.get(excerptKey);
+      if (!initialExcerpt) return undefined;
+
+      // 4. Resolve buffer point, reusing cached edit slice + snapshot
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+      const bid = initialExcerpt.bufferId as string;
+      const buffer = this._buffers.get(bid);
+
+      let bufferPoint: BufferPoint;
+      if (!buffer) {
+        bufferPoint = initialExcerpt.buffer.offsetToPoint(anchor.textAnchor.offset);
+      } else {
+        let snap = snapshotCache.get(bid);
+        if (!snap) {
+          snap = buffer.snapshot();
+          snapshotCache.set(bid, snap);
+        }
+
+        const editsKey = `${bid}@${anchor.textAnchor.version}`;
+        let edits = editsCache.get(editsKey);
+        if (!edits) {
+          edits = buffer.editsSince(anchor.textAnchor.version);
+          editsCache.set(editsKey, edits);
+        }
+
+        const adjustedOffset = adjustOffset(
+          anchor.textAnchor.offset,
+          anchor.textAnchor.bias,
+          edits,
+        );
+        const clampedOffset = snap.clipOffset(adjustedOffset, anchor.textAnchor.bias);
+        bufferPoint = snap.offsetToPoint(clampedOffset);
+      }
+
+      // 5. Find best excerpt for this buffer point
+      const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
+
+      // 6. Convert to multibuffer point
+      const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
+      const resolvedInfo = excerptInfoCache.get(resolvedKey);
+      if (!resolvedInfo) return undefined;
+
+      return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, resolvedInfo);
+    });
+  }
+
   private _bufferPointToMbPoint(
     bufferPoint: BufferPoint,
     excerptData: Excerpt,

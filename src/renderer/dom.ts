@@ -6,7 +6,7 @@
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
-import { buildHighlightedSpans } from "./highlighter.ts";
+import { buildColumnDecoratedContent, buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
@@ -52,6 +52,26 @@ export function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: nu
     });
   }
   return result;
+}
+
+/**
+ * Slice column decorations to a segment range, adjusting offsets to be segment-relative.
+ */
+function sliceColumnDecorations(
+  decorations: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>,
+  segStart: number,
+  segEnd: number,
+): Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> | undefined {
+  const result: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> = [];
+  for (const dec of decorations) {
+    if (dec.endColumn <= segStart || dec.startColumn >= segEnd) continue;
+    result.push({
+      startColumn: Math.max(0, dec.startColumn - segStart),
+      endColumn: Math.min(segEnd - segStart, dec.endColumn - segStart),
+      style: dec.style,
+    });
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 interface RowElement {
@@ -218,6 +238,12 @@ export class DomRenderer implements Renderer {
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
   private _theme: Partial<Theme> | null = null;
+  /** When true, the cursor is never rendered (for read-only mode). */
+  private _cursorHidden = false;
+  /** Cursor blink interval in milliseconds, or false to disable blinking. */
+  private _blinkIntervalMs: number | false = 600;
+  /** Cached CSS animation string — updated only when _focused or _blinkIntervalMs change. */
+  private _blinkAnimationStr: string = "cursor-blink 600ms steps(1, end) infinite alternate";
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -350,11 +376,81 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  /**
+   * Re-measure character width from the container's current font.
+   * Call this after font changes at runtime (e.g., after FontFace.load() resolves,
+   * or in response to document.fonts.onloadingdone).
+   *
+   * This invalidates the wrap map and triggers a full re-render.
+   */
+  remeasure(): void {
+    if (!this._container) {
+      // Not mounted yet — nothing to remeasure
+      return;
+    }
+
+    // Re-measure character width from the current font
+    this._charWidth = this._measureCharWidth(this._container);
+
+    // Rebuild wrap map with new measurements (if snapshot exists)
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+
+    // Trigger a full re-render by simulating a scroll event
+    this._handleScroll();
+  }
+
+  /**
+   * Get the current measured character width.
+   * Returns the value measured from the font, or the default/provided value if not yet mounted.
+   */
+  getCharWidth(): number {
+    return this._charWidth;
+  }
+
   setTheme(theme: Partial<Theme>): void {
     this._theme = { ...this._theme, ...theme };
     if (this._container) {
       this._applyThemeVars(this._container, theme);
     }
+  }
+
+  /**
+   * Configure cursor blink behavior.
+   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking
+   *             (steady cursor). Default is 600ms.
+   * @throws {RangeError} If `ms` is a number that is not positive.
+   */
+  setCursorBlink(ms: number | false): void {
+    if (typeof ms === "number" && ms <= 0) {
+      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
+    }
+    this._blinkIntervalMs = ms;
+    this._updateBlinkAnimation();
+    // Re-apply the animation to the cursor if it's currently visible and focused
+    if (this._cursorEl && this._cursorEl.style.display !== "none") {
+      this._cursorEl.style.animation = this._blinkAnimationStr;
+    }
+  }
+
+  /**
+   * Return the current blink interval setting.
+   * Useful for testing and introspection.
+   */
+  getCursorBlinkInterval(): number | false {
+    return this._blinkIntervalMs;
+  }
+
+  /**
+   * Recompute and cache the CSS animation string. Called only when
+   * `_focused` or `_blinkIntervalMs` change.
+   */
+  private _updateBlinkAnimation(): void {
+    this._blinkAnimationStr =
+      !this._focused || this._blinkIntervalMs === false
+        ? "none"
+        : `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
   }
 
   private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
@@ -406,12 +502,37 @@ export class DomRenderer implements Renderer {
     }
 
     // Build decoration lookup: mbRow → decoration style (last decoration wins)
+    // Separate line-level decorations from column-level (intraline) decorations
     const decorationMap = new Map<number, Partial<DecorationStyle>>();
+    const columnDecorationMap = new Map<number, Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>>();
     for (const dec of decorations) {
       if (!dec.style) continue;
-      for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
-        if (r >= viewport.startRow && r < viewport.endRow) {
-          decorationMap.set(r, dec.style);
+      const isColumnDecoration =
+        dec.range.start.row === dec.range.end.row &&
+        dec.range.start.column !== 0 ||
+        dec.range.end.column !== Number.MAX_SAFE_INTEGER;
+
+      if (isColumnDecoration && dec.range.start.row === dec.range.end.row) {
+        // Column-level (intraline) decoration
+        const row = dec.range.start.row;
+        if (row >= viewport.startRow && row < viewport.endRow) {
+          let list = columnDecorationMap.get(row);
+          if (!list) {
+            list = [];
+            columnDecorationMap.set(row, list);
+          }
+          list.push({
+            startColumn: dec.range.start.column,
+            endColumn: dec.range.end.column,
+            style: dec.style,
+          });
+        }
+      } else {
+        // Line-level decoration
+        for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
+          if (r >= viewport.startRow && r < viewport.endRow) {
+            decorationMap.set(r, dec.style);
+          }
         }
       }
     }
@@ -423,6 +544,7 @@ export class DomRenderer implements Renderer {
     const visualRows: Array<{
       mbRow: number;
       segment: number;
+      segmentCharStart: number;
       text: string;
       isHeader: boolean;
       headerPath?: string;
@@ -430,6 +552,7 @@ export class DomRenderer implements Renderer {
       tokens?: Token[];
       gutterText: string;
       decoration?: Partial<DecorationStyle>;
+      columnDecorations?: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>;
       diffGutter?: { oldLineNum?: string; newLineNum?: string };
     }> = [];
 
@@ -461,6 +584,7 @@ export class DomRenderer implements Renderer {
       const gutterBase = showLineNumber ? String(bufferRow + 1) : "";
 
       const decoration = decorationMap.get(mbRow);
+      const columnDecs = columnDecorationMap.get(mbRow);
 
       // Compute diff gutter info if in diff mode
       let diffGutter: { oldLineNum?: string; newLineNum?: string } | undefined;
@@ -491,9 +615,15 @@ export class DomRenderer implements Renderer {
             ? sliceTokensToRange(lineTokens, segStart, segEnd)
             : undefined;
 
+          // Slice column decorations for this segment
+          const segColumnDecs = columnDecs
+            ? sliceColumnDecorations(columnDecs, segStart, segEnd)
+            : undefined;
+
           visualRows.push({
             mbRow,
             segment: s,
+            segmentCharStart: segStart,
             text: seg,
             isHeader: s === 0 && header !== undefined,
             headerPath: header?.path,
@@ -501,6 +631,7 @@ export class DomRenderer implements Renderer {
             tokens: segTokens,
             gutterText: s === 0 ? gutterBase : "",
             decoration,
+            columnDecorations: segColumnDecs,
             diffGutter: s === 0 ? diffGutter : undefined,
           });
         }
@@ -508,6 +639,7 @@ export class DomRenderer implements Renderer {
         visualRows.push({
           mbRow,
           segment: 0,
+          segmentCharStart: 0,
           text: lineText,
           isHeader: header !== undefined,
           headerPath: header?.path,
@@ -515,6 +647,7 @@ export class DomRenderer implements Renderer {
           tokens: lineTokens,
           gutterText: gutterBase,
           decoration,
+          columnDecorations: columnDecs,
           diffGutter,
         });
       }
@@ -543,7 +676,7 @@ export class DomRenderer implements Renderer {
       if (vr.isHeader && vr.headerPath) {
         this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration, vr.diffGutter);
+        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration, vr.columnDecorations, vr.diffGutter);
       }
     }
   }
@@ -770,6 +903,7 @@ export class DomRenderer implements Renderer {
     text: string,
     tokens?: Token[],
     decoration?: Partial<DecorationStyle>,
+    columnDecorations?: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>,
     diffGutter?: { oldLineNum?: string; newLineNum?: string },
   ): void {
     rowEl.root.style.display = "flex";
@@ -785,8 +919,21 @@ export class DomRenderer implements Renderer {
     rowEl.content.style.fontSize = "";
 
     const isDiffMode = this._measurements.gutterMode === "diff";
+    const isHunkSeparator = decoration?.isHunkSeparator === true;
 
-    if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
+    if (isHunkSeparator) {
+      // Hunk separator: full-width gutter area with centered text, no line numbers
+      // Hide all gutter columns and use a single span for the separator styling
+      rowEl.gutter.style.display = "none";
+      if (rowEl.oldGutter) rowEl.oldGutter.style.display = "none";
+      if (rowEl.newGutter) rowEl.newGutter.style.display = "none";
+      if (rowEl.sign) rowEl.sign.style.display = "none";
+
+      // The content area shows the hunk header text with muted styling
+      rowEl.content.style.paddingLeft = "8px";
+      rowEl.content.style.borderTop = "1px solid var(--editor-separator-border, #444444)";
+      rowEl.content.style.borderBottom = "1px solid var(--editor-separator-border, #444444)";
+    } else if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
       // Diff mode: show old/new gutters and sign, hide standard gutter
       rowEl.gutter.style.display = "none";
       rowEl.oldGutter.style.display = "inline-block";
@@ -803,6 +950,11 @@ export class DomRenderer implements Renderer {
       rowEl.sign.textContent = decoration?.gutterSign ?? " ";
       rowEl.sign.style.color = decoration?.gutterSignColor ?? "";
       rowEl.sign.style.background = decoration?.gutterBackground ?? bg;
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     } else {
       // Standard mode: show standard gutter, hide diff gutters
       rowEl.gutter.style.display = "inline-block";
@@ -826,10 +978,18 @@ export class DomRenderer implements Renderer {
       } else {
         rowEl.gutter.textContent = gutterText;
       }
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     }
 
     if (tokens && tokens.length > 0) {
-      buildHighlightedSpans(rowEl.content, text, tokens);
+      buildHighlightedSpans(rowEl.content, text, tokens, columnDecorations);
+    } else if (columnDecorations && columnDecorations.length > 0) {
+      // No syntax tokens but we have column decorations
+      buildColumnDecoratedContent(rowEl.content, text, columnDecorations);
     } else {
       rowEl.content.textContent = text;
     }
@@ -918,10 +1078,26 @@ export class DomRenderer implements Renderer {
     this._onTripleClickCallback = cb;
   }
 
+  /**
+   * Set whether the cursor should be hidden.
+   * When true, renderCursor() becomes a no-op (for read-only mode).
+   */
+  setCursorHidden(hidden: boolean): void {
+    this._cursorHidden = hidden;
+    if (hidden && this._cursorEl) {
+      this._cursorEl.style.display = "none";
+    }
+  }
+
+  /** Returns true if the cursor is hidden. */
+  get cursorHidden(): boolean {
+    return this._cursorHidden;
+  }
+
   /** Render cursor at a multibuffer point. */
   renderCursor(point: MultiBufferPoint | undefined): void {
     if (!this._cursorEl) return;
-    if (!point) {
+    if (this._cursorHidden || !point) {
       this._cursorEl.style.display = "none";
       return;
     }
@@ -966,18 +1142,15 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
-    this._cursorEl.style.animation = this._focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Update focus state — call when the editor gains or loses keyboard focus. */
   setFocused(focused: boolean): void {
     this._focused = focused;
+    this._updateBlinkAnimation();
     if (!this._cursorEl || this._cursorEl.style.display === "none") return;
-    this._cursorEl.style.animation = focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Render selection highlight between two multibuffer points. */
