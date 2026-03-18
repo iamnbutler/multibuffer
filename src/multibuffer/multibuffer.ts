@@ -18,9 +18,11 @@ import type {
   BufferSnapshot,
   EditEntry,
   Excerpt,
+  ExcerptAddOptions,
   ExcerptBoundary,
   ExcerptId,
   ExcerptInfo,
+  ExcerptMetadata,
   ExcerptRange,
   ExcerptSpec,
   MultiBuffer,
@@ -625,7 +627,7 @@ class MultiBufferImpl implements MultiBuffer {
   addExcerpt(
     buffer: Buffer,
     range: ExcerptRange,
-    options?: { hasTrailingNewline?: boolean; editable?: boolean },
+    options?: ExcerptAddOptions,
   ): ExcerptId {
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
     const bufferId = buffer.id as string;
@@ -633,11 +635,12 @@ class MultiBufferImpl implements MultiBuffer {
     const snapshot = buffer.snapshot();
     const hasTrailing = options?.hasTrailingNewline ?? false;
     const editable = options?.editable ?? true;
+    const metadata = options?.metadata;
     // Insert a placeholder to allocate the slot and get the key.
     // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
     const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
     // Build the excerpt with its own ID, then set the real value.
-    const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
+    const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable, metadata);
     this._excerpts.set(id, excerpt);
     this._order.push(id);
     // Maintain reverse index
@@ -661,9 +664,10 @@ class MultiBufferImpl implements MultiBuffer {
       const snapshot = spec.buffer.snapshot();
       const hasTrailing = spec.options?.hasTrailingNewline ?? false;
       const editable = spec.options?.editable ?? true;
+      const metadata = spec.options?.metadata;
       // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
       const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
-      const excerpt = createExcerpt(id, snapshot, spec.range, hasTrailing, editable);
+      const excerpt = createExcerpt(id, snapshot, spec.range, hasTrailing, editable, metadata);
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       // Maintain reverse index
@@ -714,7 +718,7 @@ class MultiBufferImpl implements MultiBuffer {
     entries: ReadonlyArray<{
       buffer: Buffer;
       range: ExcerptRange;
-      options?: { hasTrailingNewline?: boolean; editable?: boolean };
+      options?: ExcerptAddOptions;
     }>,
   ): readonly ExcerptId[] {
     // Remove all existing excerpts without triggering a cache rebuild each time.
@@ -734,9 +738,10 @@ class MultiBufferImpl implements MultiBuffer {
       const snapshot = buffer.snapshot();
       const hasTrailing = options?.hasTrailingNewline ?? false;
       const editable = options?.editable ?? true;
+      const metadata = options?.metadata;
       // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
       const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
-      const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable);
+      const excerpt = createExcerpt(id, snapshot, range, hasTrailing, editable, metadata);
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       newIds.push(id);
@@ -866,6 +871,7 @@ class MultiBufferImpl implements MultiBuffer {
       newRange,
       oldExcerpt.hasTrailingNewline,
       oldExcerpt.editable,
+      oldExcerpt.metadata,
     );
     this._excerpts.set(excerptId, newExcerpt);
     this._markDirty();
@@ -948,6 +954,27 @@ class MultiBufferImpl implements MultiBuffer {
     this._refreshExcerptsForBuffer(buffer, editRow, lineDelta);
   }
 
+  updateExcerptMetadata(
+    excerptId: ExcerptId,
+    patch: Partial<ExcerptMetadata>,
+  ): void {
+    const oldExcerpt = this._excerpts.get(excerptId);
+    if (!oldExcerpt) return;
+
+    // Shallow merge the patch into existing metadata.
+    // Use a struct spread instead of createExcerpt to avoid the O(n)
+    // computeExcerptSummary rope traversal — metadata updates are O(1).
+    const updatedExcerpt: Excerpt = {
+      ...oldExcerpt,
+      metadata: {
+        ...oldExcerpt.metadata,
+        ...patch,
+      },
+    };
+    this._excerpts.set(excerptId, updatedExcerpt);
+    this._markDirty();
+  }
+
   private _refreshExcerptsForBuffer(
     buffer: Buffer,
     editRow?: BufferRow,
@@ -994,7 +1021,7 @@ class MultiBufferImpl implements MultiBuffer {
         primary: exc.range.primary,
       };
 
-      const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline, exc.editable);
+      const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline, exc.editable, exc.metadata);
       this._excerpts.set(id, refreshed);
     }
 
