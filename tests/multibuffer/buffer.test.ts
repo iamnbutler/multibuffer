@@ -372,6 +372,57 @@ describe("Buffer Clipping with Bias", () => {
     const snapshot = buffer.snapshot();
     expectOffset(snapshot.clipOffset(offset(100), Bias.Left), 5);
   });
+
+  // Surrogate pair bias tests (issue #153)
+  // "a😀b" = ['a', '\uD83D', '\uDE00', 'b'] in UTF-16 (length=4)
+  // col=2 is the low surrogate — an invalid mid-pair position.
+
+  test("clipPoint Bias.Left snaps to start of surrogate pair", () => {
+    // "a😀b": col 2 is the low surrogate of 😀
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00b");
+    const snapshot = buffer.snapshot();
+    // Bias.Left = prefer position before the boundary → snap to col 1 (high surrogate start)
+    expectPoint(snapshot.clipPoint(point(0, 2), Bias.Left), 0, 1);
+  });
+
+  test("clipPoint Bias.Right snaps past surrogate pair", () => {
+    // "a😀b": col 2 is the low surrogate of 😀
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00b");
+    const snapshot = buffer.snapshot();
+    // Bias.Right = prefer position at/after the boundary → snap to col 3 (after 😀, at 'b')
+    expectPoint(snapshot.clipPoint(point(0, 2), Bias.Right), 0, 3);
+  });
+
+  test("clipPoint at high surrogate is unchanged (valid position)", () => {
+    // col 1 is the high surrogate — it IS a valid grapheme boundary (cursor before 😀)
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00b");
+    const snapshot = buffer.snapshot();
+    expectPoint(snapshot.clipPoint(point(0, 1), Bias.Left), 0, 1);
+    expectPoint(snapshot.clipPoint(point(0, 1), Bias.Right), 0, 1);
+  });
+
+  test("clipPoint mid-surrogate at end of line with Bias.Right clamps to lineLen", () => {
+    // "a😀" (length=3): col 2 is the low surrogate, Bias.Right → col 3 = lineLen
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00");
+    const snapshot = buffer.snapshot();
+    expectPoint(snapshot.clipPoint(point(0, 2), Bias.Right), 0, 3);
+  });
+
+  test("clipOffset Bias.Left snaps to start of surrogate pair", () => {
+    // "a😀b": UTF-16 offset 2 = low surrogate of 😀
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00b");
+    const snapshot = buffer.snapshot();
+    // Bias.Left = snap back to offset 1 (high surrogate)
+    expectOffset(snapshot.clipOffset(offset(2), Bias.Left), 1);
+  });
+
+  test("clipOffset Bias.Right snaps past surrogate pair", () => {
+    // "a😀b": UTF-16 offset 2 = low surrogate of 😀
+    const buffer = createBuffer(createBufferId(), "a\uD83D\uDE00b");
+    const snapshot = buffer.snapshot();
+    // Bias.Right = snap forward to offset 3 (after 😀, at 'b')
+    expectOffset(snapshot.clipOffset(offset(2), Bias.Right), 3);
+  });
 });
 
 

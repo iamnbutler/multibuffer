@@ -749,7 +749,40 @@ describe("MultiBuffer - Snapshot", () => {
     expect(s2.excerpts.length).toBe(2);
   });
 
-  test.todo("anchors work with old snapshots", () => {});
+  test("anchors work with old snapshots", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    // Create anchor at row 1, col 3 (inside "Line 1")
+    const a = mb.createAnchor(mbPoint(1, 3), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Snapshot taken before any further mutations
+    const s1 = mb.snapshot();
+    const p1 = s1.resolveAnchor(a);
+    expect(p1).toBeDefined();
+    if (p1) expectPoint(p1, 1, 3);
+
+    // Mutate: add a second excerpt from a new buffer
+    const buf2 = createBuffer(createBufferId(), "X\nY\nZ");
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+
+    // Snapshot after mutation — multibuffer now has 6 lines total
+    const s2 = mb.snapshot();
+    expect(s2.lineCount).toBe(6);
+
+    // Anchor still resolves to the same position in s2 (excerpt 1 unchanged)
+    const p2 = s2.resolveAnchor(a);
+    expect(p2).toBeDefined();
+    if (p2) expectPoint(p2, 1, 3);
+
+    // s1 still resolves correctly (snapshot immutability)
+    const p1Again = s1.resolveAnchor(a);
+    expect(p1Again).toBeDefined();
+    if (p1Again) expectPoint(p1Again, 1, 3);
+  });
 });
 
 
@@ -905,6 +938,80 @@ describe("MultiBuffer - Edge Cases", () => {
 });
 
 
+describe("MultiBuffer - Deferred Cache Rebuild", () => {
+  test("lineCount is correct after multiple addExcerpt calls without intermediate reads", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(50));
+    // Add 5 excerpts without reading lineCount in between
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    mb.addExcerpt(buffer, excerptRange(30, 40));
+    mb.addExcerpt(buffer, excerptRange(40, 50));
+    // First read after all mutations must return correct total
+    expect(mb.lineCount).toBe(50);
+    expect(mb.excerpts.length).toBe(5);
+  });
+
+  test("snapshot version is distinct after each mutation", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const v1 = mb.snapshot().version;
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    const v2 = mb.snapshot().version;
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    const v3 = mb.snapshot().version;
+    // Each mutation must yield a strictly greater version
+    expect(v2).toBeGreaterThan(v1);
+    expect(v3).toBeGreaterThan(v2);
+  });
+
+  test("snapshot taken before mutations is unaffected by subsequent mutations", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buffer, excerptRange(0, 10));
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(10);
+    // Mutate after snapshot
+    mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    // Original snapshot is still valid
+    expect(snap.lineCount).toBe(10);
+    // Live view reflects all mutations
+    expect(mb.lineCount).toBe(30);
+  });
+
+  test("1000 sequential addExcerpts with deferred rebuild completes in <100ms", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    const { durationMs } = time(() => {
+      for (let i = 0; i < 1000; i++) {
+        mb.addExcerpt(buffer, excerptRange(i * 10, i * 10 + 10));
+      }
+      // Force cache rebuild (counts as one read)
+      void mb.lineCount;
+    });
+    // With O(n²) eager rebuild: 1+2+…+1000 ≈ 500k iterations → slow
+    // With O(n) deferred rebuild: one pass of 1000 → fast
+    expect(durationMs).toBeLessThan(100);
+  });
+
+  test("lineCount and excerpts are consistent after removeExcerpt without intermediate reads", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const id1 = mb.addExcerpt(buffer, excerptRange(0, 10));
+    const id2 = mb.addExcerpt(buffer, excerptRange(10, 20));
+    mb.addExcerpt(buffer, excerptRange(20, 30));
+    // Remove two excerpts without reading in between
+    mb.removeExcerpt(id1);
+    mb.removeExcerpt(id2);
+    // First read after both removals
+    expect(mb.lineCount).toBe(10);
+    expect(mb.excerpts.length).toBe(1);
+  });
+});
+
 describe("MultiBuffer - Performance", () => {
   test("adding 100 excerpts completes in <10ms", () => {
     const mb = createMultiBuffer();
@@ -945,7 +1052,30 @@ describe("MultiBuffer - Performance", () => {
     expect(durationMs).toBeLessThan(1);
   });
 
-  test.todo("anchor resolution is fast", () => {});
+  test("anchor resolution is fast", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10_000));
+    for (let i = 0; i < 100; i++) {
+      mb.addExcerpt(buffer, excerptRange(i * 100, i * 100 + 100));
+    }
+
+    // Create 100 anchors scattered across all excerpts
+    const anchors: import("../../src/multibuffer/types.ts").Anchor[] = [];
+    for (let i = 0; i < 100; i++) {
+      const a = mb.createAnchor(mbPoint(i * 100, 0), Bias.Right);
+      if (a) anchors.push(a);
+    }
+    expect(anchors.length).toBe(100);
+
+    const snap = mb.snapshot();
+
+    // Use benchmark() to get a stable average over multiple iterations
+    // rather than a single timing that may be skewed by JIT warm-up.
+    const result = benchmark(() => {
+      snap.resolveAnchors(anchors);
+    }, 100);
+    expect(result.avgMs).toBeLessThan(5);
+  });
 
   test.todo("singleton optimization provides speedup", () => {});
 });
@@ -1001,5 +1131,293 @@ describe("clearExcerpts", () => {
     // Adding single excerpt again should restore singleton
     mb.addExcerpt(buffer, excerptRange(0, 2));
     expect(mb.isSingleton).toBe(true);
+  });
+});
+
+
+describe("MultiBuffer - Snapshot version", () => {
+  // The snapshot version is the key used by DomRenderer to skip rebuilding
+  // WrapMap when nothing has changed (PR #219). These tests verify the
+  // invariants the caching relies on.
+
+  test("version changes after addExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const v0 = mb.snapshot().version;
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after removeExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    const id = mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.removeExcerpt(id);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after clearExcerpts", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.clearExcerpts();
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after setExcerpts", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf1, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.setExcerpts([{ buffer: buf2, range: excerptRange(0, 5) }]);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after setExcerptsForBuffer", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(10));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.setExcerptsForBuffer(buf, [excerptRange(0, 10)]);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version changes after expandExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const id = mb.addExcerpt(buf, excerptRange(5, 10));
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(id, 3, 3);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
+  test("version is stable: two snapshots from same state share a version", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    const v1 = mb.snapshot().version;
+    expect(v0).toBe(v1);
+  });
+
+  test("different MultiBuffer instances have different initial versions", () => {
+    const mb1 = createMultiBuffer();
+    const mb2 = createMultiBuffer();
+    expect(mb1.snapshot().version).not.toBe(mb2.snapshot().version);
+  });
+
+  test("version increments monotonically across multiple mutations", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const versions: number[] = [];
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(0, 10));
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(10, 20));
+    versions.push(mb.snapshot().version);
+    mb.addExcerpt(buf, excerptRange(20, 30));
+    versions.push(mb.snapshot().version);
+    for (let i = 1; i < versions.length; i++) {
+      const prev = versions[i - 1];
+      expect(prev).toBeDefined();
+      expect(versions[i]).toBeGreaterThan(prev ?? 0);
+    }
+  });
+});
+
+describe("setExcerpts (batch)", () => {
+  test("replaces all excerpts from multiple buffers atomically", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), "A\nB\nC");
+    const buf2 = createBuffer(createBufferId(), "X\nY");
+
+    // Start with one excerpt
+    mb.addExcerpt(buf1, excerptRange(0, 3));
+    expect(mb.lineCount).toBe(3);
+
+    // Replace with two excerpts from different buffers in one call
+    const ids = mb.setExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2) },
+      { buffer: buf2, range: excerptRange(0, 2) },
+    ]);
+
+    expect(ids.length).toBe(2);
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.lineCount).toBe(4); // 2 from buf1 + 2 from buf2
+    expect(mb.lines(mbRow(0), mbRow(4))).toEqual(["A", "B", "X", "Y"]);
+  });
+
+  test("empty entries clears all excerpts", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB\nC");
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    expect(mb.lineCount).toBe(3);
+
+    mb.setExcerpts([]);
+
+    expect(mb.excerpts.length).toBe(0);
+    expect(mb.lineCount).toBe(0);
+  });
+
+  test("respects options per entry", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB");
+
+    mb.setExcerpts([
+      { buffer: buf, range: excerptRange(0, 1), options: { editable: false } },
+      { buffer: buf, range: excerptRange(1, 2), options: { editable: true } },
+    ]);
+
+    expect(mb.excerpts.length).toBe(2);
+    expect(mb.excerpts[0]?.editable).toBe(false);
+    expect(mb.excerpts[1]?.editable).toBe(true);
+  });
+
+  test("produces same result as clearExcerpts + addExcerpt sequence", () => {
+    const buf1 = createBuffer(createBufferId(), "L1\nL2\nL3");
+    const buf2 = createBuffer(createBufferId(), "M1\nM2");
+
+    // Reference: classic clear+add pattern
+    const mbRef = createMultiBuffer();
+    mbRef.clearExcerpts();
+    mbRef.addExcerpt(buf1, excerptRange(0, 2));
+    mbRef.addExcerpt(buf2, excerptRange(0, 2));
+
+    // Batch version
+    const mbBatch = createMultiBuffer();
+    mbBatch.setExcerpts([
+      { buffer: buf1, range: excerptRange(0, 2) },
+      { buffer: buf2, range: excerptRange(0, 2) },
+    ]);
+
+    expect(mbBatch.lineCount).toBe(mbRef.lineCount);
+    expect(mbBatch.lines(mbRow(0), mbRow(4))).toEqual(
+      mbRef.lines(mbRow(0), mbRow(4)),
+    );
+  });
+
+  test("all returned IDs are unique", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const ids = mb.setExcerpts([
+      { buffer: buf, range: excerptRange(0, 10) },
+      { buffer: buf, range: excerptRange(10, 20) },
+      { buffer: buf, range: excerptRange(20, 30) },
+    ]);
+    const keys = new Set(ids.map((id) => `${id.index}:${id.generation}`));
+    expect(keys.size).toBe(3);
+  });
+
+  test("hasTrailingNewline option is honored", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB");
+    mb.setExcerpts([
+      {
+        buffer: buf,
+        range: excerptRange(0, 2),
+        options: { hasTrailingNewline: true },
+      },
+    ]);
+    expect(mb.excerpts[0]?.hasTrailingNewline).toBe(true);
+  });
+});
+
+describe("moveExcerpt", () => {
+  test("moves excerpt before another", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10)); // rows 0–9
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20)); // rows 10–19
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30)); // rows 20–29
+
+    // Move C before B → order becomes A, C, B
+    mb.moveExcerpt(idC, idB);
+
+    expect(mb.excerpts.length).toBe(3);
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idC);
+    expect(mb.excerpts[2]?.id).toEqual(idB);
+  });
+
+  test("startRows are recalculated after move", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buf, excerptRange(0, 10));  // 10 lines
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20)); // 10 lines
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30)); // 10 lines
+
+    // Move C before B → C gets rows 10–19, B gets rows 20–29
+    mb.moveExcerpt(idC, idB);
+
+    expect(num(mb.excerpts[1]?.startRow ?? mbRow(-1))).toBe(10);
+    expect(num(mb.excerpts[1]?.endRow ?? mbRow(-1))).toBe(20);
+    expect(num(mb.excerpts[2]?.startRow ?? mbRow(-1))).toBe(20);
+    expect(num(mb.excerpts[2]?.endRow ?? mbRow(-1))).toBe(30);
+  });
+
+  test("moves excerpt to end when insertBefore is undefined", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30));
+
+    // Move A to end → order becomes B, C, A
+    mb.moveExcerpt(idA, undefined);
+
+    expect(mb.excerpts[0]?.id).toEqual(idB);
+    expect(mb.excerpts[1]?.id).toEqual(idC);
+    expect(mb.excerpts[2]?.id).toEqual(idA);
+  });
+
+  test("no-op when id is stale/not found", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+
+    mb.removeExcerpt(idA);
+    const orderBefore = mb.excerpts.map((e) => e.id);
+    const vBefore = mb.snapshot().version;
+
+    // idA is now stale — moveExcerpt should be a no-op
+    mb.moveExcerpt(idA, idB);
+
+    expect(mb.excerpts.map((e) => e.id)).toEqual(orderBefore);
+    expect(mb.snapshot().version).toBe(vBefore);
+  });
+
+  test("version changes after moveExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const v0 = mb.snapshot().version;
+
+    mb.moveExcerpt(idB, undefined);
+
+    expect(mb.snapshot().version).toBeGreaterThan(v0);
+  });
+
+  test("lineCount is unchanged after move", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    mb.addExcerpt(buf, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30));
+    const totalBefore = mb.lineCount;
+
+    mb.moveExcerpt(idA, idC);
+
+    expect(mb.lineCount).toBe(totalBefore);
   });
 });

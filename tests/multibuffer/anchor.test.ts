@@ -458,8 +458,47 @@ describe("Anchor Survival - Buffer Edits", () => {
 
 
 describe("Anchor Survival - Excerpt Operations", () => {
-  test.todo("anchor survives excerpt expansion", () => {
-    // Depends on expandExcerpt
+  test("anchor survives excerpt expansion adding lines before", () => {
+    // Buffer: "L0\nL1\nL2\nL3\nL4\nL5\nL6"
+    // Excerpt covers buffer rows [4, 7) → "L4", "L5", "L6" at mb rows 0-2.
+    // Anchor at "L5" (mb row 1, col 0).
+    // Expand by 2 before: excerpt now covers [2, 7) → mb rows 0-4.
+    // "L5" shifts from mb row 1 → mb row 3 (offset from new start: 5 - 2 = 3).
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(4, 7));
+
+    const a = mb.createAnchor(mbPoint(1, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    mb.expandExcerpt(eid, 2, 0);
+
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 3, 0);
+  });
+
+  test("anchor survives excerpt expansion adding lines after", () => {
+    // Excerpt covers buffer rows [1, 4) → "L1", "L2", "L3" at mb rows 0-2.
+    // Anchor at "L2" (mb row 1, col 0).
+    // Expand by 2 after: excerpt now covers [1, 6).
+    // Lines were added AFTER the anchor row — anchor stays at mb row 1.
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(1, 4));
+
+    const a = mb.createAnchor(mbPoint(1, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    mb.expandExcerpt(eid, 0, 2);
+
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    expectPoint(resolved, 1, 0); // unchanged — expansion was after the anchor
   });
 
   test("anchor survives unrelated excerpt removal", () => {

@@ -2,6 +2,15 @@
  * Core types for single-buffer text storage.
  *
  * These types have no dependency on multibuffer concepts (excerpts, anchors).
+ *
+ * ## Encoding convention
+ *
+ * All offsets, lengths, and column values in this module are **UTF-16 code units**
+ * (matching JavaScript's `string.length` and `String.prototype.charCodeAt` semantics).
+ * A supplementary code point (e.g. emoji U+1F600) occupies **2** code units.
+ *
+ * The sole exception is `TextSummary.bytes`, which is the UTF-8 encoded byte
+ * count — useful for file-size display but not for position arithmetic.
  */
 
 /** Unique identifier for a buffer */
@@ -53,11 +62,14 @@ export interface BufferRange {
 export interface TextSummary {
   /** Total number of lines (including partial last line) */
   readonly lines: number;
-  /** Total byte count */
+  /** Total UTF-8 encoded byte count (for display only — not for position arithmetic) */
   readonly bytes: number;
-  /** Length of the last line (for column calculations) */
+  /** Length of the last line in UTF-16 code units (used for column calculations) */
   readonly lastLineLength: number;
-  /** Total character count (may differ from bytes for unicode) */
+  /**
+   * Total length of the text in UTF-16 code units (equals `rope.length` / JS `string.length`).
+   * Supplementary code points (e.g. emoji) contribute 2 units each.
+   */
   readonly chars: number;
 }
 

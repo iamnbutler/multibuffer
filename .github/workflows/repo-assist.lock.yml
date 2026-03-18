@@ -36,7 +36,7 @@
 #
 # gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"66d7ee202ad5942ac1608a6ecf959962f3392024e06f2dcba267d65d6742cb18","compiler_version":"v0.56.1","strict":true}
 
-name: "Repo Assist"
+name: "Auto / Repo Assist"
 "on":
   discussion:
     types:
@@ -73,7 +73,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}"
 
-run-name: "Repo Assist"
+run-name: "Auto / Repo Assist"
 
 jobs:
   activation:
@@ -122,7 +122,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.56.1"
-          GH_AW_INFO_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_INFO_WORKFLOW_NAME: "Auto / Repo Assist"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -1491,7 +1491,7 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Repo Assist"
+          WORKFLOW_NAME: "Auto / Repo Assist"
           WORKFLOW_DESCRIPTION: "A friendly repository assistant that runs 4 times a day to support contributors and maintainers.\nCan also be triggered on-demand via '/repo-assist <instructions>' to perform specific tasks.\n- Labels and triages open issues\n- Comments helpfully on open issues to unblock contributors and onboard newcomers\n- Identifies issues that can be fixed and creates draft pull requests with fixes\n- Improves performance, testing, and code quality via PRs\n- Makes engineering investments: dependency updates, CI improvements, tooling\n- Updates its own PRs when CI fails or merge conflicts arise\n- Nudges stale PRs waiting for author response\n- Takes the repository forward with proactive improvements\n- Maintains a persistent memory of work done and what remains\nAlways polite, constructive, and mindful of the project's goals."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
@@ -1632,7 +1632,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1645,7 +1645,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1658,7 +1658,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "repo-assist"
@@ -1683,7 +1683,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -1700,7 +1700,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Repo Assist"
+          GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -1838,7 +1838,7 @@ jobs:
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/repo-assist"
       GH_AW_ENGINE_ID: "claude"
       GH_AW_WORKFLOW_ID: "repo-assist"
-      GH_AW_WORKFLOW_NAME: "Repo Assist"
+      GH_AW_WORKFLOW_NAME: "Auto / Repo Assist"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}

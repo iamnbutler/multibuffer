@@ -23,9 +23,9 @@
 #
 # Maintains and updates the documentation glossary based on codebase changes
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"cd6fcbacee301bfc286ca92bafef84a68307537f687038ecccdcd84c1efebcb4","compiler_version":"v0.56.1","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"b859b764622cf3c7f94d6dbe60aa00111b7a3f0e0ab3cf3272748199ad60259f","compiler_version":"v0.56.1","strict":true}
 
-name: "Glossary Maintainer"
+name: "Docs / Glossary"
 "on":
   schedule:
   - cron: "34 12 * * 1-5"
@@ -37,7 +37,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Glossary Maintainer"
+run-name: "Docs / Glossary"
 
 jobs:
   activation:
@@ -63,7 +63,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.56.1"
-          GH_AW_INFO_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_INFO_WORKFLOW_NAME: "Docs / Glossary"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -951,7 +951,7 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Glossary Maintainer"
+          WORKFLOW_NAME: "Docs / Glossary"
           WORKFLOW_DESCRIPTION: "Maintains and updates the documentation glossary based on codebase changes"
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
@@ -1091,7 +1091,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_WORKFLOW_NAME: "Docs / Glossary"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1104,7 +1104,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_WORKFLOW_NAME: "Docs / Glossary"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1117,7 +1117,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_WORKFLOW_NAME: "Docs / Glossary"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "glossary-maintainer"
@@ -1139,7 +1139,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_WORKFLOW_NAME: "Docs / Glossary"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -1156,7 +1156,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+          GH_AW_WORKFLOW_NAME: "Docs / Glossary"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -1181,7 +1181,7 @@ jobs:
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/glossary-maintainer"
       GH_AW_ENGINE_ID: "claude"
       GH_AW_WORKFLOW_ID: "glossary-maintainer"
-      GH_AW_WORKFLOW_NAME: "Glossary Maintainer"
+      GH_AW_WORKFLOW_NAME: "Docs / Glossary"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}

@@ -71,7 +71,7 @@ steps:
 
 ---
 
-# Daily Test Improver
+# Auto / Test Improver
 
 ## Command Mode
 

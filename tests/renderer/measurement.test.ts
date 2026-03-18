@@ -6,9 +6,10 @@
  * - calculateContentHeight: total pixel height
  * - yToVisualRow / yToRow: pixel → row
  * - rowToY: row → pixel
- * - xToColumn: pixel → column
- * - clampScrollTop: scroll bounds enforcement (spool mm3lhpd9-u00r)
- * - calculateScrollTop: scroll strategies (spool mm3lhpe5-g1e7, mm3lhpi9-8bbb)
+ * - xToColumn: pixel → column (including missing charWidth error)
+ * - clampScrollTop: scroll bounds enforcement
+ * - calculateScrollTop: scroll strategies
+ * - createViewport: builds a Viewport from scroll state
  */
 
 import { describe, expect, test } from "bun:test";
@@ -18,6 +19,7 @@ import {
   calculateScrollTop,
   calculateVisibleRows,
   clampScrollTop,
+  createViewport,
   rowToY,
   xToColumn,
   yToRow,
@@ -176,10 +178,49 @@ describe("xToColumn", () => {
     // x = 40 + 10*8 = 120 → column 10
     expect(xToColumn(120, M)).toBe(10);
   });
+
+  test("throws when charWidth is undefined", () => {
+    const noCharWidth: Measurements = { lineHeight: 20, gutterWidth: 40 };
+    expect(() => xToColumn(80, noCharWidth)).toThrow("xToColumn requires charWidth");
+  });
 });
 
 
-describe("clampScrollTop (spool mm3lhpd9-u00r)", () => {
+describe("createViewport", () => {
+  const M: Measurements = { lineHeight: 20, charWidth: 8, gutterWidth: 40 };
+
+  test("passthrough: scrollTop, height, width are preserved", () => {
+    const vp = createViewport(100, 400, 600, M, 50);
+    expect(vp.scrollTop).toBe(100);
+    expect(vp.height).toBe(400);
+    expect(vp.width).toBe(600);
+  });
+
+  test("at scrollTop=0 startRow is 0", () => {
+    const vp = createViewport(0, 200, 800, M, 100);
+    expect(num(vp.startRow)).toBe(0);
+  });
+
+  test("endRow is clamped to totalLines for small content", () => {
+    const vp = createViewport(0, 200, 800, M, 3);
+    expect(num(vp.endRow)).toBe(3);
+  });
+
+  test("scrolled deep into content advances startRow", () => {
+    // scrollTop=500px → visibleStart=25, startRow = max(0, 25-10) = 15
+    const vp = createViewport(500, 200, 800, M, 100);
+    expect(num(vp.startRow)).toBe(15);
+  });
+
+  test("zero-line content produces startRow=endRow=0", () => {
+    const vp = createViewport(0, 200, 800, M, 0);
+    expect(num(vp.startRow)).toBe(0);
+    expect(num(vp.endRow)).toBe(0);
+  });
+});
+
+
+describe("clampScrollTop", () => {
   test("zero scrollTop stays at 0", () => {
     expect(clampScrollTop(0, 1000, 200)).toBe(0);
   });
@@ -215,7 +256,7 @@ describe("clampScrollTop (spool mm3lhpd9-u00r)", () => {
 });
 
 
-describe("calculateScrollTop - scroll strategies (spool mm3lhpe5-g1e7, mm3lhpi9-8bbb)", () => {
+describe("calculateScrollTop - scroll strategies", () => {
   // Layout: 50 lines × 20px = 1000px content, 200px viewport
   const LH = 20;
   const VH = 200;

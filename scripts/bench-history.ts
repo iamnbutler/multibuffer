@@ -47,6 +47,10 @@ function formatMs(ms: number): string {
   return `${ms.toFixed(1)}ms`;
 }
 
+function fmtOrNA(v: number | null): string {
+  return v !== null ? formatMs(v).padStart(8) : "N/A".padStart(8);
+}
+
 function showSummary(entries: HistoryEntry[], count: number): void {
   const recent = entries.slice(-count).reverse();
 
@@ -89,7 +93,6 @@ function showSummary(entries: HistoryEntry[], count: number): void {
       }
     }
 
-    const fmtOrNA = (v: number | null) => (v !== null ? formatMs(v).padStart(8) : "     N/A");
     const status = failed === 0 ? "✓" : "✗";
 
     console.log(

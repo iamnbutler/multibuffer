@@ -34,7 +34,7 @@
 #
 # gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"6def75b3361be8d2afbeec5da59faf1d0d46affa7923a3e9ebfd340739382c86","compiler_version":"v0.56.1","strict":true}
 
-name: "Implementor Agent"
+name: "PR / Implement"
 "on":
   discussion:
     types:
@@ -71,7 +71,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}"
 
-run-name: "Implementor Agent"
+run-name: "PR / Implement"
 
 jobs:
   activation:
@@ -120,7 +120,7 @@ jobs:
           GH_AW_INFO_VERSION: ""
           GH_AW_INFO_AGENT_VERSION: "latest"
           GH_AW_INFO_CLI_VERSION: "v0.56.1"
-          GH_AW_INFO_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_INFO_WORKFLOW_NAME: "PR / Implement"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -1355,7 +1355,7 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
-          WORKFLOW_NAME: "Implementor Agent"
+          WORKFLOW_NAME: "PR / Implement"
           WORKFLOW_DESCRIPTION: "Implements features from GitHub issues following the project's TDD discipline.\nTriggered on schedule (7am/2pm UTC) or on-demand via '/implement <instructions>'.\n- Reads CLAUDE.md and AGENTS.md for project constraints\n- Follows Types → Tests → Implementation phases\n- Creates draft PRs with working, tested code\n- Can decompose large issues into sub-issues\n- Commits WIP and resumes across runs\n- Self-maintains its PRs for CI failures\n- Can delegate to /pr-fix for complex CI issues\nAlways focused, test-driven, and mindful of the project's architecture."
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
@@ -1496,7 +1496,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_WORKFLOW_NAME: "PR / Implement"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1509,7 +1509,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_WORKFLOW_NAME: "PR / Implement"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1522,7 +1522,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_WORKFLOW_NAME: "PR / Implement"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "implementor"
@@ -1547,7 +1547,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_WORKFLOW_NAME: "PR / Implement"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_MESSAGE: ${{ steps.noop.outputs.noop_message }}
@@ -1564,7 +1564,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           GH_AW_AGENT_OUTPUT: ${{ env.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Implementor Agent"
+          GH_AW_WORKFLOW_NAME: "PR / Implement"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -1702,7 +1702,7 @@ jobs:
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/implementor"
       GH_AW_ENGINE_ID: "claude"
       GH_AW_WORKFLOW_ID: "implementor"
-      GH_AW_WORKFLOW_NAME: "Implementor Agent"
+      GH_AW_WORKFLOW_NAME: "PR / Implement"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}

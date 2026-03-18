@@ -1,5 +1,5 @@
 ---
-name: Glossary Maintainer
+name: Docs / Glossary
 description: Maintains and updates the documentation glossary based on codebase changes
 on:
   schedule: daily on weekdays
@@ -45,7 +45,7 @@ steps:
 
 ---
 
-# Glossary Maintainer
+# Docs / Glossary
 
 You are an AI documentation agent that maintains the project glossary or terminology reference documentation.
 

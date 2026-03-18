@@ -15,6 +15,21 @@ import type {
 } from "../multibuffer/types.ts";
 
 /**
+ * Event map for the Editor event emitter.
+ * Keys are event names; values are tuples of callback argument types.
+ */
+export type EditorEventMap = {
+  /** Fires when text content changes. Provides the new snapshot. */
+  textChange: [snapshot: MultiBufferSnapshot];
+  /** Fires when the cursor position changes. Provides new and previous cursor points. */
+  cursorChange: [cursor: MultiBufferPoint, prev: MultiBufferPoint];
+  /** Fires when the selection changes. Provides the new selection (or undefined if none). */
+  selectionChange: [selection: Selection | undefined];
+  /** Fires on any state change. Provides the current cursor and selection. */
+  change: [state: { cursor: MultiBufferPoint; selection: Selection | undefined }];
+};
+
+/**
  * Options for creating an Editor instance.
  * All options are opt-in; omit to use defaults.
  */

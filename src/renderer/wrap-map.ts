@@ -173,15 +173,30 @@ export function wrapLine(text: string, wrapWidth: number): string[] {
  * Equivalent to `wrapLine(text, wrapWidth).length` but avoids building the
  * intermediate `string[]`, eliminating O(segments) slice allocations per line.
  * Used in WrapMap construction where only the count is needed.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) to avoid the iterator
+ * protocol and codePointAt overhead for typical programming text — consistent
+ * with the approach used in visualWidth, wrapLine, and charColToVisualCol.
+ * This also eliminates the separate visualWidth() pre-check, reducing the
+ * common case from two O(n) passes to one.
  */
 export function wrapLineCount(text: string, wrapWidth: number): number {
-  if (wrapWidth <= 0 || visualWidth(text) <= wrapWidth) {
-    return 1;
-  }
+  if (wrapWidth <= 0) return 1;
   let count = 1;
   let segVW = 0;
-  for (const char of text) {
-    const cw = codePointWidth(char.codePointAt(0) ?? 0);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    if (c <= 0x7f) {
+      cw = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // High surrogate: decode the full code point from the surrogate pair.
+      const low = text.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+    } else {
+      cw = codePointWidth(c);
+    }
     if (segVW + cw > wrapWidth && segVW > 0) {
       count++;
       segVW = cw;
@@ -195,6 +210,14 @@ export function wrapLineCount(text: string, wrapWidth: number): number {
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
+  /**
+   * Flat array of segment char-start offsets, indexed by visual-row index.
+   * For buffer row r and segment s: `charStart = _segCharStart[_prefix[r] + s]`.
+   *
+   * Enables O(1) lookup of a segment's character offset within its line,
+   * eliminating `wrapLine()` recomputation in the hit-test and cursor hot paths.
+   */
+  private _segCharStart: Uint32Array;
   private _wrapWidth: number;
   readonly totalVisualRows: number;
 
@@ -202,7 +225,7 @@ export class WrapMap {
     this._wrapWidth = wrapWidth;
     const lineCount = snapshot.lineCount;
 
-    // Build prefix sum
+    // Build prefix sum and segment char-start offsets in a single pass.
     this._prefix = new Uint32Array(lineCount + 1);
     this._prefix[0] = 0;
 
@@ -212,13 +235,23 @@ export class WrapMap {
     const endRow = lineCount as MultiBufferRow;
     const lines = snapshot.lines(startRow, endRow);
 
+    // Collect segment char-start offsets into a temporary array, then
+    // compact into a Uint32Array once totalVisualRows is known.
+    const segCharStartArr: number[] = [];
+
     for (let i = 0; i < lineCount; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLineCount(line, wrapWidth);
-      this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
+      const segments = wrapLine(line, wrapWidth);
+      this._prefix[i + 1] = (this._prefix[i] ?? 0) + segments.length;
+      let charPos = 0;
+      for (const seg of segments) {
+        segCharStartArr.push(charPos);
+        charPos += seg.length;
+      }
     }
 
     this.totalVisualRows = this._prefix[lineCount] ?? 0;
+    this._segCharStart = new Uint32Array(segCharStartArr);
   }
 
   /** How many visual rows does a buffer row occupy? */
@@ -250,6 +283,18 @@ export class WrapMap {
     const segment = visualRow - (this._prefix[lo] ?? 0);
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { mbRow: lo as MultiBufferRow, segment };
+  }
+
+  /**
+   * Character offset (UTF-16 code-unit index) of the first character of
+   * segment `s` within buffer row `mbRow`'s line text. O(1).
+   *
+   * Used by hit-test and cursor rendering to avoid recomputing wrap segments
+   * on every mouse-move event.
+   */
+  segmentCharStart(mbRow: MultiBufferRow, segment: number): number {
+    const baseIdx = this._prefix[mbRow] ?? 0;
+    return this._segCharStart[baseIdx + segment] ?? 0;
   }
 
   /** Total content height in pixels. */

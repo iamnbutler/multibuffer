@@ -105,6 +105,34 @@ export class Rope {
     return result;
   }
 
+  /**
+   * Compute UTF-8 byte length by scanning chunks directly.
+   *
+   * Avoids the O(n) string allocation of `utf8ByteLength(rope.text())` — instead
+   * scans each chunk in place. For a 10K-line buffer (~400 chunks, ~400 KB text),
+   * this eliminates a ~400 KB string allocation on every buffer edit.
+   */
+  byteLength(): number {
+    let total = 0;
+    for (const c of this._chunks) {
+      const s = c.text;
+      for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        if (code <= 0x7f) {
+          total += 1;
+        } else if (code <= 0x7ff) {
+          total += 2;
+        } else if (code >= 0xd800 && code <= 0xdbff) {
+          total += 4;
+          i++;
+        } else {
+          total += 3;
+        }
+      }
+    }
+    return total;
+  }
+
   /** Get a single line by 0-based index. */
   line(row: number): string {
     if (row < 0 || row >= this.lineCount) return "";
