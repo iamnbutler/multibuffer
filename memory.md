@@ -5,28 +5,26 @@
 - CI: install→build:demo→typecheck→lint→test
 
 ## Framework
-- bun:test; tests/ mirrors src/; tests/helpers.ts, tests/property-helpers.ts
-- `num()` unwraps branded types; biome-ignore for branded casts
+- bun:test; tests/ mirrors src/; tests/helpers.ts (shared), property-helpers.ts (pending #234)
+- num() unwraps branded types; biome-ignore for branded casts
 
-## Open Test Improver PRs
-- #234 OPEN: property-helpers shared PRNG extraction (2026-03-16)
-- branch test-assist/setexcerpts-invariant-tests-1773744165 SUBMITTED (2026-03-17)
+## Open PRs
+- #234 OPEN: property-helpers shared PRNG extraction — clean
+- #245 OPEN: 3 missing setExcerpts invariant tests — clean
 
 ## Backlog
 1. anchor bias-at-boundary — BLOCKED (excerptAt not bias-aware)
-2. singleton optimization test — feature unimplemented
+2. singleton optimization — feature unimplemented
 3. edit-proxy cross-excerpt — BLOCKED
 4. e2e Playwright (#119)
-5. fast-check fuzz tests (#80, approved) — property-helpers.ts in place
+5. fast-check fuzz (#80, approved) — precursor #234 pending
+6. reDiff→edit view consistency regression test — BLOCKED pending #239/#246/#250
 
 ## Round-Robin
-Last run: 2026-03-17 run 23189994499; tasks: 2,3,4,7. Next: 1,5,6,7.
+Last: 2026-03-18 run 23240527188; tasks: 4,5,6,7. Next: 1,2,3,7.
 
 ## Notes
-- Recent merges: #214 (buffer property tests), #226 (snapshot version invariants) — 2026-03-16
-- snapshot.version: increments in _markDirty()
-- bun.lock frozen prevents dep install
-- setExcerpts() bug: doesn't update _bufferToExcerpts → edit() won't refresh snapshots
-  Fixed by Repo Assist PR #239; Test Improver filed duplicate bug issue
-- Repo Assist active in repo — check for overlap before PRs/issues
-- PR #243 (Implementor): MultiBuffer observer events on/off
+- setExcerpts() bug (#244): doesn't update _bufferToExcerpts; fix PRs: #239, #246, #250 (all open)
+- PR #243 (Implementor): MultiBuffer observer events on/off — open, clean, 14 tests
+- controller.test.ts: local editBuffer helper + inline mbRow/mbPoint casts (vs helpers.ts)
+- Repo Assist active; check for overlap before PRs/issues
