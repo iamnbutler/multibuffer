@@ -2334,4 +2334,35 @@ describe("Editor - Visual Line Navigation with wrapWidth", () => {
     if (start) expectPoint(start, 0, 5);
     if (end) expectPoint(end, 0, 15);
   });
+
+  test("successive Shift+down extends selection across multiple visual rows", () => {
+    const { editor, mb } = setupWithWrap("abcdefghij1234567890ABCDEFGHIJ", 10);
+    editor.setCursor(mbPoint(0, 5));
+
+    // First Shift+down: selection from visual row 0 to visual row 1
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    {
+      const snap = mb.snapshot();
+      const sel = editor.selection;
+      expect(sel).toBeDefined();
+      if (!sel) return;
+      const start = snap.resolveAnchor(sel.range.start);
+      const end = snap.resolveAnchor(sel.range.end);
+      if (start) expectPoint(start, 0, 5);
+      if (end) expectPoint(end, 0, 15);
+    }
+
+    // Second Shift+down: selection extends from visual row 0 to visual row 2
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    {
+      const snap = mb.snapshot();
+      const sel = editor.selection;
+      expect(sel).toBeDefined();
+      if (!sel) return;
+      const start = snap.resolveAnchor(sel.range.start);
+      const end = snap.resolveAnchor(sel.range.end);
+      if (start) expectPoint(start, 0, 5);
+      if (end) expectPoint(end, 0, 25);
+    }
+  });
 });
