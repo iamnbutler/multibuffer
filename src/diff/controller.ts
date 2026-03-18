@@ -7,24 +7,41 @@
  * - Subscriber notifications when diff changes
  */
 
-import type { Buffer, BufferRange, BufferRow } from "../buffer/types.ts";
+import { createBuffer } from "../buffer/buffer.ts";
+import type { Buffer, BufferId } from "../buffer/types.ts";
 import type {
-  ExcerptRange,
   MultiBuffer,
-  MultiBufferRange,
-  MultiBufferRow,
 } from "../multibuffer/types.ts";
-import type { Decoration, DecorationStyle } from "../renderer/types.ts";
-import type { DiffOptions } from "./diff.ts";
-import { diff } from "./diff.ts";
+import type { Decoration } from "../renderer/types.ts";
+import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
+import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
+import {
+  DELETE_STYLE,
+  INSERT_STYLE,
+  INTRALINE_DELETE_STYLE,
+  INTRALINE_INSERT_STYLE,
+  makeColumnDecoration,
+  makeDecoration,
+  makeExcerptRange,
+} from "./diff-styles.ts";
+import { formatHunkHeader, hunkToHeader } from "./helpers.ts";
 import type { UnifiedDiffMultiBufferOptions } from "./multibuffer.ts";
-import { createUnifiedDiffMultiBuffer } from "./multibuffer.ts";
+import { createUnifiedDiffMultiBuffer, HUNK_HEADER_STYLE } from "./multibuffer.ts";
 
 export interface DiffControllerOptions
   extends DiffOptions,
     UnifiedDiffMultiBufferOptions {
   /** Debounce delay in milliseconds. Default: 150. */
   debounceMs?: number;
+  /** Enable intraline (character-level) diff highlighting. Default: true. */
+  intraline?: boolean;
+  /** Options for intraline diff computation. */
+  intralineOptions?: IntralineDiffOptions;
+  /**
+   * When true, all excerpts are non-editable (both insert and equal lines).
+   * Use this for read-only diff viewers. Default: false.
+   */
+  readOnly?: boolean;
 }
 
 export interface DiffController {
@@ -44,19 +61,39 @@ export interface DiffController {
   dispose(): void;
 }
 
+/** Unique buffer ID counter for separator buffers in controllers. */
+let controllerSeparatorBufferCounter = 0;
+function createControllerSeparatorBufferId(): BufferId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for BufferId
+  return `__controller_hunk_separator_${++controllerSeparatorBufferCounter}__` as BufferId;
+}
+
 export function createDiffController(
   oldBuffer: Buffer,
   newBuffer: Buffer,
   options?: DiffControllerOptions,
 ): DiffController {
   const debounceMs = options?.debounceMs ?? 150;
-  const editableEqual = options?.editableEqual ?? true;
+  const readOnly = options?.readOnly ?? false;
+  const enableIntraline = options?.intraline ?? true;
+  const intralineOptions = options?.intralineOptions;
+  // In readOnly mode, force all excerpts to be non-editable
+  const editableEqual = readOnly ? false : (options?.editableEqual ?? true);
+  const editableInsert = readOnly ? false : (options?.editableInsert ?? true);
+  const showHunkSeparators = options?.showHunkSeparators ?? true;
 
-  // Initial diff
-  const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, options);
+  // Compute editableEqual/editableInsert from readOnly and pass them explicitly,
+  // overriding any values in options.
+  const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, {
+    ...options,
+    editableEqual,
+    editableInsert,
+  });
   const _multiBuffer = result.multiBuffer;
   let _decorations = result.decorations;
   let _isEqual = result.isEqual;
+  // Keep a reference to separator buffer to prevent GC
+  let _separatorBuffer: Buffer | undefined = result.separatorBuffer;
 
   let _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const _subscribers: Set<(decorations: readonly Decoration[]) => void> =
@@ -86,6 +123,7 @@ export function createDiffController(
       _multiBuffer.setExcerpts(entries);
       _decorations = [];
       _isEqual = true;
+      _separatorBuffer = undefined;
     } else {
       // Build the full excerpt list and decoration list up front, then set
       // all excerpts in one call (single _rebuildCache instead of N+1).
@@ -94,7 +132,44 @@ export function createDiffController(
       const newDecorations: Decoration[] = [];
       let mbRow = 0;
 
-      for (const hunk of diffResult.hunks) {
+      // Create separator buffer if needed (multiple hunks and separators enabled)
+      const hunkCount = diffResult.hunks.length;
+      let separatorBuffer: Buffer | undefined;
+      if (showHunkSeparators && hunkCount > 1) {
+        const separatorLines: string[] = [];
+        for (let h = 1; h < hunkCount; h++) {
+          const hunk = diffResult.hunks[h];
+          if (hunk) {
+            separatorLines.push(formatHunkHeader(hunkToHeader(hunk)));
+          }
+        }
+        separatorBuffer = createBuffer(
+          createControllerSeparatorBufferId(),
+          separatorLines.join("\n"),
+        );
+      }
+
+      let separatorLineIndex = 0;
+
+      for (let hunkIndex = 0; hunkIndex < diffResult.hunks.length; hunkIndex++) {
+        const hunk = diffResult.hunks[hunkIndex];
+        if (!hunk) continue;
+
+        // Insert hunk separator before all hunks except the first
+        if (showHunkSeparators && hunkIndex > 0 && separatorBuffer) {
+          entries.push({
+            buffer: separatorBuffer,
+            range: makeExcerptRange(separatorLineIndex, separatorLineIndex + 1),
+            options: { editable: false },
+          });
+          newDecorations.push(makeDecoration(mbRow, 1, HUNK_HEADER_STYLE));
+          mbRow += 1;
+          separatorLineIndex += 1;
+        }
+
+        // Track hunk line indices to their multibuffer row mapping for intraline
+        const hunkLineToMbRow: number[] = [];
+
         let i = 0;
         while (i < hunk.lines.length) {
           const firstLine = hunk.lines[i];
@@ -102,8 +177,10 @@ export function createDiffController(
           const kind = firstLine.kind;
 
           // Count consecutive lines of the same kind
+          const groupStart = i;
           let lineCount = 0;
           while (i < hunk.lines.length && hunk.lines[i]?.kind === kind) {
+            hunkLineToMbRow[i] = mbRow + (i - groupStart);
             i++;
             lineCount++;
           }
@@ -124,7 +201,7 @@ export function createDiffController(
               entries.push({
                 buffer: newBuffer,
                 range: makeExcerptRange(firstRow, firstRow + lineCount),
-                options: { editable: true },
+                options: { editable: editableInsert },
               });
               newDecorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
             }
@@ -143,11 +220,45 @@ export function createDiffController(
 
           mbRow += lineCount;
         }
+
+        // Generate intraline decorations for paired delete/insert lines
+        if (enableIntraline) {
+          const pairs = pairDeleteInsertLines(hunk.lines);
+          for (const pair of pairs) {
+            const intraline = computeIntralineDiff(
+              pair.deleteLine.text,
+              pair.insertLine.text,
+              intralineOptions,
+            );
+
+            const deleteMbRow = hunkLineToMbRow[pair.deleteIdx];
+            const insertMbRow = hunkLineToMbRow[pair.insertIdx];
+
+            // Add intraline delete decorations
+            if (deleteMbRow !== undefined) {
+              for (const range of intraline.deleteRanges) {
+                newDecorations.push(
+                  makeColumnDecoration(deleteMbRow, range.startColumn, range.endColumn, INTRALINE_DELETE_STYLE),
+                );
+              }
+            }
+
+            // Add intraline insert decorations
+            if (insertMbRow !== undefined) {
+              for (const range of intraline.insertRanges) {
+                newDecorations.push(
+                  makeColumnDecoration(insertMbRow, range.startColumn, range.endColumn, INTRALINE_INSERT_STYLE),
+                );
+              }
+            }
+          }
+        }
       }
 
       _multiBuffer.setExcerpts(entries);
       _decorations = newDecorations;
       _isEqual = false;
+      _separatorBuffer = separatorBuffer;
     }
 
     // Notify subscribers
@@ -206,48 +317,4 @@ export function createDiffController(
     onUpdate,
     dispose,
   };
-}
-
-// Styles duplicated from multibuffer.ts - could be extracted to shared module
-const DELETE_STYLE = {
-  backgroundColor: "rgba(255, 80, 80, 0.10)",
-  gutterBackground: "rgba(255, 80, 80, 0.18)",
-  gutterSign: "−",
-  gutterSignColor: "#f87171",
-};
-
-const INSERT_STYLE = {
-  backgroundColor: "rgba(80, 200, 80, 0.10)",
-  gutterBackground: "rgba(80, 200, 80, 0.18)",
-  gutterSign: "+",
-  gutterSignColor: "#4ade80",
-};
-
-/** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
-function makeExcerptRange(startRow: number, endRow: number): ExcerptRange {
-  const bufRange: BufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    start: { row: startRow as BufferRow, column: 0 },
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    end: { row: endRow as BufferRow, column: 0 },
-  };
-  return { context: bufRange, primary: bufRange };
-}
-
-/** Build a line-range decoration covering [startMbRow, startMbRow + lineCount - 1]. */
-function makeDecoration(
-  startMbRow: number,
-  lineCount: number,
-  style: Partial<DecorationStyle>,
-): Decoration {
-  const range: MultiBufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-    start: { row: startMbRow as MultiBufferRow, column: 0 },
-    end: {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-      row: (startMbRow + lineCount - 1) as MultiBufferRow,
-      column: Number.MAX_SAFE_INTEGER,
-    },
-  };
-  return { range, style };
 }

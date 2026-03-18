@@ -38,6 +38,18 @@ export interface EditorViewOptions extends EditorOptions {
    * Called when a `{ type: 'custom', action }` command fires from the keymap.
    */
   onCustomCommand?: (action: string) => void;
+  /**
+   * When true, hide the cursor. Useful for read-only viewers.
+   * Default: false (cursor visible). If readOnly is true and this is not
+   * explicitly set, cursor is hidden automatically.
+   */
+  hideCursor?: boolean;
+  /**
+   * When true, skip mounting the input handler entirely. This prevents
+   * the editor from capturing keyboard events, leaving them for the page.
+   * Useful for pure read-only viewers. Default: false.
+   */
+  skipInputHandler?: boolean;
 }
 
 /** The EditorView facade — bundles Editor, DomRenderer, and InputHandler. */
@@ -46,8 +58,11 @@ export interface EditorView {
   readonly editor: Editor;
   /** The DOM renderer instance. */
   readonly renderer: ReturnType<typeof createDomRenderer>;
-  /** The keyboard/input handler instance. */
-  readonly inputHandler: InputHandler;
+  /**
+   * The keyboard/input handler instance.
+   * May be undefined if skipInputHandler was true.
+   */
+  readonly inputHandler: InputHandler | undefined;
 
   /**
    * Update a named group of decorations. Multiple groups are merged before
@@ -67,6 +82,26 @@ export interface EditorView {
 }
 
 /**
+ * Resolve readOnly-related options into concrete hideCursor / skipInputHandler
+ * booleans. Extracted as a pure function so it is testable without a DOM.
+ *
+ * Rules:
+ * - `hideCursor` defaults to `readOnly` when not explicitly set.
+ * - `skipInputHandler` defaults to `readOnly` when not explicitly set.
+ * - Explicit values always win over the `readOnly` default.
+ */
+export function resolveReadOnlyOptions(options?: Pick<EditorViewOptions, "readOnly" | "hideCursor" | "skipInputHandler">): {
+  hideCursor: boolean;
+  skipInputHandler: boolean;
+} {
+  const readOnly = options?.readOnly === true;
+  return {
+    hideCursor: options?.hideCursor ?? readOnly,
+    skipInputHandler: options?.skipInputHandler ?? readOnly,
+  };
+}
+
+/**
  * Merge all decoration groups from the keyed map into a flat array.
  * Exported for testing; callers should use the EditorView API.
  */
@@ -81,7 +116,7 @@ export function mergeDecorations(map: Map<string, Decoration[]>): Decoration[] {
 class EditorViewImpl implements EditorView {
   readonly editor: Editor;
   readonly renderer: ReturnType<typeof createDomRenderer>;
-  readonly inputHandler: InputHandler;
+  readonly inputHandler: InputHandler | undefined;
 
   private _container: HTMLElement;
   private _decorations = new Map<string, Decoration[]>();
@@ -98,21 +133,35 @@ class EditorViewImpl implements EditorView {
       wrapWidth: options?.measurements?.wrapWidth,
     };
 
+    // Determine cursor visibility and input handler from readOnly/explicit options
+    const { hideCursor, skipInputHandler } = resolveReadOnlyOptions(options);
+
     this.editor = createSingleBufferEditor(text, options);
     this.renderer = createDomRenderer(measurements);
-    this.inputHandler = new InputHandler(
-      (cmd) => {
-        // Intercept copy/cut to populate the clipboard before the state update
-        if (cmd.type === "copy" || cmd.type === "cut") {
-          const selected = this.editor.getSelectedText();
-          if (selected && typeof navigator !== "undefined") {
-            navigator.clipboard?.writeText(selected);
+
+    // Hide cursor in read-only mode
+    if (hideCursor) {
+      this.renderer.setCursorHidden(true);
+    }
+
+    // Only create input handler if not skipped
+    if (!skipInputHandler) {
+      this.inputHandler = new InputHandler(
+        (cmd) => {
+          // Intercept copy/cut to populate the clipboard before the state update
+          if (cmd.type === "copy" || cmd.type === "cut") {
+            const selected = this.editor.getSelectedText();
+            if (selected && typeof navigator !== "undefined") {
+              navigator.clipboard?.writeText(selected);
+            }
           }
-        }
-        this.editor.dispatch(cmd);
-      },
-      { keymap: options?.keymap },
-    );
+          this.editor.dispatch(cmd);
+        },
+        { keymap: options?.keymap },
+      );
+    } else {
+      this.inputHandler = undefined;
+    }
 
     if (options?.onCustomCommand) {
       this.editor.onCustomCommand(options.onCustomCommand);
@@ -120,12 +169,12 @@ class EditorViewImpl implements EditorView {
 
     // Mount renderer and input handler into the container
     this.renderer.mount(container);
-    this.inputHandler.mount(container);
+    this.inputHandler?.mount(container);
 
     // Wire click/drag callbacks from renderer → editor
     this.renderer.onClickPosition((point) => {
       this.editor.setCursor(point);
-      this.inputHandler.focus();
+      this.inputHandler?.focus();
     });
     this.renderer.onDrag((point) => {
       this.editor.extendSelectionTo(point);
@@ -167,7 +216,7 @@ class EditorViewImpl implements EditorView {
       this._rafId = null;
     }
     this.editor.off("change", this._onEditorChange);
-    this.inputHandler.unmount();
+    this.inputHandler?.unmount();
     this.renderer.unmount();
   }
 
@@ -205,7 +254,7 @@ class EditorViewImpl implements EditorView {
         selections: this.editor.selection ? [this.editor.selection] : [],
         decorations: mergeDecorations(this._decorations),
         excerptHeaders,
-        focused: this.inputHandler.hasFocus,
+        focused: this.inputHandler?.hasFocus ?? false,
       },
       lines,
     );
