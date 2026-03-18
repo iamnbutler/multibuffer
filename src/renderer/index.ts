@@ -24,6 +24,8 @@ export {
   THEME_CSS_VARIABLES,
   themeToVars,
 } from "./theme.ts";
+export type { InvalidationReason, Tile, TileManagerOptions } from "./tile-map.ts";
+export { createTileManager, markEditDirty, markSelectionDirty, TileManager } from "./tile-map.ts";
 export * from "./types.ts";
 export type { WrapMapOptions } from "./wrap-map.ts";
 export { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
