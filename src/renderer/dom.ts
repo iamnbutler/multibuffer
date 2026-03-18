@@ -218,6 +218,10 @@ export class DomRenderer implements Renderer {
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
   private _theme: Partial<Theme> | null = null;
+  /** Cursor blink interval in milliseconds, or false to disable blinking. */
+  private _blinkIntervalMs: number | false = 600;
+  /** Cached CSS animation string — updated only when _focused or _blinkIntervalMs change. */
+  private _blinkAnimationStr: string = "cursor-blink 600ms steps(1, end) infinite alternate";
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -350,11 +354,81 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  /**
+   * Re-measure character width from the container's current font.
+   * Call this after font changes at runtime (e.g., after FontFace.load() resolves,
+   * or in response to document.fonts.onloadingdone).
+   *
+   * This invalidates the wrap map and triggers a full re-render.
+   */
+  remeasure(): void {
+    if (!this._container) {
+      // Not mounted yet — nothing to remeasure
+      return;
+    }
+
+    // Re-measure character width from the current font
+    this._charWidth = this._measureCharWidth(this._container);
+
+    // Rebuild wrap map with new measurements (if snapshot exists)
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+
+    // Trigger a full re-render by simulating a scroll event
+    this._handleScroll();
+  }
+
+  /**
+   * Get the current measured character width.
+   * Returns the value measured from the font, or the default/provided value if not yet mounted.
+   */
+  getCharWidth(): number {
+    return this._charWidth;
+  }
+
   setTheme(theme: Partial<Theme>): void {
     this._theme = { ...this._theme, ...theme };
     if (this._container) {
       this._applyThemeVars(this._container, theme);
     }
+  }
+
+  /**
+   * Configure cursor blink behavior.
+   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking
+   *             (steady cursor). Default is 600ms.
+   * @throws {RangeError} If `ms` is a number that is not positive.
+   */
+  setCursorBlink(ms: number | false): void {
+    if (typeof ms === "number" && ms <= 0) {
+      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
+    }
+    this._blinkIntervalMs = ms;
+    this._updateBlinkAnimation();
+    // Re-apply the animation to the cursor if it's currently visible and focused
+    if (this._cursorEl && this._cursorEl.style.display !== "none") {
+      this._cursorEl.style.animation = this._blinkAnimationStr;
+    }
+  }
+
+  /**
+   * Return the current blink interval setting.
+   * Useful for testing and introspection.
+   */
+  getCursorBlinkInterval(): number | false {
+    return this._blinkIntervalMs;
+  }
+
+  /**
+   * Recompute and cache the CSS animation string. Called only when
+   * `_focused` or `_blinkIntervalMs` change.
+   */
+  private _updateBlinkAnimation(): void {
+    this._blinkAnimationStr =
+      !this._focused || this._blinkIntervalMs === false
+        ? "none"
+        : `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
   }
 
   private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
@@ -785,8 +859,21 @@ export class DomRenderer implements Renderer {
     rowEl.content.style.fontSize = "";
 
     const isDiffMode = this._measurements.gutterMode === "diff";
+    const isHunkSeparator = decoration?.isHunkSeparator === true;
 
-    if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
+    if (isHunkSeparator) {
+      // Hunk separator: full-width gutter area with centered text, no line numbers
+      // Hide all gutter columns and use a single span for the separator styling
+      rowEl.gutter.style.display = "none";
+      if (rowEl.oldGutter) rowEl.oldGutter.style.display = "none";
+      if (rowEl.newGutter) rowEl.newGutter.style.display = "none";
+      if (rowEl.sign) rowEl.sign.style.display = "none";
+
+      // The content area shows the hunk header text with muted styling
+      rowEl.content.style.paddingLeft = "8px";
+      rowEl.content.style.borderTop = "1px solid var(--editor-separator-border, #444444)";
+      rowEl.content.style.borderBottom = "1px solid var(--editor-separator-border, #444444)";
+    } else if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
       // Diff mode: show old/new gutters and sign, hide standard gutter
       rowEl.gutter.style.display = "none";
       rowEl.oldGutter.style.display = "inline-block";
@@ -803,6 +890,11 @@ export class DomRenderer implements Renderer {
       rowEl.sign.textContent = decoration?.gutterSign ?? " ";
       rowEl.sign.style.color = decoration?.gutterSignColor ?? "";
       rowEl.sign.style.background = decoration?.gutterBackground ?? bg;
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     } else {
       // Standard mode: show standard gutter, hide diff gutters
       rowEl.gutter.style.display = "inline-block";
@@ -826,6 +918,11 @@ export class DomRenderer implements Renderer {
       } else {
         rowEl.gutter.textContent = gutterText;
       }
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     }
 
     if (tokens && tokens.length > 0) {
@@ -966,18 +1063,15 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
-    this._cursorEl.style.animation = this._focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Update focus state — call when the editor gains or loses keyboard focus. */
   setFocused(focused: boolean): void {
     this._focused = focused;
+    this._updateBlinkAnimation();
     if (!this._cursorEl || this._cursorEl.style.display === "none") return;
-    this._cursorEl.style.animation = focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Render selection highlight between two multibuffer points. */
