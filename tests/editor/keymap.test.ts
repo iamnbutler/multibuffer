@@ -26,6 +26,9 @@ import {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const isMac =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
+
 /** Create a fake KeyboardEvent with only the fields normalizeKey reads. */
 function key(
   k: string,
@@ -44,6 +47,18 @@ function key(
     altKey: opts.altKey ?? false,
     shiftKey: opts.shiftKey ?? false,
   } as KeyboardEvent;
+}
+
+/** Create a key event with the platform-correct "Mod" modifier set. */
+function modKey(
+  k: string,
+  opts: { altKey?: boolean; shiftKey?: boolean } = {},
+): KeyboardEvent {
+  return key(k, {
+    ...opts,
+    metaKey: isMac,
+    ctrlKey: !isMac,
+  });
 }
 
 function setup() {
@@ -72,10 +87,9 @@ describe("normalizeKey", () => {
     expect(normalizeKey(key("Backspace"))).toBe("Backspace");
   });
 
-  test("Mod modifier (ctrlKey on non-Mac)", () => {
-    // In test environment, isMac is false (navigator.platform undefined)
-    expect(normalizeKey(key("s", { ctrlKey: true }))).toBe("Mod+S");
-    expect(normalizeKey(key("z", { ctrlKey: true }))).toBe("Mod+Z");
+  test("Mod modifier (platform-aware)", () => {
+    expect(normalizeKey(modKey("s"))).toBe("Mod+S");
+    expect(normalizeKey(modKey("z"))).toBe("Mod+Z");
   });
 
   test("Alt modifier", () => {
@@ -87,11 +101,11 @@ describe("normalizeKey", () => {
   });
 
   test("Mod+Shift combination", () => {
-    expect(normalizeKey(key("k", { ctrlKey: true, shiftKey: true }))).toBe("Mod+Shift+K");
+    expect(normalizeKey(modKey("k", { shiftKey: true }))).toBe("Mod+Shift+K");
   });
 
   test("Mod+Alt+Shift combination", () => {
-    expect(normalizeKey(key("ArrowUp", { ctrlKey: true, altKey: true, shiftKey: true }))).toBe(
+    expect(normalizeKey(modKey("ArrowUp", { altKey: true, shiftKey: true }))).toBe(
       "Mod+Alt+Shift+ArrowUp",
     );
   });
