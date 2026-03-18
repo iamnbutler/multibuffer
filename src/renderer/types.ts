@@ -10,6 +10,42 @@
 import type { MultiBufferRange, MultiBufferRow, Selection } from "../multibuffer/types.ts";
 
 /**
+ * Visual theme for the editor.
+ * Keys correspond to entries in THEME_CSS_VARIABLES; values are CSS color strings.
+ * Use Partial<Theme> with setTheme() for runtime partial updates.
+ */
+export interface Theme {
+  // Editor chrome
+  /** Cursor color */
+  cursor: string;
+  /** Selection background */
+  selection: string;
+  /** Gutter (line number) text color */
+  gutter: string;
+  /** Excerpt header background */
+  headerBg: string;
+  /** Excerpt header border color */
+  headerBorder: string;
+  /** Excerpt header text color */
+  headerText: string;
+  /** Line background (use "transparent" to inherit) */
+  lineBg: string;
+  // Syntax highlighting
+  syntaxKeyword: string;
+  syntaxString: string;
+  syntaxNumber: string;
+  syntaxComment: string;
+  syntaxType: string;
+  syntaxFunction: string;
+  syntaxProperty: string;
+  syntaxOperator: string;
+  syntaxPunctuation: string;
+  syntaxConstant: string;
+  syntaxVariableBuiltin: string;
+  syntaxDefault: string;
+}
+
+/**
  * Fixed measurements for rendering.
  * All lines have identical height for O(1) calculations.
  */
@@ -126,6 +162,9 @@ export interface Renderer {
 
   /** Update measurements (e.g., after font change) */
   setMeasurements(measurements: Measurements): void;
+
+  /** Update the visual theme at runtime. Partial updates merge onto the current theme. */
+  setTheme(theme: Partial<Theme>): void;
 
   /** Render the current state */
   render(state: RenderState, lines: readonly string[]): void;
