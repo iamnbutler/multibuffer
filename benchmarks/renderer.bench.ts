@@ -19,7 +19,7 @@
 import { createBuffer } from "../src/buffer/buffer.ts";
 import { createMultiBuffer } from "../src/multibuffer/multibuffer.ts";
 import type { BufferId, BufferRow, ExcerptRange, MultiBufferRow } from "../src/multibuffer/types.ts";
-import { computeSelectionRects } from "../src/renderer/dom.ts";
+import { computeSelectionRects, sliceTokensToRange } from "../src/renderer/dom.ts";
 import type { Token } from "../src/renderer/highlighter.ts";
 import { WrapMap } from "../src/renderer/wrap-map.ts";
 import type { BenchmarkSuite } from "./harness.ts";
@@ -89,22 +89,29 @@ const tokens40 = makeTokens(40);
 const tokens200 = makeTokens(200);
 
 /**
- * Inline implementation of sliceTokensToRange used in dom.ts.
- * Reproduced here because it is not exported; benchmarks the same computation
- * path exercised during every repaint of a wrapped segment.
+ * Generate many tokens covering a line (simulates syntax-rich lines like minified JS).
+ * Creates tokens of varying widths, sorted by startColumn.
  */
-function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
-  const result: Token[] = [];
-  for (const t of tokens) {
-    if (t.endColumn <= segStart || t.startColumn >= segEnd) continue;
-    result.push({
-      startColumn: Math.max(0, t.startColumn - segStart),
-      endColumn: Math.min(segEnd - segStart, t.endColumn - segStart),
-      color: t.color,
+function makeManyTokens(count: number): Token[] {
+  const tokens: Token[] = [];
+  let col = 0;
+  const colors = ["#569cd6", "#d4d4d4", "#9cdcfe", "#ce9178", "#dcdcaa", "#4ec9b0"];
+  for (let i = 0; i < count; i++) {
+    const width = (i % 5) + 1; // Token widths: 1-5 chars
+    tokens.push({
+      startColumn: col,
+      endColumn: col + width,
+      // biome-ignore lint/style/noNonNullAssertion: expect: modulo always in bounds
+      color: colors[i % colors.length]!,
     });
+    col += width;
   }
-  return result;
+  return tokens;
 }
+
+// 200-token array (simulates heavily wrapped long lines)
+const tokens200Count = makeManyTokens(200);
+// Line length covered by 200 tokens: varies, but roughly 200 * avg(1..5) = 200 * 3 = 600 chars
 
 export const rendererBenchmarks: BenchmarkSuite = {
   name: "Renderer Pure-Path",
@@ -228,6 +235,33 @@ export const rendererBenchmarks: BenchmarkSuite = {
       targetMs: 0.005,
       fn: () => {
         sliceTokensToRange(tokens200, 0, 50);
+      },
+    },
+    // Binary search benchmarks — 200 tokens, O(log n + k) vs O(n)
+    {
+      name: "sliceTokensToRange - 200 tokens, segment at start",
+      iterations: 100000,
+      targetMs: 0.01,
+      fn: () => {
+        sliceTokensToRange(tokens200Count, 0, 20);
+      },
+    },
+    {
+      name: "sliceTokensToRange - 200 tokens, segment in middle",
+      iterations: 100000,
+      targetMs: 0.01,
+      fn: () => {
+        // ~300 chars in from start (middle of the token range)
+        sliceTokensToRange(tokens200Count, 300, 320);
+      },
+    },
+    {
+      name: "sliceTokensToRange - 200 tokens, segment near end",
+      iterations: 100000,
+      targetMs: 0.01,
+      fn: () => {
+        // Near end of the ~600-char line
+        sliceTokensToRange(tokens200Count, 550, 600);
       },
     },
     // ─── WrapMap rebuild on resize ────────────────────────────────────────────
