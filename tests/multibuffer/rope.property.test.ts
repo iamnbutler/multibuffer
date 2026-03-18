@@ -17,8 +17,8 @@
 import { describe, expect, test } from "bun:test";
 import { Rope } from "../../src/buffer/rope.ts";
 import {
-  type EditOp,
   applyToString,
+  type EditOp,
   mulberry32,
   randomOp,
   randomString,
