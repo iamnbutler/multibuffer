@@ -66,3 +66,20 @@ export interface IntralineDiff {
   /** Column ranges that changed in the inserted line. */
   readonly insertRanges: readonly IntralineRange[];
 }
+
+/**
+ * Metadata for a hunk separator line displayed between non-adjacent hunks.
+ * Contains the information needed to render the `@@ -X,Y +A,B @@ context` line.
+ */
+export interface HunkHeader {
+  /** Starting line in the old buffer (1-based for display). */
+  readonly oldStart: number;
+  /** Number of lines from the old buffer in this hunk. */
+  readonly oldCount: number;
+  /** Starting line in the new buffer (1-based for display). */
+  readonly newStart: number;
+  /** Number of lines from the new buffer in this hunk. */
+  readonly newCount: number;
+  /** Optional function/class context extracted from the hunk header. */
+  readonly context?: string;
+}
