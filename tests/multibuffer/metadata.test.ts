@@ -13,7 +13,9 @@ import {
   createBufferId,
   excerptRange,
   generateText,
+  mbPoint,
   resetCounters,
+  row,
 } from "../helpers.ts";
 
 beforeEach(() => {
@@ -199,8 +201,8 @@ describe("ExcerptMetadata - preservation through operations", () => {
     // Metadata should be preserved
     expect(info?.metadata).toEqual(metadata);
     // Range should be expanded
-    expect(info?.range.context.start.row).toBe(2);
-    expect(info?.range.context.end.row).toBe(18);
+    expect(info?.range.context.start.row).toBe(row(2));
+    expect(info?.range.context.end.row).toBe(row(18));
   });
 
   test("metadata preserved through buffer edits (_refreshExcerptsForBuffer)", () => {
@@ -214,7 +216,7 @@ describe("ExcerptMetadata - preservation through operations", () => {
     mb.addExcerpt(buffer, excerptRange(0, 10), { metadata });
 
     // Edit the buffer through the multibuffer
-    mb.edit({ row: 0, column: 0 } as import("../../src/multibuffer/types.ts").MultiBufferPoint, { row: 0, column: 0 } as import("../../src/multibuffer/types.ts").MultiBufferPoint, "new text");
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "new text");
 
     const info = mb.excerpts[0];
     expect(info?.metadata).toEqual(metadata);

@@ -18,6 +18,7 @@ import type {
   BufferSnapshot,
   EditEntry,
   Excerpt,
+  ExcerptAddOptions,
   ExcerptBoundary,
   ExcerptId,
   ExcerptInfo,
@@ -626,7 +627,7 @@ class MultiBufferImpl implements MultiBuffer {
   addExcerpt(
     buffer: Buffer,
     range: ExcerptRange,
-    options?: { hasTrailingNewline?: boolean; editable?: boolean; metadata?: ExcerptMetadata },
+    options?: ExcerptAddOptions,
   ): ExcerptId {
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
     const bufferId = buffer.id as string;
@@ -717,7 +718,7 @@ class MultiBufferImpl implements MultiBuffer {
     entries: ReadonlyArray<{
       buffer: Buffer;
       range: ExcerptRange;
-      options?: { hasTrailingNewline?: boolean; editable?: boolean; metadata?: ExcerptMetadata };
+      options?: ExcerptAddOptions;
     }>,
   ): readonly ExcerptId[] {
     // Remove all existing excerpts without triggering a cache rebuild each time.
@@ -960,21 +961,16 @@ class MultiBufferImpl implements MultiBuffer {
     const oldExcerpt = this._excerpts.get(excerptId);
     if (!oldExcerpt) return;
 
-    // Shallow merge the patch into existing metadata
-    const mergedMetadata: ExcerptMetadata = {
-      ...oldExcerpt.metadata,
-      ...patch,
+    // Shallow merge the patch into existing metadata.
+    // Use a struct spread instead of createExcerpt to avoid the O(n)
+    // computeExcerptSummary rope traversal — metadata updates are O(1).
+    const updatedExcerpt: Excerpt = {
+      ...oldExcerpt,
+      metadata: {
+        ...oldExcerpt.metadata,
+        ...patch,
+      },
     };
-
-    // Create a new excerpt with updated metadata
-    const updatedExcerpt = createExcerpt(
-      excerptId,
-      oldExcerpt.buffer,
-      oldExcerpt.range,
-      oldExcerpt.hasTrailingNewline,
-      oldExcerpt.editable,
-      mergedMetadata,
-    );
     this._excerpts.set(excerptId, updatedExcerpt);
     this._markDirty();
   }

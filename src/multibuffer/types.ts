@@ -184,16 +184,22 @@ export interface MultiBufferSnapshot {
 }
 
 /**
+ * Options for adding an excerpt (trailing newline, editability, metadata).
+ * Shared across addExcerpt, addExcerpts (via ExcerptSpec), and setExcerpts.
+ */
+export interface ExcerptAddOptions {
+  readonly hasTrailingNewline?: boolean;
+  readonly editable?: boolean;
+  readonly metadata?: ExcerptMetadata;
+}
+
+/**
  * Specification for creating a single excerpt in a batch operation.
  */
 export interface ExcerptSpec {
   readonly buffer: import("../buffer/types.ts").Buffer;
   readonly range: ExcerptRange;
-  readonly options?: {
-    hasTrailingNewline?: boolean;
-    editable?: boolean;
-    metadata?: ExcerptMetadata;
-  };
+  readonly options?: ExcerptAddOptions;
 }
 
 /**
@@ -208,11 +214,7 @@ export interface MultiBuffer {
   addExcerpt(
     buffer: import("../buffer/types.ts").Buffer,
     range: ExcerptRange,
-    options?: {
-      hasTrailingNewline?: boolean;
-      editable?: boolean;
-      metadata?: ExcerptMetadata;
-    },
+    options?: ExcerptAddOptions,
   ): ExcerptId;
   addExcerpts(specs: readonly ExcerptSpec[]): readonly ExcerptId[];
   removeExcerpt(excerptId: ExcerptId): void;
@@ -226,11 +228,7 @@ export interface MultiBuffer {
     entries: ReadonlyArray<{
       buffer: import("../buffer/types.ts").Buffer;
       range: ExcerptRange;
-      options?: {
-        hasTrailingNewline?: boolean;
-        editable?: boolean;
-        metadata?: ExcerptMetadata;
-      };
+      options?: ExcerptAddOptions;
     }>,
   ): readonly ExcerptId[];
   setExcerptsForBuffer(
