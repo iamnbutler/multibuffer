@@ -151,9 +151,16 @@ export interface ExcerptBoundary {
  * Keys are event names; values are tuples of callback argument types.
  */
 export type MultiBufferEventMap = {
-  /** Fires when an excerpt is added. Provides the new excerpt info. */
+  /** Fires when an excerpt is added. Provides the new excerpt info (including row offsets). */
   excerptAdded: [info: ExcerptInfo];
-  /** Fires when an excerpt is removed. Provides the removed excerpt's ID. */
+  /**
+   * Fires when an excerpt is removed. Provides only the removed excerpt's ID.
+   *
+   * Note: The payload is intentionally minimal (ID only, not a full ExcerptInfo snapshot).
+   * The excerpt's buffer, range, and row-offset data are already gone by the time the event
+   * fires — computing a pre-removal snapshot would require an additional cache rebuild.
+   * Consumers that need this data should maintain their own index from `excerptAdded` events.
+   */
   excerptRemoved: [id: ExcerptId];
 };
 
