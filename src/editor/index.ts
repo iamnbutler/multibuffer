@@ -12,8 +12,8 @@ export {
 } from "./factories.ts";
 export type { CommandCallback, InputHandlerOptions, KeyBindingResult } from "./input-handler.ts";
 export { InputHandler, keyEventToCommand, normalizeKey, resolveKeyBinding } from "./input-handler.ts";
-export { SearchController } from "./search.ts";
 export type { SearchOptions, SearchResult, SearchState } from "./search.ts";
+export { SearchController } from "./search.ts";
 export {
   collapseSelection,
   extendSelection,
