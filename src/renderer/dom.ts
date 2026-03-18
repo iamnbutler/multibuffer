@@ -218,6 +218,8 @@ export class DomRenderer implements Renderer {
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
   private _theme: Partial<Theme> | null = null;
+  /** Cursor blink interval in milliseconds, or false to disable blinking. */
+  private _blinkIntervalMs: number | false = 600;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -355,6 +357,30 @@ export class DomRenderer implements Renderer {
     if (this._container) {
       this._applyThemeVars(this._container, theme);
     }
+  }
+
+  /**
+   * Configure cursor blink behavior.
+   * @param ms - Blink interval in milliseconds, or `false` to disable blinking (steady cursor).
+   *             Default is 600ms.
+   */
+  setCursorBlink(ms: number | false): void {
+    this._blinkIntervalMs = ms;
+    // Re-apply the animation to the cursor if it's currently visible and focused
+    if (this._cursorEl && this._cursorEl.style.display !== "none") {
+      this._cursorEl.style.animation = this._blinkAnimation();
+    }
+  }
+
+  /**
+   * Build the CSS animation string for cursor blinking based on focus state
+   * and configured blink interval.
+   */
+  private _blinkAnimation(): string {
+    if (!this._focused || this._blinkIntervalMs === false) {
+      return "none";
+    }
+    return `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
   }
 
   private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
@@ -966,18 +992,14 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
-    this._cursorEl.style.animation = this._focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimation();
   }
 
   /** Update focus state — call when the editor gains or loses keyboard focus. */
   setFocused(focused: boolean): void {
     this._focused = focused;
     if (!this._cursorEl || this._cursorEl.style.display === "none") return;
-    this._cursorEl.style.animation = focused
-      ? "cursor-blink 600ms steps(1, end) infinite alternate"
-      : "none";
+    this._cursorEl.style.animation = this._blinkAnimation();
   }
 
   /** Render selection highlight between two multibuffer points. */
