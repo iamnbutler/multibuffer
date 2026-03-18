@@ -1,3 +1,4 @@
+export type { CanvasRendererOptions } from "./canvas.ts";
 export { CanvasRenderer, createCanvasRenderer } from "./canvas.ts";
 export { createDomRenderer, DomRenderer } from "./dom.ts";
 export type { GlyphAtlasConfig, GlyphInfo } from "./glyph-atlas.ts";
