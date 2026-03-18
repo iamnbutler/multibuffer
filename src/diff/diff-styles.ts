@@ -26,6 +26,16 @@ export const INSERT_STYLE: Partial<DecorationStyle> = {
   gutterSignColor: "#4ade80",
 };
 
+/** Intraline delete highlighting (stronger opacity than line-level). */
+export const INTRALINE_DELETE_STYLE: Partial<DecorationStyle> = {
+  backgroundColor: "rgba(255, 80, 80, 0.25)",
+};
+
+/** Intraline insert highlighting (stronger opacity than line-level). */
+export const INTRALINE_INSERT_STYLE: Partial<DecorationStyle> = {
+  backgroundColor: "rgba(80, 200, 80, 0.25)",
+};
+
 /** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
 export function makeExcerptRange(startRow: number, endRow: number): ExcerptRange {
   const bufRange: BufferRange = {
@@ -51,6 +61,22 @@ export function makeDecoration(
       row: (startMbRow + lineCount - 1) as MultiBufferRow,
       column: Number.MAX_SAFE_INTEGER,
     },
+  };
+  return { range, style };
+}
+
+/** Build a column-range decoration for intraline highlighting. */
+export function makeColumnDecoration(
+  mbRow: number,
+  startColumn: number,
+  endColumn: number,
+  style: Partial<DecorationStyle>,
+): Decoration {
+  const range: MultiBufferRange = {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    start: { row: mbRow as MultiBufferRow, column: startColumn },
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    end: { row: mbRow as MultiBufferRow, column: endColumn },
   };
   return { range, style };
 }
