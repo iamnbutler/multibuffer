@@ -52,6 +52,17 @@ class BufferSnapshotImpl implements BufferSnapshot {
     return this._rope.lines(startRow, endRow);
   }
 
+  *lineIterator(
+    startRow?: BufferRow,
+    endRow?: BufferRow,
+  ): Generator<string, void, undefined> {
+    yield* this._rope.lineIterator(startRow, endRow);
+  }
+
+  *textChunks(): Generator<string, void, undefined> {
+    yield* this._rope.textChunks();
+  }
+
   text(): string {
     return this._rope.text();
   }
