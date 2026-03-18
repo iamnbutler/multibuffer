@@ -1216,7 +1216,9 @@ describe("MultiBuffer - Snapshot version", () => {
     mb.addExcerpt(buf, excerptRange(20, 30));
     versions.push(mb.snapshot().version);
     for (let i = 1; i < versions.length; i++) {
-      expect(versions[i]).toBeGreaterThan(versions[i - 1] as number);
+      const prev = versions[i - 1];
+      expect(prev).toBeDefined();
+      expect(versions[i]).toBeGreaterThan(prev ?? 0);
     }
   });
 });
