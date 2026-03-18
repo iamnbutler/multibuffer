@@ -13,6 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
+import type { CommandCallback, InputHandlerOptions } from "../../src/editor/input-handler.ts";
 import type { EditorCommand } from "../../src/editor/types.ts";
 
 // ── happy-dom setup ─────────────────────────────────────────────────────────
@@ -21,28 +22,43 @@ import type { EditorCommand } from "../../src/editor/types.ts";
 const win = new Window({ url: "https://localhost:8080/" });
 const doc = win.document;
 
-// Set up globals required by InputHandler
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).document = doc;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).HTMLElement = win.HTMLElement;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).HTMLTextAreaElement = win.HTMLTextAreaElement;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).KeyboardEvent = win.KeyboardEvent;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).ClipboardEvent = win.ClipboardEvent;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).DataTransfer = win.DataTransfer;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).Event = win.Event;
-// biome-ignore lint/suspicious/noExplicitAny lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
-(globalThis as any).navigator = win.navigator;
+// Set up globals required by InputHandler.
+// We use `as unknown as Record<string, unknown>` to avoid `noExplicitAny`,
+// then only suppress `no-type-assertion` per rule.
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).document = doc;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).HTMLElement = win.HTMLElement;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).HTMLTextAreaElement = win.HTMLTextAreaElement;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).KeyboardEvent = win.KeyboardEvent;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).ClipboardEvent = win.ClipboardEvent;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).DataTransfer = win.DataTransfer;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).Event = win.Event;
+// biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+(globalThis as unknown as Record<string, unknown>).navigator = win.navigator;
 
-// Import InputHandler after globals are set up
-const { InputHandler } = await import("../../src/editor/input-handler.ts");
-type CommandCallback = (command: EditorCommand) => void;
-type InputHandlerOptions = { keymap?: Record<string, EditorCommand | null> };
+// Dynamic import: InputHandler must be imported AFTER the globals above are
+// set, because `_isMac` is a module-level constant captured on first evaluation
+// of input-handler.ts. A static import would evaluate the module before the
+// globals exist, causing `_isMac` to read an undefined `navigator`.
+//
+// NOTE: If another test file statically imports input-handler.ts first (e.g.
+// input-handler.test.ts), the module will already be cached with the real
+// navigator. We use normalizeKey to detect the effective _isMac state.
+const { InputHandler, normalizeKey } = await import("../../src/editor/input-handler.ts");
+
+// Detect the effective _isMac state by checking how normalizeKey treats metaKey.
+// If _isMac is true, Mod maps to metaKey; otherwise to ctrlKey.
+const _testModKey: "metaKey" | "ctrlKey" = (() => {
+  // biome-ignore lint/plugin/no-type-assertion: expect: minimal mock to detect _isMac state via normalizeKey
+  const probe = normalizeKey({ metaKey: true, ctrlKey: false, altKey: false, shiftKey: false, key: "a" } as unknown as KeyboardEvent);
+  return probe.startsWith("Mod") ? "metaKey" : "ctrlKey";
+})();
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
@@ -108,6 +124,22 @@ function createKeyboardEvent(
 }
 
 /**
+ * Create a keyboard event with the platform-correct Mod key (Cmd on Mac, Ctrl elsewhere).
+ * Use this instead of manually setting ctrlKey/metaKey for Mod bindings.
+ */
+function createModKeyboardEvent(
+  type: "keydown" | "keyup",
+  key: string,
+  opts: { altKey?: boolean; shiftKey?: boolean } = {},
+): KeyboardEvent {
+  return createKeyboardEvent(type, key, {
+    [_testModKey]: true,
+    altKey: opts.altKey,
+    shiftKey: opts.shiftKey,
+  });
+}
+
+/**
  * Create a clipboard event with text data.
  */
 function createPasteEvent(text: string): ClipboardEvent {
@@ -158,6 +190,8 @@ describe("InputHandler mount/unmount", () => {
   test("mounted textarea is hidden (positioned off-screen)", () => {
     handler.mount(container);
     const textarea = getTextarea(container);
+    // Note: the implementation sets "position:absolute" (no space), but happy-dom
+    // normalizes cssText to include a space. This assertion depends on that behavior.
     expect(textarea?.style.cssText).toContain("position: absolute");
     expect(textarea?.style.cssText).toContain("left: -9999px");
   });
@@ -177,8 +211,10 @@ describe("InputHandler mount/unmount", () => {
     handler.mount(container);
     handler.mount(container);
     const textareas = getAllTextareas(container);
-    // Current implementation appends without removing previous
-    expect(textareas.length).toBeGreaterThanOrEqual(1);
+    // Pin current (defective) behavior: mount() does not guard against double-mounting,
+    // so calling it twice appends two textareas. If mount() is made idempotent in the
+    // future, update this assertion to toBe(1).
+    expect(textareas.length).toBe(2);
   });
 });
 
@@ -277,9 +313,9 @@ describe("InputHandler keydown events", () => {
     });
   });
 
-  test("keydown with Ctrl dispatches correct command", () => {
+  test("keydown with Mod dispatches correct command", () => {
     const textarea = getTextarea(container);
-    const event = createKeyboardEvent("keydown", "ArrowLeft", { ctrlKey: true });
+    const event = createModKeyboardEvent("keydown", "ArrowLeft");
     textarea?.dispatchEvent(event);
 
     expect(collector.commands).toHaveLength(1);
@@ -320,9 +356,9 @@ describe("InputHandler keydown events", () => {
     expect(collector.commands[0]).toEqual({ type: "insertTab" });
   });
 
-  test("Ctrl+A dispatches selectAll", () => {
+  test("Mod+A dispatches selectAll", () => {
     const textarea = getTextarea(container);
-    const event = createKeyboardEvent("keydown", "a", { ctrlKey: true });
+    const event = createModKeyboardEvent("keydown", "a");
     textarea?.dispatchEvent(event);
 
     expect(collector.commands).toHaveLength(1);
@@ -497,8 +533,7 @@ describe("InputHandler with custom keymap", () => {
     handler.mount(container);
 
     const textarea = getTextarea(container);
-    // In bun/happy-dom without Mac platform, Mod = Ctrl
-    const event = createKeyboardEvent("keydown", "s", { ctrlKey: true });
+    const event = createModKeyboardEvent("keydown", "s");
     textarea?.dispatchEvent(event);
 
     expect(collector.commands).toHaveLength(1);
@@ -518,7 +553,7 @@ describe("InputHandler with custom keymap", () => {
     handler.mount(container);
 
     const textarea = getTextarea(container);
-    const event = createKeyboardEvent("keydown", "z", { ctrlKey: true });
+    const event = createModKeyboardEvent("keydown", "z");
     textarea?.dispatchEvent(event);
 
     // No command should be dispatched (binding is null = disabled)
@@ -539,15 +574,93 @@ describe("InputHandler with custom keymap", () => {
     const textarea = getTextarea(container);
 
     // First key: Mod+K (starts chord)
-    const event1 = createKeyboardEvent("keydown", "k", { ctrlKey: true });
+    const event1 = createModKeyboardEvent("keydown", "k");
     textarea?.dispatchEvent(event1);
     expect(collector.commands).toHaveLength(0); // No command yet, waiting for chord completion
 
     // Second key: Mod+C (completes chord)
-    const event2 = createKeyboardEvent("keydown", "c", { ctrlKey: true });
+    const event2 = createModKeyboardEvent("keydown", "c");
     textarea?.dispatchEvent(event2);
     expect(collector.commands).toHaveLength(1);
     expect(collector.commands[0]).toEqual({ type: "custom", action: "commentLine" });
+
+    handler.unmount();
+  });
+});
+
+// ── Chord cancellation ──────────────────────────────────────────────────────
+
+describe("InputHandler chord cancellation", () => {
+  let container: HTMLElement;
+  let collector: ReturnType<typeof createCommandCollector>;
+
+  beforeEach(() => {
+    container = createContainer();
+    collector = createCommandCollector();
+  });
+
+  afterEach(() => {
+    removeContainer(container);
+  });
+
+  test("blur() cancels a pending chord", () => {
+    const options: InputHandlerOptions = {
+      keymap: {
+        "Mod+K Mod+C": { type: "custom", action: "commentLine" },
+      },
+    };
+    const handler = new InputHandler(collector.callback, options);
+    handler.mount(container);
+
+    const textarea = getTextarea(container);
+
+    // Start chord: Mod+K
+    const event1 = createModKeyboardEvent("keydown", "k");
+    textarea?.dispatchEvent(event1);
+    expect(collector.commands).toHaveLength(0);
+
+    // Blur should clear the pending chord via _clearChord()
+    handler.focus();
+    handler.blur();
+
+    // Now press Mod+C — should NOT complete the chord (it was cancelled)
+    handler.focus();
+    const event2 = createModKeyboardEvent("keydown", "c");
+    textarea?.dispatchEvent(event2);
+
+    // Mod+C alone maps to "copy" in the default keymap, not "commentLine"
+    expect(collector.commands).toHaveLength(1);
+    expect(collector.commands[0]).toEqual({ type: "copy" });
+
+    handler.unmount();
+  });
+
+  test("chord auto-resets after 1500ms timeout", async () => {
+    const options: InputHandlerOptions = {
+      keymap: {
+        "Mod+K Mod+C": { type: "custom", action: "commentLine" },
+      },
+    };
+    const handler = new InputHandler(collector.callback, options);
+    handler.mount(container);
+
+    const textarea = getTextarea(container);
+
+    // Start chord: Mod+K
+    const event1 = createModKeyboardEvent("keydown", "k");
+    textarea?.dispatchEvent(event1);
+    expect(collector.commands).toHaveLength(0);
+
+    // Wait for the 1500ms chord timeout to expire
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+
+    // Now press Mod+C — chord should have been auto-reset
+    const event2 = createModKeyboardEvent("keydown", "c");
+    textarea?.dispatchEvent(event2);
+
+    // Mod+C alone maps to "copy" in the default keymap, not "commentLine"
+    expect(collector.commands).toHaveLength(1);
+    expect(collector.commands[0]).toEqual({ type: "copy" });
 
     handler.unmount();
   });
