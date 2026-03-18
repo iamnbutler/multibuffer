@@ -23,4 +23,5 @@ export {
   themeToVars,
 } from "./theme.ts";
 export * from "./types.ts";
+export type { WrapMapOptions } from "./wrap-map.ts";
 export { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
