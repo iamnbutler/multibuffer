@@ -22,7 +22,7 @@ export interface Tile {
   /** Last row of the tile (exclusive) */
   readonly endRow: number;
   /** Whether this tile needs to be redrawn */
-  dirty: boolean;
+  readonly dirty: boolean;
 }
 
 /**
@@ -155,8 +155,9 @@ export class TileManager {
 
     for (let tile = tileStart; tile <= tileEnd; tile += this._linesPerTile) {
       this._dirtyTiles.add(tile);
-      this._frameInvalidationCount++;
     }
+    const tileCount = Math.floor((tileEnd - tileStart) / this._linesPerTile) + 1;
+    this._frameInvalidationCount += tileCount;
   }
 
   /**
@@ -205,7 +206,7 @@ export class TileManager {
   getDirtyTiles(): Tile[] {
     const result: Tile[] = [];
     const viewportTileStart = this._rowToTileStart(this._viewportStartRow);
-    const viewportTileEnd = this._rowToTileStart(this._viewportEndRow - 1);
+    const viewportTileEnd = this._rowToTileStart(Math.max(0, this._viewportEndRow - 1));
 
     for (let tileStart = viewportTileStart; tileStart <= viewportTileEnd; tileStart += this._linesPerTile) {
       if (this._dirtyTiles.has(tileStart)) {
@@ -272,15 +273,21 @@ export class TileManager {
     newStart: number,
     newEnd: number,
   ): void {
+    if (newStart >= newEnd) return;
+
     // Mark tiles that are in the new viewport but weren't in the old one
     const newTileStart = this._rowToTileStart(newStart);
     const newTileEnd = this._rowToTileStart(Math.max(0, newEnd - 1));
-    const prevTileStart = this._rowToTileStart(prevStart);
-    const prevTileEnd = this._rowToTileStart(Math.max(0, prevEnd - 1));
+
+    // An empty previous viewport (prevStart >= prevEnd) means nothing was
+    // visible before, so every new tile is newly visible.
+    const prevEmpty = prevStart >= prevEnd;
+    const prevTileStart = prevEmpty ? 0 : this._rowToTileStart(prevStart);
+    const prevTileEnd = prevEmpty ? -1 : this._rowToTileStart(Math.max(0, prevEnd - 1));
 
     for (let tile = newTileStart; tile <= newTileEnd; tile += this._linesPerTile) {
       // Only mark as dirty if this tile wasn't visible before
-      if (tile < prevTileStart || tile > prevTileEnd) {
+      if (prevEmpty || tile < prevTileStart || tile > prevTileEnd) {
         this._dirtyTiles.add(tile);
         this._frameInvalidationCount++;
       }
@@ -316,14 +323,13 @@ export function markEditDirty(
   if (lineDelta === 0) {
     // Single-line edit - only mark that row's tile
     tileManager.markRowDirty(editRow, "edit");
-  } else if (lineDelta > 0) {
-    // Lines were added - mark from edit point to end of new content
-    // All content after the edit is shifted down
-    tileManager.markDirty(editRow, tileManager.totalLines, "edit");
   } else {
-    // Lines were deleted - mark from edit point to where old content ended
-    // All content after the edit is shifted up
-    tileManager.markDirty(editRow, tileManager.totalLines, "edit");
+    // Lines were added or removed - mark from edit point to the furthest
+    // extent of old or new content. For insertions the new content is longer;
+    // for deletions the old content was longer. Using the max of both ensures
+    // we cover the entire affected range regardless of whether setTotalLines
+    // has been called yet.
+    tileManager.markDirty(editRow, Math.max(oldLineCount, newLineCount), "edit");
   }
 }
 
@@ -331,11 +337,15 @@ export function markEditDirty(
  * Helper to mark tiles dirty based on selection change.
  * Optimized to only mark tiles that are actually affected.
  *
+ * All row parameters use **inclusive** semantics — they represent the
+ * anchor and head rows of the selection (both included in the range).
+ * Reversed selections (start > end) are normalized internally.
+ *
  * @param tileManager The TileManager to update
- * @param oldStart Old selection start row (or undefined if no previous selection)
- * @param oldEnd Old selection end row (or undefined if no previous selection)
- * @param newStart New selection start row
- * @param newEnd New selection end row
+ * @param oldStart Old selection start row, inclusive (or undefined if no previous selection)
+ * @param oldEnd Old selection end row, inclusive (or undefined if no previous selection)
+ * @param newStart New selection start row, inclusive
+ * @param newEnd New selection end row, inclusive
  */
 export function markSelectionDirty(
   tileManager: TileManager,
@@ -344,17 +354,19 @@ export function markSelectionDirty(
   newStart: number,
   newEnd: number,
 ): void {
+  // Normalize new range (ensure min <= max) — handles reversed selections
+  const newMin = Math.min(newStart, newEnd);
+  const newMax = Math.max(newStart, newEnd);
+
   // If there was no previous selection, mark the new selection
   if (oldStart === undefined || oldEnd === undefined) {
-    tileManager.markDirty(newStart, newEnd + 1, "selection");
+    tileManager.markDirty(newMin, newMax + 1, "selection");
     return;
   }
 
-  // Normalize ranges (ensure start <= end)
+  // Normalize old range
   const prevMin = Math.min(oldStart, oldEnd);
   const prevMax = Math.max(oldStart, oldEnd);
-  const newMin = Math.min(newStart, newEnd);
-  const newMax = Math.max(newStart, newEnd);
 
   // Mark the symmetric difference (rows that changed selection state)
   // This is more efficient than marking the union

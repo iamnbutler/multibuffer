@@ -306,8 +306,9 @@ describe("TileManager coalescing", () => {
 
     tm.markDirty(5, 35);
 
-    expect(tm.frameInvalidationCount).toBe(3); // 3 tiles touched
-    expect(tm.dirtyCount).toBe(3);
+    // Rows 5-34 span tiles 0, 10, 20, 30 → 4 tiles
+    expect(tm.frameInvalidationCount).toBe(4);
+    expect(tm.dirtyCount).toBe(4);
   });
 });
 
@@ -364,14 +365,14 @@ describe("markSelectionDirty helper", () => {
   test("selection expansion marks only newly selected rows", () => {
     const tm = new TileManager({ linesPerTile: 10, totalLines: 100 });
 
-    // Old selection: 20-30, new selection: 20-50
+    // Old selection: rows 20-30 inclusive, new selection: rows 20-50 inclusive
     markSelectionDirty(tm, 20, 30, 20, 50);
 
-    // Only rows 31-50 are newly selected
+    // Only rows 31-50 are newly selected (inclusive on both ends)
     expect(tm.isTileDirty(20)).toBe(false); // was selected, still selected
     expect(tm.isTileDirty(30)).toBe(true);  // row 31 newly selected
     expect(tm.isTileDirty(40)).toBe(true);  // row 41 newly selected
-    expect(tm.isTileDirty(50)).toBe(false); // row 50 is at exclusive end
+    expect(tm.isTileDirty(50)).toBe(true);  // row 50 is inclusive end, newly selected
   });
 
   test("selection contraction marks deselected rows", () => {
@@ -437,10 +438,13 @@ describe("TileManager edge cases", () => {
     const tm = new TileManager({ linesPerTile: 1000, totalLines: 5000 });
     tm.setViewport(500, 1500);
 
+    // Viewport 500-1500 spans tile 0 (rows 0-1000) and tile 1000 (rows 1000-2000)
     const tiles = tm.getVisibleTiles();
-    expect(tiles.length).toBe(1); // Only tile 0 (rows 0-1000)
+    expect(tiles.length).toBe(2);
     expect(tiles[0]?.startRow).toBe(0);
     expect(tiles[0]?.endRow).toBe(1000);
+    expect(tiles[1]?.startRow).toBe(1000);
+    expect(tiles[1]?.endRow).toBe(2000);
   });
 
   test("handles empty document", () => {
