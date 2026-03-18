@@ -11,9 +11,11 @@ import { describe, expect, test } from "bun:test";
 import {
   type EditorViewOptions,
   mergeDecorations,
+  resolveReadOnlyOptions,
   type ThemeVars,
 } from "../../src/editor/editor-view.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
+import { createDomRenderer } from "../../src/renderer/dom.ts";
 import type { Decoration } from "../../src/renderer/types.ts";
 
 // ── Type export smoke test ──────────────────────────────────────────────────
@@ -90,6 +92,92 @@ describe("EditorViewOptions", () => {
   test("all fields are optional", () => {
     const opts: EditorViewOptions = {};
     expect(opts).toBeDefined();
+  });
+
+  test("accepts hideCursor and skipInputHandler options", () => {
+    const opts: EditorViewOptions = {
+      readOnly: true,
+      hideCursor: true,
+      skipInputHandler: true,
+    };
+    // If this compiles the type is correct
+    expect(opts.hideCursor).toBe(true);
+    expect(opts.skipInputHandler).toBe(true);
+  });
+});
+
+// ── resolveReadOnlyOptions (pure logic) ─────────────────────────────────────
+
+describe("resolveReadOnlyOptions", () => {
+  test("defaults: both false when no options", () => {
+    const result = resolveReadOnlyOptions();
+    expect(result.hideCursor).toBe(false);
+    expect(result.skipInputHandler).toBe(false);
+  });
+
+  test("defaults: both false when readOnly is false", () => {
+    const result = resolveReadOnlyOptions({ readOnly: false });
+    expect(result.hideCursor).toBe(false);
+    expect(result.skipInputHandler).toBe(false);
+  });
+
+  test("readOnly: true auto-derives hideCursor and skipInputHandler", () => {
+    const result = resolveReadOnlyOptions({ readOnly: true });
+    expect(result.hideCursor).toBe(true);
+    expect(result.skipInputHandler).toBe(true);
+  });
+
+  test("readOnly: true, hideCursor: false keeps cursor visible", () => {
+    const result = resolveReadOnlyOptions({ readOnly: true, hideCursor: false });
+    expect(result.hideCursor).toBe(false);
+    expect(result.skipInputHandler).toBe(true);
+  });
+
+  test("readOnly: true, skipInputHandler: false keeps input handler", () => {
+    const result = resolveReadOnlyOptions({ readOnly: true, skipInputHandler: false });
+    expect(result.hideCursor).toBe(true);
+    expect(result.skipInputHandler).toBe(false);
+  });
+
+  test("explicit overrides win over readOnly in all directions", () => {
+    const result = resolveReadOnlyOptions({
+      readOnly: true,
+      hideCursor: false,
+      skipInputHandler: false,
+    });
+    expect(result.hideCursor).toBe(false);
+    expect(result.skipInputHandler).toBe(false);
+  });
+
+  test("explicit true without readOnly", () => {
+    const result = resolveReadOnlyOptions({
+      hideCursor: true,
+      skipInputHandler: true,
+    });
+    expect(result.hideCursor).toBe(true);
+    expect(result.skipInputHandler).toBe(true);
+  });
+});
+
+// ── DomRenderer.cursorHidden (behavioral, no DOM mount needed) ──────────────
+
+describe("DomRenderer.cursorHidden", () => {
+  test("cursorHidden defaults to false", () => {
+    const renderer = createDomRenderer({ lineHeight: 20, gutterWidth: 48 });
+    expect(renderer.cursorHidden).toBe(false);
+  });
+
+  test("setCursorHidden(true) sets cursorHidden", () => {
+    const renderer = createDomRenderer({ lineHeight: 20, gutterWidth: 48 });
+    renderer.setCursorHidden(true);
+    expect(renderer.cursorHidden).toBe(true);
+  });
+
+  test("setCursorHidden(false) clears cursorHidden", () => {
+    const renderer = createDomRenderer({ lineHeight: 20, gutterWidth: 48 });
+    renderer.setCursorHidden(true);
+    renderer.setCursorHidden(false);
+    expect(renderer.cursorHidden).toBe(false);
   });
 });
 
