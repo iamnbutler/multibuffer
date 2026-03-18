@@ -17,11 +17,34 @@ import { themeToVars } from "./theme.ts";
 import type { Decoration, DecorationStyle, Measurements, Renderer, RenderState, ScrollTarget, Theme, Viewport } from "./types.ts";
 import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
 
-/** Slice tokens to a column range, adjusting offsets to be segment-relative. */
-function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
+/**
+ * Slice tokens to a column range, adjusting offsets to be segment-relative.
+ *
+ * Tokens must be sorted by startColumn (guaranteed by the highlighter).
+ * Binary-searches for the first token whose endColumn > segStart, then scans
+ * forward until startColumn >= segEnd — O(log n + k) instead of O(n).
+ *
+ * Exported for unit testing.
+ */
+export function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: number): Token[] {
+  // Binary search: find the first token with endColumn > segStart.
+  let lo = 0;
+  let hi = tokens.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    // biome-ignore lint/style/noNonNullAssertion: expect: mid is always a valid in-bounds index
+    if (tokens[mid]!.endColumn <= segStart) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
   const result: Token[] = [];
-  for (const t of tokens) {
-    if (t.endColumn <= segStart || t.startColumn >= segEnd) continue;
+  for (let i = lo; i < tokens.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: expect: i is always a valid in-bounds index
+    const t = tokens[i]!;
+    if (t.startColumn >= segEnd) break;
     result.push({
       startColumn: Math.max(0, t.startColumn - segStart),
       endColumn: Math.min(segEnd - segStart, t.endColumn - segStart),
