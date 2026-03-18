@@ -1,3 +1,4 @@
+export { CanvasRenderer, createCanvasRenderer } from "./canvas.ts";
 export { createDomRenderer, DomRenderer } from "./dom.ts";
 export type { GlyphAtlasConfig, GlyphInfo } from "./glyph-atlas.ts";
 export { createGlyphAtlas, GlyphAtlas } from "./glyph-atlas.ts";
@@ -24,6 +25,8 @@ export {
   THEME_CSS_VARIABLES,
   themeToVars,
 } from "./theme.ts";
+export type { InvalidationReason, Tile, TileManagerOptions } from "./tile-map.ts";
+export { createTileManager, markEditDirty, markSelectionDirty, TileManager } from "./tile-map.ts";
 export * from "./types.ts";
 export { createWebGpuRenderer, isWebGpuAvailable, WebGpuRenderer } from "./webgpu.ts";
 export type { WrapMapOptions } from "./wrap-map.ts";
