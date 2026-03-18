@@ -1,3 +1,4 @@
+export { CanvasRenderer, createCanvasRenderer, GlyphAtlas } from "./canvas.ts";
 export { createDomRenderer, DomRenderer } from "./dom.ts";
 export type { SyntaxHighlighter, Token, TreeEdit } from "./highlighter.ts";
 export { buildHighlightedSpans, Highlighter } from "./highlighter.ts";
