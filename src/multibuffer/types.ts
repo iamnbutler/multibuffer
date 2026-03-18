@@ -98,6 +98,18 @@ export interface ExcerptRange {
 }
 
 /**
+ * Metadata that can be attached to excerpts.
+ * Common use cases: filePath, language, isModified.
+ * Open-ended for consumer extensions via index signature.
+ */
+export interface ExcerptMetadata {
+  readonly filePath?: string;
+  readonly language?: string;
+  readonly isModified?: boolean;
+  readonly [key: string]: unknown;
+}
+
+/**
  * Internal excerpt state - includes runtime data.
  */
 export interface Excerpt {
@@ -108,6 +120,7 @@ export interface Excerpt {
   readonly hasTrailingNewline: boolean;
   readonly editable: boolean;
   readonly textSummary: TextSummary;
+  readonly metadata?: ExcerptMetadata;
 }
 
 /**
@@ -121,6 +134,7 @@ export interface ExcerptInfo {
   readonly endRow: MultiBufferRow;
   readonly hasTrailingNewline: boolean;
   readonly editable: boolean;
+  readonly metadata?: ExcerptMetadata;
 }
 
 /**
@@ -164,7 +178,11 @@ export interface MultiBufferSnapshot {
 export interface ExcerptSpec {
   readonly buffer: import("../buffer/types.ts").Buffer;
   readonly range: ExcerptRange;
-  readonly options?: { hasTrailingNewline?: boolean; editable?: boolean };
+  readonly options?: {
+    hasTrailingNewline?: boolean;
+    editable?: boolean;
+    metadata?: ExcerptMetadata;
+  };
 }
 
 /**
@@ -179,7 +197,11 @@ export interface MultiBuffer {
   addExcerpt(
     buffer: import("../buffer/types.ts").Buffer,
     range: ExcerptRange,
-    options?: { hasTrailingNewline?: boolean; editable?: boolean },
+    options?: {
+      hasTrailingNewline?: boolean;
+      editable?: boolean;
+      metadata?: ExcerptMetadata;
+    },
   ): ExcerptId;
   addExcerpts(specs: readonly ExcerptSpec[]): readonly ExcerptId[];
   removeExcerpt(excerptId: ExcerptId): void;
@@ -193,7 +215,11 @@ export interface MultiBuffer {
     entries: ReadonlyArray<{
       buffer: import("../buffer/types.ts").Buffer;
       range: ExcerptRange;
-      options?: { hasTrailingNewline?: boolean; editable?: boolean };
+      options?: {
+        hasTrailingNewline?: boolean;
+        editable?: boolean;
+        metadata?: ExcerptMetadata;
+      };
     }>,
   ): readonly ExcerptId[];
   setExcerptsForBuffer(
@@ -214,6 +240,14 @@ export interface MultiBuffer {
   moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void;
   createAnchor(point: MultiBufferPoint, bias: import("../buffer/types.ts").Bias): Anchor | undefined;
   edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void;
+  /**
+   * Update the metadata for an excerpt by shallow-merging a patch.
+   * No-op if the excerpt doesn't exist.
+   */
+  updateExcerptMetadata(
+    excerptId: ExcerptId,
+    patch: Partial<ExcerptMetadata>,
+  ): void;
   excerptAt(row: MultiBufferRow): ExcerptInfo | undefined;
   toBufferPoint(
     point: MultiBufferPoint,
