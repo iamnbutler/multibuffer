@@ -74,13 +74,16 @@ export async function runBenchmark(bench: Benchmark): Promise<BenchmarkResult> {
   // Calculate stats
   const totalMs = times.reduce((a, b) => a + b, 0);
   const avgMs = totalMs / iterations;
-  const minMs = Math.min(...times);
-  const maxMs = Math.max(...times);
   const opsPerSec = 1000 / avgMs;
   const passed = bench.targetMs === undefined || avgMs <= bench.targetMs;
 
-  // Percentile stats: sort a copy to preserve insertion order for future use
+  // Sort once; reuse for min, max, median, and p95.
+  // Using sorted[0]/sorted[n-1] instead of Math.min/max(...times) avoids a
+  // redundant O(n) pass and the spread-argument stack-overflow risk for large
+  // iteration counts.
   const sorted = times.slice().sort((a, b) => a - b);
+  const minMs = sorted[0] ?? 0;
+  const maxMs = sorted[sorted.length - 1] ?? 0;
   const medianMs = sorted[Math.floor(sorted.length * 0.5)] ?? avgMs;
   const p95Ms = sorted[Math.floor(sorted.length * 0.95)] ?? maxMs;
 
