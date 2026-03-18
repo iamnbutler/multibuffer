@@ -495,3 +495,50 @@ describe("Cursor - Visual Line Movement (Wrapped Lines)", () => {
     expectPoint(result, 0, 3);
   });
 });
+
+describe("Cursor - Visual Row Movement Across Excerpt Headers (issue #89)", () => {
+  // Set up a multibuffer with two excerpts separated by a trailing-newline row (header).
+  // Excerpt 1: "a\nb\nc" → multiBuffer rows 0, 1, 2 (content) + row 3 (trailing newline/header)
+  // Excerpt 2: "x\ny\nz" → multiBuffer rows 4, 5, 6
+  function setupWithHeader() {
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const buf2 = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    return mb;
+  }
+
+  test("moveCursorVisual down from last content row of excerpt 1 skips header row", () => {
+    // Row 2 is the last content row of excerpt 1; row 3 is the header (trailing newline).
+    // With wrapWidth set, pressing down should skip row 3 and land on row 4.
+    const snap = setupWithHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 80);
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "down", "character", wrapMap), 4, 0);
+  });
+
+  test("moveCursorVisual up from first content row of excerpt 2 skips header row", () => {
+    // Row 4 is the first content row of excerpt 2; row 3 is the header (trailing newline).
+    // With wrapWidth set, pressing up should skip row 3 and land on row 2.
+    const snap = setupWithHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 80);
+    expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "up", "character", wrapMap), 2, 0);
+  });
+
+  test("moveCursorVisual down preserves column across header skip (clamped)", () => {
+    const snap = setupWithHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 80);
+    // "c" (row 2) has length 1, "x" (row 4) has length 1
+    // Starting at col 0, should land at col 0
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "down", "character", wrapMap), 4, 0);
+  });
+
+  test("moveCursorVisual within excerpt does not skip non-header rows", () => {
+    const snap = setupWithHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 80);
+    // Moving down from row 4 should land on row 5 (both in excerpt 2)
+    expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "down", "character", wrapMap), 5, 0);
+    // Moving up from row 2 should land on row 1 (both in excerpt 1)
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "up", "character", wrapMap), 1, 0);
+  });
+});

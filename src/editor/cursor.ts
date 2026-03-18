@@ -113,14 +113,32 @@ function moveVisualRow(
     if (currentVisualRow + 1 >= wrapMap.totalVisualRows) {
       return current; // Stay put at end
     }
-    return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
+    const target = resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
+    // Skip trailing newline rows (excerpt headers) just like moveCharacter does
+    const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "down", lineCount);
+    if (skippedRow !== target.row) {
+      // If we skipped, resolve the new row's column
+      const skippedLineText = snapshot.lines(skippedRow, nextRow(skippedRow, lineCount));
+      const skippedLen = skippedLineText[0]?.length ?? 0;
+      return { row: skippedRow, column: Math.min(target.column, skippedLen) };
+    }
+    return target;
   }
 
   // direction === "up"
   if (currentVisualRow <= 0) {
     return current; // Stay put at start
   }
-  return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow - 1, visualColInSegment, lineCount);
+  const target = resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow - 1, visualColInSegment, lineCount);
+  // Skip trailing newline rows (excerpt headers) just like moveCharacter does
+  const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "up", lineCount);
+  if (skippedRow !== target.row) {
+    // If we skipped, resolve the new row's column
+    const skippedLineText = snapshot.lines(skippedRow, nextRow(skippedRow, lineCount));
+    const skippedLen = skippedLineText[0]?.length ?? 0;
+    return { row: skippedRow, column: Math.min(target.column, skippedLen) };
+  }
+  return target;
 }
 
 /**
