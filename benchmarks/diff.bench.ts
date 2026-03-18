@@ -161,5 +161,31 @@ export const diffBenchmarks: BenchmarkSuite = {
       iterations: 10,
       targetMs: 100,
     },
+    // Pre-created buffer variants: isolate diff+excerpt cost from buffer creation.
+    // These reflect the DiffController.reDiff() hot path where buffers already exist.
+    (() => {
+      const oldBuf = createBuffer(oldId, medium1k);
+      const newBuf = createBuffer(newId, medium1kScattered);
+      return {
+        name: "createUnifiedDiffMultiBuffer - 1K pre-created buffers (reDiff path)",
+        fn() {
+          createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+        },
+        iterations: 200,
+        targetMs: 5,
+      };
+    })(),
+    (() => {
+      const oldBuf = createBuffer(oldId, large10k);
+      const newBuf = createBuffer(newId, large10kFewChanges);
+      return {
+        name: "createUnifiedDiffMultiBuffer - 10K pre-created buffers (reDiff path)",
+        fn() {
+          createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+        },
+        iterations: 20,
+        targetMs: 20,
+      };
+    })(),
   ],
 };

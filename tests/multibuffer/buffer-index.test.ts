@@ -229,4 +229,33 @@ describe("buffer-to-excerpt index", () => {
       expect(lines2[0]).toBe("say hello");
     });
   });
+
+  describe("setExcerpts maintains reverse index", () => {
+    test("edit after setExcerpts refreshes the new excerpt's snapshot", () => {
+      const mb = createMultiBuffer();
+      const buf = createBuffer(createBufferId(), "hello\nworld\n");
+
+      // Use setExcerpts instead of addExcerpt to populate the multiBuffer.
+      mb.setExcerpts([{ buffer: buf, range: excerptRange(0, 2) }]);
+
+      // Edit through the multiBuffer — requires a live reverse index entry for buf.
+      mb.edit(mbPoint(0, 0), mbPoint(0, 0), "say ");
+
+      // The edit must be visible via lines().
+      expect(mb.lines(mbRow(0), mbRow(1))).toEqual(["say hello"]);
+    });
+
+    test("setExcerpts replacing existing excerpts still allows edit()", () => {
+      const mb = createMultiBuffer();
+      const buf = createBuffer(createBufferId(), "line1\nline2\n");
+
+      // First populate via addExcerpt, then replace via setExcerpts.
+      mb.addExcerpt(buf, excerptRange(0, 2));
+      mb.setExcerpts([{ buffer: buf, range: excerptRange(0, 2) }]);
+
+      mb.edit(mbPoint(0, 0), mbPoint(0, 0), "PREFIX ");
+
+      expect(mb.lines(mbRow(0), mbRow(1))).toEqual(["PREFIX line1"]);
+    });
+  });
 });

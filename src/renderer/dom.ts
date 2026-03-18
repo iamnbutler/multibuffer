@@ -530,15 +530,16 @@ export class DomRenderer implements Renderer {
 
     if (this._wrapMap) {
       const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
-      const wrapWidth = this._measurements.wrapWidth ?? 0;
       const lineText = this._getLineText(mbRow);
-      const segments = wrapLine(lineText, wrapWidth);
-      // Compute char offset of this segment by summing prior segment lengths
-      let charOffset = 0;
-      for (let s = 0; s < segment; s++) {
-        charOffset += segments[s]?.length ?? 0;
-      }
-      const segText = segments[segment] ?? "";
+      // Use cached segment char-start offsets — avoids wrapLine() O(n) recomputation
+      // on every mouse-move event.
+      const charOffset = this._wrapMap.segmentCharStart(mbRow, segment);
+      const nextSeg = segment + 1;
+      const segEnd =
+        nextSeg < this._wrapMap.visualRowsForLine(mbRow)
+          ? this._wrapMap.segmentCharStart(mbRow, nextSeg)
+          : lineText.length;
+      const segText = lineText.slice(charOffset, segEnd);
       const charColInSeg = visualColToCharCol(segText, visualColInSegment);
       return { row: mbRow, column: charOffset + charColInSeg };
     }
@@ -832,20 +833,23 @@ export class DomRenderer implements Renderer {
     const lineText = this._getLineText(point.row);
     let displayRow = visualRow;
     let displayVisualCol: number;
-    if (wrapWidth > 0) {
-      const segments = wrapLine(lineText, wrapWidth);
-      // Find which segment contains this char index
-      let charOffset = 0;
+    if (wrapWidth > 0 && this._wrapMap) {
+      // Use cached segment char-start offsets — avoids wrapLine() recomputation
+      // on every cursor repaint (called after every keypress and mouse click).
+      const wm = this._wrapMap;
+      const totalSegs = wm.visualRowsForLine(point.row);
       let segIdx = 0;
-      for (let s = 0; s < segments.length - 1; s++) {
-        const segLen = segments[s]?.length ?? 0;
-        if (charOffset + segLen > point.column) break;
-        charOffset += segLen;
-        segIdx = s + 1;
+      for (let s = 1; s < totalSegs; s++) {
+        if (wm.segmentCharStart(point.row, s) > point.column) break;
+        segIdx = s;
       }
       displayRow = visualRow + segIdx;
-      const segText = segments[segIdx] ?? "";
-      displayVisualCol = charColToVisualCol(segText, point.column - charOffset);
+      const charOffset = wm.segmentCharStart(point.row, segIdx);
+      const segEnd =
+        segIdx + 1 < totalSegs
+          ? wm.segmentCharStart(point.row, segIdx + 1)
+          : lineText.length;
+      displayVisualCol = charColToVisualCol(lineText.slice(charOffset, segEnd), point.column - charOffset);
     } else {
       displayVisualCol = charColToVisualCol(lineText, point.column);
     }

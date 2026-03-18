@@ -72,8 +72,9 @@ export function createDiffController(
 
     if (diffResult.isEqual) {
       // Replace all excerpts atomically (single _rebuildCache call).
+      // textSummary.chars is O(1) — avoids a redundant text() call.
       const entries =
-        newSnap.text().length > 0
+        newSnap.textSummary.chars > 0
           ? [
               {
                 buffer: newBuffer,
