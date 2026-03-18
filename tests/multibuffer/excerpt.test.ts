@@ -460,6 +460,42 @@ describe("Excerpt Expansion", () => {
     const startRowAfter = num(mb.excerpts[1]?.startRow ?? mbRow(0));
     expect(startRowAfter).toBe(startRowBefore + 2);
   });
+
+  test("zero-line expand leaves range unchanged", () => {
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(3, 7)); // lines 3-6
+
+    const beforeLineCount = mb.lineCount;
+    mb.expandExcerpt(eid, 0, 0);
+    expect(mb.lineCount).toBe(beforeLineCount);
+    expect(mb.excerpts[0]?.range.context.start.row).toBe(row(3));
+    expect(mb.excerpts[0]?.range.context.end.row).toBe(row(7));
+  });
+
+  test("expand with invalid id is a no-op", () => {
+    const buf = createBuffer(createBufferId(), "L0\nL1\nL2\nL3\nL4");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(1, 4));
+
+    const beforeLineCount = mb.lineCount;
+    const fakeId = excerptId(999, 0); // not in the multibuffer
+    mb.expandExcerpt(fakeId, 2, 2); // should not throw or mutate
+    expect(mb.lineCount).toBe(beforeLineCount);
+  });
+
+  test("expanded lines contain correct text content", () => {
+    const buf = createBuffer(createBufferId(), "alpha\nbeta\ngamma\ndelta\nepsilon");
+    const mb = createMultiBuffer();
+    const eid = mb.addExcerpt(buf, excerptRange(2, 3)); // line 2: "gamma"
+
+    mb.expandExcerpt(eid, 1, 1); // add "beta" before, "delta" after
+    // Now excerpt should cover rows 1-4: beta, gamma, delta
+    const lines = mb.lines(mbRow(0), mbRow(3));
+    expect(lines[0]).toBe("beta");
+    expect(lines[1]).toBe("gamma");
+    expect(lines[2]).toBe("delta");
+  });
 });
 
 
