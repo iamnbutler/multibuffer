@@ -29,6 +29,18 @@
     "./diff": {
       "import": "./src/diff/index.ts",
       "types": "./src/diff/index.ts"
+    },
+    "./react": {
+      "import": "./src/react/index.ts",
+      "types": "./src/react/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
     }
   },
   "type": "module",
@@ -46,7 +58,9 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
     "@types/bun": "latest",
+    "@types/react": "^18.2.0",
     "@vscode/tree-sitter-wasm": "^0.3.0",
+    "react": "^18.2.0",
     "tree-sitter-wasms": "^0.1.13",
     "typescript": "^5"
   },
