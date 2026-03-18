@@ -104,6 +104,17 @@ export interface BufferSnapshot {
   /** Get text for a range of lines [startRow, endRow) */
   lines(startRow: BufferRow, endRow: BufferRow): readonly string[];
 
+  /**
+   * Iterate over lines in range [startRow, endRow) without allocating an array.
+   *
+   * Use for streaming operations (diff, export, search) where you may not
+   * need all lines or want to process them incrementally.
+   */
+  lineIterator(
+    startRow?: BufferRow,
+    endRow?: BufferRow,
+  ): Generator<string, void, undefined>;
+
   /** Get the full text */
   text(): string;
 

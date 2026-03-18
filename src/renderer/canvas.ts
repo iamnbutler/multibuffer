@@ -1,171 +1,249 @@
 /**
  * Canvas-based renderer for the multibuffer.
+ * Renders visible visual rows into an HTML Canvas element.
+ * Supports native scrolling via a scroll container with spacer element.
+ * Supports soft wrapping via WrapMap.
  *
- * Uses a glyph atlas for efficient text rendering and provides cursor/selection
- * rendering with theme-aware colors and blink animation.
+ * Uses a glyph atlas for high-performance text rendering with syntax highlighting.
+ * The compositing approach applies color to grayscale glyphs via canvas operations.
+ * Uses a glyph atlas for efficient text rendering and provides
+ * hit testing and mouse event handling.
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import { computeSelectionRects } from "./dom.ts";
+import { sliceTokensToRange } from "./dom.ts";
+import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
+  createViewport,
   yToVisualRow,
 } from "./measurement.ts";
-import { GRUVBOX_DARK_THEME } from "./theme.ts";
-import type { Measurements, Renderer, RenderState, ScrollTarget, Theme, Viewport } from "./types.ts";
-import { charColToVisualCol, WrapMap } from "./wrap-map.ts";
+import { GRUVBOX_DARK_THEME, themeToVars } from "./theme.ts";
+import type {
+  DecorationStyle,
+  Measurements,
+  Renderer,
+  RenderState,
+  ScrollTarget,
+  Theme,
+  Viewport,
+} from "./types.ts";
+import { charColToVisualCol, visualColToCharCol, visualWidth, WrapMap, wrapLine } from "./wrap-map.ts";
+
+/** Threshold for lazy WrapMap computation (lines). */
+const LAZY_WRAP_THRESHOLD = 5000;
+
+/** Number of rows to compute per animation frame during lazy WrapMap build. */
+const WRAP_CHUNK_SIZE = 500;
 
 /**
- * Glyph atlas for efficient text rendering.
- * Pre-renders ASCII printable characters (32-126) at the specified font/size.
- * Extended characters are cached on-demand.
+ * Glyph atlas for caching pre-rendered character glyphs.
+ * Uses a single grayscale atlas; color is applied via compositing.
  */
+interface GlyphEntry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Display cell count: 1 for normal characters, 2 for wide (CJK/emoji). */
+  cells: 1 | 2;
+}
+
 class GlyphAtlas {
-  readonly canvas: OffscreenCanvas;
+  private _canvas: OffscreenCanvas;
+  private _ctx: OffscreenCanvasRenderingContext2D;
+  private _glyphs = new Map<string, GlyphEntry>();
+  private _nextX = 0;
+  private _nextY = 0;
+  private _rowHeight = 0;
+  private _font: string;
+  private _textColor: string;
   readonly charWidth: number;
   readonly lineHeight: number;
-  private readonly _ctx: OffscreenCanvasRenderingContext2D;
-  private readonly _glyphMap: Map<string, { x: number; y: number }> = new Map();
-  private readonly _font: string;
-  private readonly _textColor: string;
 
-  /** Number of glyphs per row in the atlas. */
-  private static readonly GLYPHS_PER_ROW = 16;
-  /** ASCII printable range. */
-  private static readonly ASCII_START = 32;
-  private static readonly ASCII_END = 126;
-
-  constructor(charWidth: number, lineHeight: number, font: string, textColor: string) {
+  constructor(font: string, charWidth: number, lineHeight: number, textColor = "#ffffff") {
     this.charWidth = charWidth;
     this.lineHeight = lineHeight;
     this._font = font;
     this._textColor = textColor;
 
-    // Calculate atlas size for ASCII characters + some space for extended chars
-    const asciiCount = GlyphAtlas.ASCII_END - GlyphAtlas.ASCII_START + 1;
-    const rows = Math.ceil(asciiCount / GlyphAtlas.GLYPHS_PER_ROW);
-    // Reserve extra rows for on-demand extended character caching
-    const totalRows = rows + 8;
-
-    this.canvas = new OffscreenCanvas(
-      GlyphAtlas.GLYPHS_PER_ROW * charWidth,
-      totalRows * lineHeight,
-    );
-
-    const ctx = this.canvas.getContext("2d");
-    if (!ctx) {
-      throw new Error("Failed to create OffscreenCanvas 2D context");
-    }
+    // Start with a reasonably sized atlas (1024x1024)
+    this._canvas = new OffscreenCanvas(1024, 1024);
+    const ctx = this._canvas.getContext("2d", { willReadFrequently: false });
+    if (!ctx) throw new Error("Failed to create OffscreenCanvas 2D context");
     this._ctx = ctx;
-
-    this._initAtlas();
-  }
-
-  /** Pre-render ASCII printable characters. */
-  private _initAtlas(): void {
-    const ctx = this._ctx;
-    ctx.font = this._font;
-    ctx.fillStyle = this._textColor;
-    ctx.textBaseline = "top";
-
-    for (let code = GlyphAtlas.ASCII_START; code <= GlyphAtlas.ASCII_END; code++) {
-      const char = String.fromCharCode(code);
-      const idx = code - GlyphAtlas.ASCII_START;
-      const col = idx % GlyphAtlas.GLYPHS_PER_ROW;
-      const row = Math.floor(idx / GlyphAtlas.GLYPHS_PER_ROW);
-      const x = col * this.charWidth;
-      const y = row * this.lineHeight;
-
-      // Center the character horizontally within its cell
-      const charMetrics = ctx.measureText(char);
-      const charX = x + (this.charWidth - charMetrics.width) / 2;
-      ctx.fillText(char, charX, y);
-
-      this._glyphMap.set(char, { x, y });
-    }
-  }
-
-  /** Get the atlas position for a character. Returns null for unmapped characters. */
-  get(char: string): { x: number; y: number } | null {
-    const cached = this._glyphMap.get(char);
-    if (cached) return cached;
-
-    // On-demand caching for extended characters
-    const code = char.charCodeAt(0);
-    if (code >= GlyphAtlas.ASCII_START && code <= GlyphAtlas.ASCII_END) {
-      // Should have been pre-rendered
-      return null;
-    }
-
-    // Add extended character to the atlas
-    const idx = this._glyphMap.size;
-    const col = idx % GlyphAtlas.GLYPHS_PER_ROW;
-    const row = Math.floor(idx / GlyphAtlas.GLYPHS_PER_ROW);
-    const x = col * this.charWidth;
-    const y = row * this.lineHeight;
-
-    // Check if we have space
-    if (y + this.lineHeight > this.canvas.height) {
-      return null; // Atlas full
-    }
-
-    this._ctx.fillText(char, x, y);
-    this._glyphMap.set(char, { x, y });
-    return { x, y };
-  }
-
-  /** Rebuild atlas with new colors. */
-  rebuild(textColor: string): void {
-    this._ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this._ctx.font = font;
+    this._ctx.textBaseline = "top";
+    // Render white text - we'll apply color via compositing
     this._ctx.fillStyle = textColor;
-    this._glyphMap.clear();
-    this._initAtlas();
+
+    // Pre-render ASCII printable characters (32-126)
+    for (let code = 32; code <= 126; code++) {
+      this._addGlyph(String.fromCharCode(code));
+    }
+  }
+
+  /**
+   * Update the text color for new glyphs.
+   */
+  setTextColor(color: string): void {
+    this._textColor = color;
+    this._ctx.fillStyle = color;
+    // Note: existing glyphs keep their original color
+    // For a full theme change, recreate the atlas
+  }
+
+  private _addGlyph(char: string): GlyphEntry {
+    const existing = this._glyphs.get(char);
+    if (existing) return existing;
+
+    // Determine cell count: wide characters (CJK, emoji) occupy 2 cells
+    const cells = visualWidth(char) > 1 ? 2 : 1;
+    const width = this.charWidth * cells;
+    const height = this.lineHeight;
+
+    // Check if we need to wrap to next row
+    if (this._nextX + width > this._canvas.width) {
+      this._nextX = 0;
+      this._nextY += this._rowHeight;
+      this._rowHeight = 0;
+    }
+
+    // Check if we need to expand the atlas
+    if (this._nextY + height > this._canvas.height) {
+      this._expandAtlas();
+    }
+
+    // Render the glyph
+    this._ctx.fillText(char, this._nextX, this._nextY);
+
+    const entry: GlyphEntry = {
+      x: this._nextX,
+      y: this._nextY,
+      width,
+      height,
+      // biome-ignore lint/plugin/no-type-assertion: expect: cells is always 1 or 2 from visualWidth
+      cells: cells as 1 | 2,
+    };
+    this._glyphs.set(char, entry);
+
+    this._nextX += width;
+    this._rowHeight = Math.max(this._rowHeight, height);
+
+    return entry;
+  }
+
+  private _expandAtlas(): void {
+    const newHeight = this._canvas.height * 2;
+    const newCanvas = new OffscreenCanvas(this._canvas.width, newHeight);
+    const newCtx = newCanvas.getContext("2d", { willReadFrequently: false });
+    if (!newCtx) throw new Error("Failed to create expanded OffscreenCanvas");
+
+    // Copy existing content
+    newCtx.drawImage(this._canvas, 0, 0);
+    newCtx.font = this._font;
+    newCtx.textBaseline = "top";
+    newCtx.fillStyle = this._textColor;
+
+    this._canvas = newCanvas;
+    this._ctx = newCtx;
+  }
+
+  get(char: string): GlyphEntry {
+    return this._glyphs.get(char) ?? this._addGlyph(char);
+  }
+
+  get canvas(): OffscreenCanvas {
+    return this._canvas;
   }
 }
 
 /**
- * Canvas renderer implementing the Renderer interface.
- * Provides efficient text, cursor, and selection rendering.
+ * Resolve a CSS color value that may contain CSS variables.
+ * For canvas rendering, we need actual color values, not var() references.
+ */
+function resolveCssColor(color: string, computedStyle?: CSSStyleDeclaration): string {
+  if (!color.startsWith("var(")) {
+    return color;
+  }
+
+  // Parse var(--name, fallback)
+  const match = color.match(/^var\((--[^,)]+)(?:,\s*([^)]+))?\)$/);
+  if (!match) return color;
+
+  const varName = match[1];
+  const fallback = match[2]?.trim();
+
+  if (computedStyle && varName) {
+    const resolved = computedStyle.getPropertyValue(varName).trim();
+    if (resolved) return resolved;
+  }
+
+  return fallback ?? "#ebdbb2"; // Default to Gruvbox fg
+}
+
+export interface CanvasRendererOptions {
+  highlighter?: SyntaxHighlighter;
+  theme?: Partial<Theme>;
+}
+
+/**
+ * Canvas-based renderer implementation.
+ * Implements the Renderer interface with canvas-based text rendering,
+ * scroll handling, hit testing, and mouse event handling.
+ * Supports lazy WrapMap computation for large documents.
  */
 export class CanvasRenderer implements Renderer {
   private _container: HTMLElement | null = null;
+  private _scrollContainer: HTMLElement | null = null;
+  private _spacer: HTMLElement | null = null;
   private _canvas: HTMLCanvasElement | null = null;
   private _ctx: CanvasRenderingContext2D | null = null;
-  private _atlas: GlyphAtlas | null = null;
   private _measurements: Measurements;
-  private _charWidth: number = 8;
+  private _theme: Theme;
   private _viewport: Viewport;
   private _snapshot: MultiBufferSnapshot | null = null;
+  private _highlighter: SyntaxHighlighter | null = null;
   private _wrapMap: WrapMap | null = null;
-  private _theme: Theme = GRUVBOX_DARK_THEME;
+  private _wrapMapSnapshotVersion = -1;
+  private _wrapMapWrapWidth = 0;
+  private _wrapBuildFrame: number | null = null;
+  private _glyphAtlas: GlyphAtlas | null = null;
+  private _charWidth = 8; // Default, will be measured
+  private _computedStyle: CSSStyleDeclaration | null = null;
+  private _pendingRender: number | null = null;
 
-  // Cursor state
-  private _cursorPoint: MultiBufferPoint | undefined;
-  private _cursorVisible = true;
-  private _cursorHidden = false;
-  private _blinkIntervalMs: number | false = 600;
-  private _blinkIntervalId: ReturnType<typeof setInterval> | null = null;
-  private _focused = false;
+  // Color cache to avoid repeated CSS variable resolution
+  private _colorCache = new Map<string, string>();
 
-  // Selection state
-  private _selectionStart: MultiBufferPoint | undefined;
-  private _selectionEnd: MultiBufferPoint | undefined;
+  // Event handlers
+  private _onScroll: (() => void) | null = null;
+  private _onClick: ((e: MouseEvent) => void) | null = null;
+  private _onMouseMove: ((e: MouseEvent) => void) | null = null;
+  private _onMouseUp: ((e: MouseEvent) => void) | null = null;
+  private _isDragging = false;
 
-  // Font configuration
-  private readonly _fontFamily = "monospace";
-  private readonly _fontSize: number;
+  // Callbacks
+  private _onClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
 
-  constructor(measurements: Measurements) {
+  /** Diff mode gutter widths */
+  private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
+  private static readonly DIFF_NEW_GUTTER_WIDTH = 40;
+  private static readonly DIFF_SIGN_WIDTH = 16;
+
+  constructor(measurements: Measurements, options?: CanvasRendererOptions) {
     this._measurements = measurements;
-    this._fontSize = Math.round(measurements.lineHeight * 0.75);
-    if (measurements.charWidth !== undefined) {
-      this._charWidth = measurements.charWidth;
-    }
+    this._charWidth = measurements.charWidth ?? 8;
+    this._theme = { ...GRUVBOX_DARK_THEME, ...options?.theme };
+    this._highlighter = options?.highlighter ?? null;
     this._viewport = {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for initial zero viewport
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for initial viewport
       startRow: 0 as MultiBufferRow,
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for initial zero viewport
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for initial viewport
       endRow: 0 as MultiBufferRow,
       scrollTop: 0,
       height: 0,
@@ -173,45 +251,120 @@ export class CanvasRenderer implements Renderer {
     };
   }
 
+  /** Get effective gutter width based on mode */
+  private _getEffectiveGutterWidth(): number {
+    if (this._measurements.gutterMode === "diff") {
+      return (
+        CanvasRenderer.DIFF_OLD_GUTTER_WIDTH +
+        CanvasRenderer.DIFF_NEW_GUTTER_WIDTH +
+        CanvasRenderer.DIFF_SIGN_WIDTH
+      );
+    }
+    return this._measurements.gutterWidth;
+  }
+
   mount(container: HTMLElement): void {
     this._container = container;
+    this._computedStyle = getComputedStyle(container);
 
-    // Create canvas element
-    this._canvas = document.createElement("canvas");
-    this._canvas.style.display = "block";
-    this._canvas.style.width = "100%";
-    this._canvas.style.height = "100%";
-    container.appendChild(this._canvas);
+    // Measure character width from the font
+    this._charWidth = this._measureCharWidth(container);
 
-    const ctx = this._canvas.getContext("2d");
+    // Create scroll container
+    const scrollContainer = document.createElement("div");
+    scrollContainer.style.cssText =
+      "position:relative;overflow-y:auto;height:100%;width:100%;overscroll-behavior:none;";
+    this._scrollContainer = scrollContainer;
+
+    // Create spacer for scroll height
+    const spacer = document.createElement("div");
+    spacer.style.cssText = "width:1px;pointer-events:none;";
+    this._spacer = spacer;
+
+    // Create canvas
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:absolute;top:0;left:0;";
+    this._canvas = canvas;
+
+    // Get 2D context
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) {
-      throw new Error("Failed to create Canvas 2D context");
+      throw new Error("Failed to get 2D context from canvas");
     }
     this._ctx = ctx;
 
-    // Measure actual character width from font
-    this._measureCharWidth();
-
     // Initialize glyph atlas
-    this._initAtlas();
+    const font = getComputedStyle(container).font || "14px monospace";
+    this._glyphAtlas = new GlyphAtlas(font, this._charWidth, this._measurements.lineHeight, this._theme.syntaxDefault);
 
-    // Set up resize handling
-    this._handleResize();
-    window.addEventListener("resize", this._handleResize);
+    // Assemble DOM
+    scrollContainer.appendChild(spacer);
+    scrollContainer.appendChild(canvas);
+    container.appendChild(scrollContainer);
+
+    // Size the canvas to the container
+    this._resizeCanvas();
+
+    // Set up scroll listener
+    this._onScroll = () => this._handleScroll();
+    scrollContainer.addEventListener("scroll", this._onScroll, { passive: true });
+
+    // Set up mouse event listeners
+    this._onClick = (e: MouseEvent) => this._handleMouseDown(e);
+    this._onMouseMove = (e: MouseEvent) => this._handleMouseMove(e);
+    this._onMouseUp = () => this._handleMouseUp();
+    scrollContainer.addEventListener("mousedown", this._onClick);
+    document.addEventListener("mousemove", this._onMouseMove);
+    document.addEventListener("mouseup", this._onMouseUp);
   }
 
   unmount(): void {
-    this._stopBlinking();
-    window.removeEventListener("resize", this._handleResize);
+    // Cancel any pending animation frames
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
+    if (this._pendingRender !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._pendingRender);
+      this._pendingRender = null;
+    }
 
-    if (this._canvas && this._container) {
-      this._container.removeChild(this._canvas);
+    if (this._scrollContainer) {
+      if (this._onScroll) {
+        this._scrollContainer.removeEventListener("scroll", this._onScroll);
+      }
+      if (this._onClick) {
+        this._scrollContainer.removeEventListener("mousedown", this._onClick);
+      }
+    }
+
+    if (this._onMouseMove) {
+      document.removeEventListener("mousemove", this._onMouseMove);
+    }
+    if (this._onMouseUp) {
+      document.removeEventListener("mouseup", this._onMouseUp);
+    }
+
+    if (this._container && this._scrollContainer) {
+      this._container.removeChild(this._scrollContainer);
     }
 
     this._container = null;
+    this._scrollContainer = null;
+    this._spacer = null;
     this._canvas = null;
     this._ctx = null;
-    this._atlas = null;
+    this._glyphAtlas = null;
+    this._computedStyle = null;
+    this._colorCache.clear();
+    this._snapshot = null;
+    this._wrapMap = null;
+    this._wrapMapSnapshotVersion = -1;
+    this._wrapMapWrapWidth = 0;
+    this._onScroll = null;
+    this._onClick = null;
+    this._onMouseMove = null;
+    this._onMouseUp = null;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -219,93 +372,489 @@ export class CanvasRenderer implements Renderer {
     if (measurements.charWidth !== undefined) {
       this._charWidth = measurements.charWidth;
     }
+
+    // Rebuild wrap map if snapshot exists
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+
+    // Recreate glyph atlas with new measurements
+    if (this._container) {
+      const font = getComputedStyle(this._container).font || "14px monospace";
+      this._glyphAtlas = new GlyphAtlas(font, this._charWidth, this._measurements.lineHeight, this._theme.syntaxDefault);
+    }
+
+    this._scheduleRender();
+  }
+
+  remeasure(): void {
+    if (!this._container) return;
+
+    this._charWidth = this._measureCharWidth(this._container);
+    this._colorCache.clear();
+    this._computedStyle = getComputedStyle(this._container);
+
     // Rebuild atlas with new measurements
-    this._initAtlas();
+    const font = this._computedStyle.font || "14px monospace";
+    this._glyphAtlas = new GlyphAtlas(font, this._charWidth, this._measurements.lineHeight, this._theme.syntaxDefault);
+
+    // Rebuild wrap map
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+
+    this._scheduleRender();
   }
 
   setTheme(theme: Partial<Theme>): void {
     this._theme = { ...this._theme, ...theme };
-    // Rebuild atlas if text color changed
-    if (theme.syntaxDefault && this._atlas) {
-      this._atlas.rebuild(this._theme.syntaxDefault);
-    }
-  }
+    this._colorCache.clear();
 
-  render(state: RenderState, lines: readonly string[]): void {
-    if (!this._ctx || !this._canvas || !this._atlas) return;
-
-    const ctx = this._ctx;
-    const { lineHeight, gutterWidth } = this._measurements;
-    const charWidth = this._charWidth;
-
-    // Clear canvas
-    ctx.fillStyle = this._theme.lineBg === "transparent" ? "#1d2021" : this._theme.lineBg;
-    ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
-
-    // Draw selection (behind text)
-    this._renderSelectionInternal(ctx);
-
-    // Draw lines
-    const { startRow, scrollTop } = state.viewport;
-    const wrapMap = this._wrapMap;
-
-    for (let i = 0; i < lines.length; i++) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const bufferRow = (startRow + i) as MultiBufferRow;
-      const visualRow = wrapMap
-        ? wrapMap.bufferRowToFirstVisualRow(bufferRow)
-        : bufferRow;
-      const y = visualRow * lineHeight - scrollTop;
-
-      // Skip if off-screen
-      if (y + lineHeight < 0 || y > this._canvas.height) continue;
-
-      const line = lines[i] ?? "";
-
-      // Draw gutter (line number)
-      ctx.fillStyle = this._theme.gutter;
-      ctx.font = `${this._fontSize}px ${this._fontFamily}`;
-      ctx.textBaseline = "top";
-      const lineNum = String(bufferRow + 1);
-      ctx.fillText(lineNum, gutterWidth - (lineNum.length + 1) * charWidth, y);
-
-      // Draw text using glyph atlas
-      let x = gutterWidth;
-      for (const char of line) {
-        const glyph = this._atlas.get(char);
-        if (glyph) {
-          ctx.drawImage(
-            this._atlas.canvas,
-            glyph.x,
-            glyph.y,
-            charWidth,
-            lineHeight,
-            x,
-            y,
-            charWidth,
-            lineHeight,
-          );
-        } else {
-          // Fallback for characters not in atlas
-          ctx.fillStyle = this._theme.syntaxDefault;
-          ctx.fillText(char, x, y);
-        }
-        x += charWidth;
+    // Apply CSS variables to container
+    if (this._container) {
+      const vars = themeToVars(theme);
+      for (const [key, value] of Object.entries(vars)) {
+        this._container.style.setProperty(key, value);
       }
     }
 
-    // Draw cursor (on top of text)
-    this._renderCursorInternal(ctx);
+    // Update atlas text color
+    if (this._glyphAtlas && theme.syntaxDefault) {
+      this._glyphAtlas.setTextColor(theme.syntaxDefault);
+    }
+
+    this._scheduleRender();
+  }
+
+  /**
+   * Set the snapshot for content rendering.
+   * Called by the editor to update the content state.
+   * Uses version tracking to avoid unnecessary WrapMap rebuilds.
+   */
+  setSnapshot(snapshot: MultiBufferSnapshot | null): void {
+    this._snapshot = snapshot;
+    if (!snapshot) {
+      this._wrapMap = null;
+      return;
+    }
+
+    // Check if we need to rebuild the wrap map
+    const wrapWidth = this._measurements.wrapWidth;
+    const needsRebuild =
+      snapshot.version !== this._wrapMapSnapshotVersion ||
+      (wrapWidth ?? 0) !== this._wrapMapWrapWidth;
+
+    if (needsRebuild) {
+      this._wrapMap = this._buildWrapMap(snapshot);
+    }
+  }
+
+  setHighlighter(highlighter: SyntaxHighlighter | null): void {
+    this._highlighter = highlighter;
+  }
+
+  render(state: RenderState, lines: readonly string[]): void {
+    if (!this._ctx || !this._canvas) return;
+
+    this._resizeCanvas();
+    const ctx = this._ctx;
+    const lineHeight = this._measurements.lineHeight;
+    const gutterWidth = this._getEffectiveGutterWidth();
 
     // Update viewport
     this._viewport = state.viewport;
+
+    // Update scroll content height for proper scrolling
+    if (this._spacer && this._snapshot) {
+      const contentHeight = calculateContentHeight(
+        this._snapshot.lineCount,
+        lineHeight,
+        this._wrapMap ?? undefined,
+      );
+      this._spacer.style.height = `${contentHeight}px`;
+    }
+
+    // Clear canvas with line background
+    const bgColor = this._resolveColor(this._theme.lineBg === "transparent" ? "#282828" : this._theme.lineBg);
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
+
+    // Draw gutter background
+    ctx.fillStyle = "#282828";
+    ctx.fillRect(0, 0, gutterWidth, this._canvas.height);
+
+    // Build decoration map
+    const decorationMap = new Map<number, Partial<DecorationStyle>>();
+    for (const dec of state.decorations) {
+      for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
+        if (dec.style) {
+          decorationMap.set(r, dec.style);
+        }
+      }
+    }
+
+    // Build header map
+    const headerMap = new Map<number, { path: string; label?: string }>();
+    for (const header of state.excerptHeaders) {
+      headerMap.set(header.row, { path: header.path, label: header.label });
+    }
+
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
+
+    // Render each visible line
+    let visualY = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const mbRow = state.viewport.startRow + i;
+      const lineText = lines[i] ?? "";
+      const header = headerMap.get(mbRow);
+      const decoration = decorationMap.get(mbRow);
+
+      // Get excerpt info for syntax highlighting
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      const excerptInfo = this._snapshot?.excerptAt(mbRow as MultiBufferRow);
+      let lineTokens: Token[] | undefined;
+
+      if (excerptInfo && this._highlighter?.ready) {
+        const bufferRow = excerptInfo.range.context.start.row + (mbRow - excerptInfo.startRow);
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+        lineTokens = this._highlighter.getLineTokens(excerptInfo.bufferId as string, bufferRow);
+      }
+
+      // Get line number for gutter
+      let gutterText = "";
+      if (!header && excerptInfo) {
+        const bufferRow = excerptInfo.range.context.start.row + (mbRow - excerptInfo.startRow);
+        gutterText = String(bufferRow + 1);
+      }
+
+      if (wrapWidth > 0) {
+        const segments = wrapLine(lineText, wrapWidth);
+        let charOffset = 0;
+        for (let s = 0; s < segments.length; s++) {
+          const seg = segments[s] ?? "";
+          const segStart = charOffset;
+          charOffset += seg.length;
+          const segEnd = charOffset;
+          const segTokens = lineTokens ? sliceTokensToRange(lineTokens, segStart, segEnd) : undefined;
+
+          if (s === 0 && header) {
+            this._renderHeader(ctx, visualY, header.path, header.label);
+          } else {
+            this._renderLine(ctx, visualY, s === 0 ? gutterText : "", seg, segTokens, decoration);
+          }
+          visualY += lineHeight;
+        }
+      } else {
+        if (header) {
+          this._renderHeader(ctx, visualY, header.path, header.label);
+        } else {
+          this._renderLine(ctx, visualY, gutterText, lineText, lineTokens, decoration);
+        }
+        visualY += lineHeight;
+      }
+    }
+
+    // Render selections
+    this._renderSelections(ctx, state);
+
+    // Render cursor if focused
+    if (state.focused && state.selections.length > 0) {
+      this._renderCursor(ctx, state);
+    }
+  }
+
+  private _renderLine(
+    ctx: CanvasRenderingContext2D,
+    y: number,
+    gutterText: string,
+    text: string,
+    tokens: Token[] | undefined,
+    decoration: Partial<DecorationStyle> | undefined,
+  ): void {
+    const lineHeight = this._measurements.lineHeight;
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    // Draw line background if decorated
+    if (decoration?.backgroundColor) {
+      ctx.fillStyle = this._resolveColor(decoration.backgroundColor);
+      ctx.fillRect(gutterWidth, y, this._canvas?.width ?? 0, lineHeight);
+    }
+
+    // Draw gutter background
+    const gutterBg = decoration?.gutterBackground ?? this._theme.lineBg;
+    if (gutterBg && gutterBg !== "transparent") {
+      ctx.fillStyle = this._resolveColor(gutterBg);
+      ctx.fillRect(0, y, gutterWidth, lineHeight);
+    }
+
+    // Draw gutter text (right-aligned)
+    ctx.fillStyle = this._resolveColor(decoration?.gutterColor ?? this._theme.gutter);
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.font = this._getFont();
+    ctx.fillText(gutterText, gutterWidth - 8, y);
+
+    // Draw gutter sign if present
+    if (decoration?.gutterSign) {
+      ctx.fillStyle = this._resolveColor(decoration.gutterSignColor ?? this._theme.gutter);
+      ctx.textAlign = "left";
+      ctx.fillText(decoration.gutterSign, gutterWidth - 20, y);
+    }
+
+    // Draw text content with syntax highlighting
+    this._renderTokenizedLine(ctx, text, tokens, gutterWidth, y, decoration?.color);
+  }
+
+  /**
+   * Render a line with syntax highlighting tokens.
+   * Fills gaps between tokens with default color.
+   */
+  private _renderTokenizedLine(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    tokens: Token[] | undefined,
+    startX: number,
+    y: number,
+    overrideColor?: string,
+  ): void {
+    const charWidth = this._charWidth;
+    const defaultColor = this._resolveColor(overrideColor ?? this._theme.syntaxDefault);
+
+    if (!tokens || tokens.length === 0) {
+      // No tokens - render entire line with default color
+      this._drawTextWithColor(ctx, text, startX, y, defaultColor);
+      return;
+    }
+
+    let x = startX;
+    let pos = 0;
+
+    for (const token of tokens) {
+      // Fill gap before token with default color
+      if (token.startColumn > pos) {
+        const gapText = text.slice(pos, token.startColumn);
+        this._drawTextWithColor(ctx, gapText, x, y, defaultColor);
+        x += visualWidth(gapText) * charWidth;
+      }
+
+      // Draw token with its color
+      const tokenEnd = Math.min(token.endColumn, text.length);
+      if (token.startColumn < tokenEnd) {
+        const tokenText = text.slice(token.startColumn, tokenEnd);
+        const tokenColor = this._resolveColor(token.color);
+        this._drawTextWithColor(ctx, tokenText, x, y, tokenColor);
+        x += visualWidth(tokenText) * charWidth;
+      }
+
+      pos = Math.max(pos, tokenEnd);
+    }
+
+    // Fill trailing gap with default color
+    if (pos < text.length) {
+      const trailingText = text.slice(pos);
+      this._drawTextWithColor(ctx, trailingText, x, y, defaultColor);
+    }
+  }
+
+  /**
+   * Draw text with the specified color using the glyph atlas.
+   * Uses compositing to apply color to grayscale glyphs.
+   */
+  private _drawTextWithColor(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    color: string,
+  ): void {
+    if (!this._glyphAtlas) {
+      // Fallback to direct text rendering
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.font = this._getFont();
+      ctx.fillText(text, x, y);
+      return;
+    }
+
+    const atlas = this._glyphAtlas;
+    const charWidth = atlas.charWidth;
+    const lineHeight = atlas.lineHeight;
+
+    // For each character, draw from atlas with color applied.
+    // Uses charCodeAt with ASCII fast-path to avoid iterator allocation.
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      let char: string;
+
+      if (c >= 0xd800 && c <= 0xdbff) {
+        // Surrogate pair: decode full code point
+        char = text.slice(i, i + 2);
+        i++;
+      } else {
+        char = text[i] ?? "";
+      }
+
+      // Skip space characters - nothing to draw
+      if (char === " " || char === "\t") {
+        x += charWidth;
+        continue;
+      }
+
+      const glyph = atlas.get(char);
+      const drawWidth = charWidth * glyph.cells;
+
+      // Method: Draw glyph, then tint with color using composite operation
+      // Save current state
+      ctx.save();
+
+      // First draw the glyph from atlas (white on transparent)
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(
+        atlas.canvas,
+        glyph.x,
+        glyph.y,
+        glyph.width,
+        glyph.height,
+        x,
+        y,
+        drawWidth,
+        lineHeight,
+      );
+
+      // Apply color tint using multiply composite operation
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, drawWidth, lineHeight);
+
+      ctx.restore();
+
+      x += drawWidth;
+    }
+  }
+
+  private _renderHeader(
+    ctx: CanvasRenderingContext2D,
+    y: number,
+    path: string,
+    label?: string,
+  ): void {
+    const lineHeight = this._measurements.lineHeight;
+    const width = this._canvas?.width ?? 0;
+
+    // Draw header background
+    ctx.fillStyle = this._resolveColor(this._theme.headerBg);
+    ctx.fillRect(0, y, width, lineHeight);
+
+    // Draw header border
+    ctx.fillStyle = this._resolveColor(this._theme.headerBorder);
+    ctx.fillRect(0, y + lineHeight - 1, width, 1);
+
+    // Draw header text
+    ctx.fillStyle = this._resolveColor(this._theme.headerText);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = this._getFont();
+    const displayText = label ? `${path} ${label}` : path;
+    ctx.fillText(displayText, this._measurements.gutterWidth, y);
+  }
+
+  private _renderSelections(ctx: CanvasRenderingContext2D, state: RenderState): void {
+    if (state.selections.length === 0 || !this._snapshot) return;
+
+    const lineHeight = this._measurements.lineHeight;
+    const charWidth = this._charWidth;
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    ctx.fillStyle = this._resolveColor(this._theme.selection);
+
+    for (const sel of state.selections) {
+      // Resolve anchors to get actual positions
+      const startPoint = this._snapshot.resolveAnchor(sel.range.start);
+      const endPoint = this._snapshot.resolveAnchor(sel.range.end);
+
+      if (!startPoint || !endPoint) continue;
+
+      if (startPoint.row === endPoint.row && startPoint.column === endPoint.column) {
+        continue; // Empty selection
+      }
+
+      // Normalize selection direction
+      let startRow = startPoint.row;
+      let startCol = startPoint.column;
+      let endRow = endPoint.row;
+      let endCol = endPoint.column;
+      if (startRow > endRow || (startRow === endRow && startCol > endCol)) {
+        [startRow, startCol, endRow, endCol] = [endRow, endCol, startRow, startCol];
+      }
+
+      // Calculate visual positions relative to viewport
+      for (let row = startRow; row <= endRow; row++) {
+        if (row < state.viewport.startRow || row >= state.viewport.endRow) continue;
+
+        const lineText = this._getLineText(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          row as MultiBufferRow,
+        );
+        const visualRow = this._wrapMap
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
+          : row;
+        const screenY = (visualRow - Math.floor(state.viewport.scrollTop / lineHeight)) * lineHeight;
+
+        const isFirstRow = row === startRow;
+        const isLastRow = row === endRow;
+
+        const selStartCol = isFirstRow ? startCol : 0;
+        const selEndCol = isLastRow ? endCol : lineText.length;
+
+        const startX = gutterWidth + charColToVisualCol(lineText.slice(0, selStartCol), selStartCol) * charWidth;
+        const endX = gutterWidth + charColToVisualCol(lineText.slice(0, selEndCol), selEndCol) * charWidth;
+
+        ctx.fillRect(startX, screenY, endX - startX, lineHeight);
+      }
+    }
+  }
+
+  private _renderCursor(ctx: CanvasRenderingContext2D, state: RenderState): void {
+    const sel = state.selections[0];
+    if (!sel || !this._snapshot) return;
+
+    const lineHeight = this._measurements.lineHeight;
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    // Cursor is at the head position (start or end based on sel.head)
+    const headAnchor = sel.head === "start" ? sel.range.start : sel.range.end;
+    const cursorPoint = this._snapshot.resolveAnchor(headAnchor);
+    if (!cursorPoint) return;
+
+    const cursorRow = cursorPoint.row;
+    const cursorCol = cursorPoint.column;
+
+    if (cursorRow < state.viewport.startRow || cursorRow >= state.viewport.endRow) return;
+
+    const lineText = this._getLineText(
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      cursorRow as MultiBufferRow,
+    );
+    const visualRow = this._wrapMap
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      ? this._wrapMap.bufferRowToFirstVisualRow(cursorRow as MultiBufferRow)
+      : cursorRow;
+    const screenY = (visualRow - Math.floor(state.viewport.scrollTop / lineHeight)) * lineHeight;
+
+    const cursorX = gutterWidth + charColToVisualCol(lineText.slice(0, cursorCol), cursorCol) * this._charWidth;
+
+    ctx.fillStyle = this._resolveColor(this._theme.cursor);
+    ctx.fillRect(cursorX, screenY, 2, lineHeight); // 2px wide cursor
   }
 
   scrollTo(target: ScrollTarget): void {
-    if (!this._snapshot || !this._canvas) return;
+    if (!this._scrollContainer || !this._snapshot) return;
 
+    const totalLines = this._snapshot.lineCount;
     const contentHeight = calculateContentHeight(
-      this._snapshot.lineCount,
+      totalLines,
       this._measurements.lineHeight,
       this._wrapMap ?? undefined,
     );
@@ -313,187 +862,120 @@ export class CanvasRenderer implements Renderer {
     const newScrollTop = calculateScrollTop(
       target.row,
       target.strategy,
-      this._viewport.scrollTop,
+      this._scrollContainer.scrollTop,
       this._measurements.lineHeight,
-      this._viewport.height,
+      this._scrollContainer.clientHeight,
       contentHeight,
       this._wrapMap ?? undefined,
     );
 
-    this._viewport = {
-      ...this._viewport,
-      scrollTop: newScrollTop,
-    };
+    this._scrollContainer.scrollTop = newScrollTop;
   }
 
   getViewport(): Viewport {
     return this._viewport;
   }
 
-  hitTest(x: number, y: number): { row: MultiBufferRow; column: number } | undefined {
-    const { lineHeight, gutterWidth } = this._measurements;
-    const charWidth = this._charWidth;
-    const scrollTop = this._viewport.scrollTop;
-
-    const visualRow = yToVisualRow(y + scrollTop, lineHeight);
-
-    let bufferRow: MultiBufferRow;
-    if (this._wrapMap) {
-      const info = this._wrapMap.visualRowToBufferRow(visualRow);
-      bufferRow = info.mbRow;
-    } else {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      bufferRow = visualRow as MultiBufferRow;
-    }
-
-    // Clamp to valid rows
-    if (this._snapshot) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      bufferRow = Math.min(bufferRow, Math.max(0, this._snapshot.lineCount - 1)) as MultiBufferRow;
-    }
-
-    const column = Math.max(0, Math.floor((x - gutterWidth) / charWidth));
-
-    return { row: bufferRow, column };
-  }
-
   /**
-   * Set the snapshot for rendering. Called by EditorView.
+   * Get the current scroll position from the scroll container.
    */
-  setSnapshot(snapshot: MultiBufferSnapshot): void {
-    this._snapshot = snapshot;
-    const wrapWidth = this._measurements.wrapWidth ?? 0;
-    if (wrapWidth > 0) {
-      this._wrapMap = new WrapMap(snapshot, wrapWidth);
-    } else {
-      this._wrapMap = null;
-    }
+  getScrollTop(): number {
+    return this._scrollContainer?.scrollTop ?? 0;
   }
 
-  // ─── Cursor Rendering ────────────────────────────────────────────────
+  /**
+   * Convert pixel coordinates to multibuffer position.
+   * Accounts for gutter width, scroll offset, and soft wrapping.
+   */
+  hitTest(x: number, y: number): { row: MultiBufferRow; column: number } | undefined {
+    if (!this._scrollContainer) return undefined;
+
+    const scrollTop = this._scrollContainer.scrollTop;
+    const visualRow = yToVisualRow(scrollTop + y, this._measurements.lineHeight);
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    // Convert pixel X to visual column
+    const visualColInSegment = Math.max(0, Math.floor((x - gutterWidth) / this._charWidth));
+
+    // If click is in gutter area, treat as column 0
+    if (x < gutterWidth) {
+      if (this._wrapMap) {
+        const { mbRow } = this._wrapMap.visualRowToBufferRow(visualRow);
+        return { row: mbRow, column: 0 };
+      }
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      return { row: visualRow as MultiBufferRow, column: 0 };
+    }
+
+    if (this._wrapMap) {
+      const { mbRow, segment } = this._wrapMap.visualRowToBufferRow(visualRow);
+      const lineText = this._getLineText(mbRow);
+
+      // Use cached segment char-start offsets for O(1) lookup
+      const charOffset = this._wrapMap.segmentCharStart(mbRow, segment);
+      const nextSeg = segment + 1;
+      const segEnd =
+        nextSeg < this._wrapMap.visualRowsForLine(mbRow)
+          ? this._wrapMap.segmentCharStart(mbRow, nextSeg)
+          : lineText.length;
+      const segText = lineText.slice(charOffset, segEnd);
+
+      // Handle wide characters (tabs, emoji, CJK)
+      const charColInSeg = visualColToCharCol(segText, visualColInSegment);
+      return { row: mbRow, column: charOffset + charColInSeg };
+    }
+
+    // No wrapping: visual row = buffer row
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    const lineText = this._getLineText(visualRow as MultiBufferRow);
+    const column = visualColToCharCol(lineText, visualColInSegment);
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+    return { row: visualRow as MultiBufferRow, column };
+  }
+
+  getCharWidth(): number {
+    return this._charWidth;
+  }
 
   /**
-   * Render cursor at a multibuffer point.
+   * Register callback for click events.
+   * Callback receives the buffer position of the click.
+   */
+  onClickPosition(cb: (point: MultiBufferPoint) => void): void {
+    this._onClickCallback = cb;
+  }
+
+  /**
+   * Register callback for drag events.
+   * Callback receives the current buffer position during drag.
+   */
+  onDrag(cb: (point: MultiBufferPoint) => void): void {
+    this._onDragCallback = cb;
+  }
+
+  /**
+   * Register callback for double-click events.
+   * Typically used for word selection.
+   */
+  onDoubleClick(cb: (point: MultiBufferPoint) => void): void {
+    this._onDoubleClickCallback = cb;
+  }
+
+  /**
+   * Register callback for triple-click events.
+   * Typically used for line selection.
+   */
+  onTripleClick(cb: (point: MultiBufferPoint) => void): void {
+    this._onTripleClickCallback = cb;
+  }
+
+  /**
+   * Render the cursor at a given position.
    */
   renderCursor(point: MultiBufferPoint | undefined): void {
-    this._cursorPoint = point;
-    this._requestRedraw();
+    if (!this._ctx || !this._canvas || !point) return;
+    this._drawCursor(this._ctx, point, this._viewport);
   }
-
-  private _renderCursorInternal(ctx: CanvasRenderingContext2D): void {
-    if (this._cursorHidden || !this._cursorPoint || !this._cursorVisible) return;
-
-    const point = this._cursorPoint;
-    const { lineHeight } = this._measurements;
-    const gutterWidth = this._getEffectiveGutterWidth();
-    const charWidth = this._charWidth;
-    const scrollTop = this._viewport.scrollTop;
-
-    // Calculate visual position
-    const visualRow = this._wrapMap
-      ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
-      : point.row;
-
-    const wrapWidth = this._measurements.wrapWidth ?? 0;
-    const lineText = this._getLineText(point.row);
-    let displayRow = visualRow;
-    let displayVisualCol: number;
-
-    if (wrapWidth > 0 && this._wrapMap) {
-      // Handle wrapped lines
-      const wm = this._wrapMap;
-      const totalSegs = wm.visualRowsForLine(point.row);
-      let segIdx = 0;
-      for (let s = 1; s < totalSegs; s++) {
-        if (wm.segmentCharStart(point.row, s) > point.column) break;
-        segIdx = s;
-      }
-      displayRow = visualRow + segIdx;
-      const charOffset = wm.segmentCharStart(point.row, segIdx);
-      const segEnd =
-        segIdx + 1 < totalSegs
-          ? wm.segmentCharStart(point.row, segIdx + 1)
-          : lineText.length;
-      displayVisualCol = charColToVisualCol(lineText.slice(charOffset, segEnd), point.column - charOffset);
-    } else {
-      displayVisualCol = charColToVisualCol(lineText, point.column);
-    }
-
-    const x = gutterWidth + displayVisualCol * charWidth;
-    const y = displayRow * lineHeight - scrollTop;
-
-    // Draw 2px vertical bar cursor
-    ctx.fillStyle = this._theme.cursor;
-    ctx.fillRect(x, y, 2, lineHeight);
-  }
-
-  /**
-   * Set whether the cursor should be hidden (for read-only mode).
-   */
-  setCursorHidden(hidden: boolean): void {
-    this._cursorHidden = hidden;
-    this._requestRedraw();
-  }
-
-  /**
-   * Returns true if the cursor is hidden.
-   */
-  get cursorHidden(): boolean {
-    return this._cursorHidden;
-  }
-
-  /**
-   * Configure cursor blink behavior.
-   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking.
-   * @throws {RangeError} If `ms` is a number that is not positive.
-   */
-  setCursorBlink(ms: number | false): void {
-    if (typeof ms === "number" && ms <= 0) {
-      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
-    }
-    this._blinkIntervalMs = ms;
-    this._updateBlinking();
-  }
-
-  /**
-   * Return the current blink interval setting.
-   */
-  getCursorBlinkInterval(): number | false {
-    return this._blinkIntervalMs;
-  }
-
-  /**
-   * Update focus state — call when the editor gains or loses keyboard focus.
-   */
-  setFocused(focused: boolean): void {
-    this._focused = focused;
-    this._updateBlinking();
-    this._requestRedraw();
-  }
-
-  private _updateBlinking(): void {
-    this._stopBlinking();
-
-    if (this._focused && this._blinkIntervalMs !== false) {
-      this._cursorVisible = true;
-      this._blinkIntervalId = setInterval(() => {
-        this._cursorVisible = !this._cursorVisible;
-        this._requestRedraw();
-      }, this._blinkIntervalMs);
-    } else {
-      // When unfocused or blink disabled, cursor is solid
-      this._cursorVisible = true;
-    }
-  }
-
-  private _stopBlinking(): void {
-    if (this._blinkIntervalId !== null) {
-      clearInterval(this._blinkIntervalId);
-      this._blinkIntervalId = null;
-    }
-  }
-
-  // ─── Selection Rendering ─────────────────────────────────────────────
 
   /**
    * Render selection highlight between two multibuffer points.
@@ -502,115 +984,304 @@ export class CanvasRenderer implements Renderer {
     start: MultiBufferPoint | undefined,
     end: MultiBufferPoint | undefined,
   ): void {
-    this._selectionStart = start;
-    this._selectionEnd = end;
-    this._requestRedraw();
+    if (!this._ctx || !this._canvas || !start || !end) return;
+    this._drawSelectionRange(this._ctx, start, end, this._viewport);
   }
 
-  private _renderSelectionInternal(ctx: CanvasRenderingContext2D): void {
-    if (!this._selectionStart || !this._selectionEnd) return;
+  // --- Private Methods ---
 
-    const rects = computeSelectionRects(
-      this._selectionStart,
-      this._selectionEnd,
-      this._snapshot,
-      this._measurements.lineHeight,
-      this._charWidth,
-      this._getEffectiveGutterWidth(),
-      this._measurements.wrapWidth ?? 0,
-      this._wrapMap,
-    );
-
-    if (rects.length === 0) return;
-
-    const scrollTop = this._viewport.scrollTop;
-    ctx.fillStyle = this._theme.selection;
-
-    for (const rect of rects) {
-      ctx.fillRect(rect.x, rect.y - scrollTop, rect.width, rect.height);
+  private _measureCharWidth(container: HTMLElement): number {
+    if (this._measurements.charWidth) {
+      return this._measurements.charWidth;
     }
+
+    const span = document.createElement("span");
+    span.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:inherit;";
+    span.textContent = "MMMMMMMMMM"; // 10 wide chars for accuracy
+    container.appendChild(span);
+    const width = span.getBoundingClientRect().width / 10;
+    container.removeChild(span);
+    return width || 8; // Fallback to 8 if measurement fails
   }
 
-  // ─── Private Helpers ─────────────────────────────────────────────────
-
-  private _measureCharWidth(): void {
-    if (!this._ctx) return;
-
-    this._ctx.font = `${this._fontSize}px ${this._fontFamily}`;
-    // Measure using a character that represents average width
-    const metrics = this._ctx.measureText("M");
-    this._charWidth = metrics.width;
-  }
-
-  private _initAtlas(): void {
-    const font = `${this._fontSize}px ${this._fontFamily}`;
-    this._atlas = new GlyphAtlas(
-      this._charWidth,
-      this._measurements.lineHeight,
-      font,
-      this._theme.syntaxDefault,
-    );
-  }
-
-  private _getEffectiveGutterWidth(): number {
-    if (this._measurements.gutterMode === "diff") {
-      // Diff mode: old line # + new line # + sign
-      return 40 + 40 + 16;
+  private _getFont(): string {
+    if (this._container) {
+      return getComputedStyle(this._container).font || "14px monospace";
     }
-    return this._measurements.gutterWidth;
+    return "14px monospace";
   }
 
+  /** Get the text content of a single line from the snapshot. */
   private _getLineText(row: MultiBufferRow): string {
     if (!this._snapshot) return "";
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     const nextRow = Math.min(row + 1, this._snapshot.lineCount) as MultiBufferRow;
-    const lines = this._snapshot.lines(row, nextRow);
-    return lines[0] ?? "";
+    return this._snapshot.lines(row, nextRow)?.[0] ?? "";
   }
 
-  private readonly _handleResize = (): void => {
-    if (!this._canvas || !this._container) return;
+  /**
+   * Build or rebuild the WrapMap for soft wrapping.
+   * Uses lazy computation for large documents.
+   */
+  private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
+    const wrapWidth = this._measurements.wrapWidth;
+    if (!wrapWidth || wrapWidth <= 0) {
+      return null;
+    }
 
-    const rect = this._container.getBoundingClientRect();
+    this._wrapMapSnapshotVersion = snapshot.version;
+    this._wrapMapWrapWidth = wrapWidth;
+
+    // Cancel any pending animation frame from a previous build
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
+
+    const useLazy =
+      snapshot.lineCount > LAZY_WRAP_THRESHOLD &&
+      typeof requestAnimationFrame !== "undefined";
+
+    if (useLazy) {
+      const wrapMap = new WrapMap(snapshot, wrapWidth, { lazy: true });
+      this._scheduleWrapCompletion(wrapMap);
+      return wrapMap;
+    }
+
+    return new WrapMap(snapshot, wrapWidth);
+  }
+
+  /**
+   * Incrementally compute the WrapMap across animation frames.
+   */
+  private _scheduleWrapCompletion(wrapMap: WrapMap): void {
+    this._wrapBuildFrame = requestAnimationFrame(() => {
+      // If the wrapMap was replaced by a newer snapshot, bail out
+      if (this._wrapMap !== wrapMap) {
+        this._wrapBuildFrame = null;
+        return;
+      }
+
+      const complete = wrapMap.computeChunk(WRAP_CHUNK_SIZE);
+
+      if (complete) {
+        this._wrapBuildFrame = null;
+        // Update spacer height with exact content height
+        if (this._spacer && this._snapshot) {
+          const contentHeight = calculateContentHeight(
+            this._snapshot.lineCount,
+            this._measurements.lineHeight,
+            wrapMap,
+          );
+          this._spacer.style.height = `${contentHeight}px`;
+        }
+      } else {
+        // Schedule next chunk
+        this._scheduleWrapCompletion(wrapMap);
+      }
+    });
+  }
+
+  private _resizeCanvas(): void {
+    if (!this._canvas || !this._scrollContainer) return;
+
+    const width = this._scrollContainer.clientWidth;
+    const height = this._scrollContainer.clientHeight;
+
+    // Handle device pixel ratio for sharp rendering
     const dpr = window.devicePixelRatio || 1;
+    this._canvas.width = width * dpr;
+    this._canvas.height = height * dpr;
+    this._canvas.style.width = `${width}px`;
+    this._canvas.style.height = `${height}px`;
 
-    // Set actual canvas size for high-DPI displays
-    this._canvas.width = rect.width * dpr;
-    this._canvas.height = rect.height * dpr;
-
-    // Scale context to match device pixel ratio
     if (this._ctx) {
       this._ctx.scale(dpr, dpr);
+      // Reset font after scale
+      this._ctx.font = this._getFont();
+      this._ctx.textBaseline = "top";
     }
 
     // Update viewport dimensions
     this._viewport = {
       ...this._viewport,
-      width: rect.width,
-      height: rect.height,
+      width,
+      height,
     };
-  };
+  }
 
-  private _redrawPending = false;
+  private _scheduleRender(): void {
+    if (this._pendingRender !== null) return;
 
-  private _requestRedraw(): void {
-    if (this._redrawPending) return;
-    this._redrawPending = true;
-    requestAnimationFrame(() => {
-      this._redrawPending = false;
-      this._redrawCursorAndSelection();
+    this._pendingRender = requestAnimationFrame(() => {
+      this._pendingRender = null;
+      this._handleScrollUpdate();
     });
   }
 
+  private _handleScroll(): void {
+    this._handleScrollUpdate();
+  }
+
+  private _handleScrollUpdate(): void {
+    if (!this._scrollContainer || !this._snapshot) return;
+
+    const scrollTop = this._scrollContainer.scrollTop;
+    const height = this._scrollContainer.clientHeight;
+    const width = this._scrollContainer.clientWidth;
+
+    const totalLines = this._snapshot.lineCount;
+
+    // Update spacer height
+    if (this._spacer) {
+      const contentHeight = calculateContentHeight(
+        totalLines,
+        this._measurements.lineHeight,
+        this._wrapMap ?? undefined,
+      );
+      this._spacer.style.height = `${contentHeight}px`;
+    }
+
+    this._viewport = createViewport(
+      scrollTop,
+      height,
+      width,
+      this._measurements,
+      totalLines,
+      this._wrapMap ?? undefined,
+    );
+
+    const { startRow, endRow } = this._viewport;
+    const lines = this._snapshot.lines(startRow, endRow);
+
+    this.render(
+      {
+        viewport: this._viewport,
+        selections: [],
+        decorations: [],
+        excerptHeaders: [],
+        focused: false,
+      },
+      lines,
+    );
+  }
+
+  private _drawSelectionRange(
+    ctx: CanvasRenderingContext2D,
+    selStart: MultiBufferPoint,
+    selEnd: MultiBufferPoint,
+    viewport: Viewport,
+  ): void {
+    const { lineHeight } = this._measurements;
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    // Normalize selection (start <= end)
+    const start =
+      selStart.row < selEnd.row ||
+      (selStart.row === selEnd.row && selStart.column <= selEnd.column)
+        ? selStart
+        : selEnd;
+    const end =
+      selStart.row < selEnd.row ||
+      (selStart.row === selEnd.row && selStart.column <= selEnd.column)
+        ? selEnd
+        : selStart;
+
+    ctx.fillStyle = this._theme.selection;
+
+    for (let row = start.row; row <= end.row; row++) {
+      if (row < viewport.startRow || row >= viewport.endRow) continue;
+
+      const lineText = this._getLineText(row);
+      const visualRow = this._wrapMap
+        ? this._wrapMap.bufferRowToFirstVisualRow(row)
+        : row;
+      const screenY = (visualRow - Math.floor(viewport.scrollTop / lineHeight)) * lineHeight;
+
+      const startCol = row === start.row ? start.column : 0;
+      const endCol = row === end.row ? end.column : lineText.length;
+
+      const startX = gutterWidth + charColToVisualCol(lineText.slice(0, startCol), startCol) * this._charWidth;
+      const endX = gutterWidth + charColToVisualCol(lineText.slice(0, endCol), endCol) * this._charWidth;
+
+      ctx.fillRect(startX, screenY, endX - startX, lineHeight);
+    }
+  }
+
+  private _drawCursor(
+    ctx: CanvasRenderingContext2D,
+    cursor: MultiBufferPoint,
+    viewport: Viewport,
+  ): void {
+    const { lineHeight } = this._measurements;
+    const gutterWidth = this._getEffectiveGutterWidth();
+
+    if (cursor.row < viewport.startRow || cursor.row >= viewport.endRow) return;
+
+    const lineText = this._getLineText(cursor.row);
+    const visualRow = this._wrapMap
+      ? this._wrapMap.bufferRowToFirstVisualRow(cursor.row)
+      : cursor.row;
+    const screenY = (visualRow - Math.floor(viewport.scrollTop / lineHeight)) * lineHeight;
+
+    const cursorX =
+      gutterWidth + charColToVisualCol(lineText.slice(0, cursor.column), cursor.column) * this._charWidth;
+
+    ctx.fillStyle = this._theme.cursor;
+    ctx.fillRect(cursorX, screenY, 2, lineHeight);
+  }
+
+  private _hitTestFromEvent(e: MouseEvent): { row: MultiBufferRow; column: number } | undefined {
+    if (!this._scrollContainer) return undefined;
+    const rect = this._scrollContainer.getBoundingClientRect();
+    return this.hitTest(e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  private _handleMouseDown(e: MouseEvent): void {
+    if (!this._scrollContainer) return;
+
+    // Prevent the browser from focusing the scroll container,
+    // so the hidden textarea retains focus for keyboard input.
+    e.preventDefault();
+
+    const point = this._hitTestFromEvent(e);
+    if (!point) return;
+
+    // Handle click based on detail (click count)
+    if (e.detail >= 3 && this._onTripleClickCallback) {
+      this._onTripleClickCallback(point);
+    } else if (e.detail === 2 && this._onDoubleClickCallback) {
+      this._onDoubleClickCallback(point);
+    } else if (this._onClickCallback) {
+      this._onClickCallback(point);
+    }
+
+    this._isDragging = true;
+  }
+
+  private _handleMouseMove(e: MouseEvent): void {
+    if (!this._isDragging || !this._onDragCallback) return;
+    const point = this._hitTestFromEvent(e);
+    if (point) {
+      this._onDragCallback(point);
+    }
+  }
+
+  private _handleMouseUp(): void {
+    this._isDragging = false;
+  }
+
   /**
-   * Redraw only cursor and selection layers without full re-render.
-   * This is more efficient for cursor blink animation.
+   * Resolve a color that may contain CSS variables.
+   * Caches results for performance.
    */
-  private _redrawCursorAndSelection(): void {
-    if (!this._ctx || !this._canvas) return;
-    // For now, we do a full re-render. A more optimized version could
-    // use separate canvas layers or dirty rect tracking.
-    // The render() method will be called by the editor on the next frame.
+  private _resolveColor(color: string): string {
+    const cached = this._colorCache.get(color);
+    if (cached) return cached;
+
+    const resolved = resolveCssColor(color, this._computedStyle ?? undefined);
+    this._colorCache.set(color, resolved);
+    return resolved;
   }
 }
 
@@ -619,11 +1290,7 @@ export class CanvasRenderer implements Renderer {
  */
 export function createCanvasRenderer(
   measurements: Measurements,
-  theme?: Partial<Theme>,
+  options?: CanvasRendererOptions,
 ): CanvasRenderer {
-  const renderer = new CanvasRenderer(measurements);
-  if (theme) {
-    renderer.setTheme(theme);
-  }
-  return renderer;
+  return new CanvasRenderer(measurements, options);
 }

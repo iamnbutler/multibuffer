@@ -269,3 +269,106 @@ describe("Rope - Stress", () => {
     expect(r.lineCount).toBe(text.split("\n").length);
   });
 });
+
+describe("Rope - textChunks", () => {
+  test("empty rope yields empty chunk", () => {
+    const r = Rope.from("");
+    const chunks = [...r.textChunks()];
+    expect(chunks).toEqual([""]);
+  });
+
+  test("small text yields single chunk", () => {
+    const r = Rope.from("Hello, world!");
+    const chunks = [...r.textChunks()];
+    expect(chunks.join("")).toBe("Hello, world!");
+  });
+
+  test("large text yields multiple chunks", () => {
+    const lines = Array.from({ length: 1000 }, (_, i) => `Line ${i}`);
+    const text = lines.join("\n");
+    const r = Rope.from(text);
+    const chunks = [...r.textChunks()];
+    // Multiple chunks should be yielded
+    expect(chunks.length).toBeGreaterThan(1);
+    // Concatenation matches original text
+    expect(chunks.join("")).toBe(text);
+  });
+
+  test("chunks can be iterated lazily", () => {
+    const r = Rope.from("A".repeat(5000));
+    const gen = r.textChunks();
+    const first = gen.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toBeDefined();
+    // Can continue iterating
+    let total = first.value?.length ?? 0;
+    for (const chunk of gen) {
+      total += chunk.length;
+    }
+    expect(total).toBe(5000);
+  });
+});
+
+describe("Rope - lineIterator", () => {
+  test("empty rope yields single empty line", () => {
+    const r = Rope.from("");
+    const lines = [...r.lineIterator()];
+    expect(lines).toEqual([""]);
+  });
+
+  test("single line without newline", () => {
+    const r = Rope.from("Hello");
+    const lines = [...r.lineIterator()];
+    expect(lines).toEqual(["Hello"]);
+  });
+
+  test("multiple lines", () => {
+    const r = Rope.from("A\nB\nC");
+    const lines = [...r.lineIterator()];
+    expect(lines).toEqual(["A", "B", "C"]);
+  });
+
+  test("trailing newline yields empty final line", () => {
+    const r = Rope.from("A\nB\n");
+    const lines = [...r.lineIterator()];
+    expect(lines).toEqual(["A", "B", ""]);
+  });
+
+  test("matches lines() output", () => {
+    const r = Rope.from("Line 0\nLine 1\nLine 2\nLine 3\nLine 4");
+    expect([...r.lineIterator()]).toEqual(r.lines(0, r.lineCount));
+    expect([...r.lineIterator(1, 4)]).toEqual(r.lines(1, 4));
+    expect([...r.lineIterator(0, 1)]).toEqual(r.lines(0, 1));
+    expect([...r.lineIterator(4, 5)]).toEqual(r.lines(4, 5));
+  });
+
+  test("range parameters work correctly", () => {
+    const r = Rope.from("A\nB\nC\nD\nE");
+    expect([...r.lineIterator(1, 4)]).toEqual(["B", "C", "D"]);
+    expect([...r.lineIterator(0, 2)]).toEqual(["A", "B"]);
+    expect([...r.lineIterator(3, 5)]).toEqual(["D", "E"]);
+  });
+
+  test("out of range clamps correctly", () => {
+    const r = Rope.from("A\nB");
+    expect([...r.lineIterator(0, 100)]).toEqual(["A", "B"]);
+    expect([...r.lineIterator(5, 10)]).toEqual([]);
+  });
+
+  test("large file iteration matches lines()", () => {
+    const lines = Array.from({ length: 1000 }, (_, i) => `Line ${i}`);
+    const text = lines.join("\n");
+    const r = Rope.from(text);
+    expect([...r.lineIterator()]).toEqual(r.lines(0, r.lineCount));
+    expect([...r.lineIterator(100, 200)]).toEqual(r.lines(100, 200));
+  });
+
+  test("can iterate lazily and stop early", () => {
+    const r = Rope.from("A\nB\nC\nD\nE");
+    const gen = r.lineIterator();
+    expect(gen.next().value).toBe("A");
+    expect(gen.next().value).toBe("B");
+    // Stop early - generator should be usable
+    expect(gen.next().value).toBe("C");
+  });
+});
