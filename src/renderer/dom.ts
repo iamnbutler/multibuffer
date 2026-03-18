@@ -220,6 +220,8 @@ export class DomRenderer implements Renderer {
   private _theme: Partial<Theme> | null = null;
   /** Cursor blink interval in milliseconds, or false to disable blinking. */
   private _blinkIntervalMs: number | false = 600;
+  /** Cached CSS animation string — updated only when _focused or _blinkIntervalMs change. */
+  private _blinkAnimationStr: string = "cursor-blink 600ms steps(1, end) infinite alternate";
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -361,26 +363,39 @@ export class DomRenderer implements Renderer {
 
   /**
    * Configure cursor blink behavior.
-   * @param ms - Blink interval in milliseconds, or `false` to disable blinking (steady cursor).
-   *             Default is 600ms.
+   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking
+   *             (steady cursor). Default is 600ms.
+   * @throws {RangeError} If `ms` is a number that is not positive.
    */
   setCursorBlink(ms: number | false): void {
+    if (typeof ms === "number" && ms <= 0) {
+      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
+    }
     this._blinkIntervalMs = ms;
+    this._updateBlinkAnimation();
     // Re-apply the animation to the cursor if it's currently visible and focused
     if (this._cursorEl && this._cursorEl.style.display !== "none") {
-      this._cursorEl.style.animation = this._blinkAnimation();
+      this._cursorEl.style.animation = this._blinkAnimationStr;
     }
   }
 
   /**
-   * Build the CSS animation string for cursor blinking based on focus state
-   * and configured blink interval.
+   * Return the current blink interval setting.
+   * Useful for testing and introspection.
    */
-  private _blinkAnimation(): string {
-    if (!this._focused || this._blinkIntervalMs === false) {
-      return "none";
-    }
-    return `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
+  getCursorBlinkInterval(): number | false {
+    return this._blinkIntervalMs;
+  }
+
+  /**
+   * Recompute and cache the CSS animation string. Called only when
+   * `_focused` or `_blinkIntervalMs` change.
+   */
+  private _updateBlinkAnimation(): void {
+    this._blinkAnimationStr =
+      !this._focused || this._blinkIntervalMs === false
+        ? "none"
+        : `cursor-blink ${this._blinkIntervalMs}ms steps(1, end) infinite alternate`;
   }
 
   private _applyThemeVars(container: HTMLElement, theme: Partial<Theme>): void {
@@ -992,14 +1007,15 @@ export class DomRenderer implements Renderer {
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
     this._cursorEl.style.height = `${lineHeight}px`;
-    this._cursorEl.style.animation = this._blinkAnimation();
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Update focus state — call when the editor gains or loses keyboard focus. */
   setFocused(focused: boolean): void {
     this._focused = focused;
+    this._updateBlinkAnimation();
     if (!this._cursorEl || this._cursorEl.style.display === "none") return;
-    this._cursorEl.style.animation = this._blinkAnimation();
+    this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
   /** Render selection highlight between two multibuffer points. */
