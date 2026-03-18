@@ -14,11 +14,14 @@ import type { Buffer, BufferId } from "../buffer/types.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
 import type { MultiBuffer } from "../multibuffer/types.ts";
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
-import type { DiffOptions } from "./diff.ts";
-import { diff } from "./diff.ts";
+import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
+import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
 import {
   DELETE_STYLE,
   INSERT_STYLE,
+  INTRALINE_DELETE_STYLE,
+  INTRALINE_INSERT_STYLE,
+  makeColumnDecoration,
   makeDecoration,
   makeExcerptRange,
 } from "./diff-styles.ts";
@@ -29,6 +32,10 @@ export interface UnifiedDiffMultiBufferOptions {
   editableEqual?: boolean;
   /** Make insert lines editable. Default: true. */
   editableInsert?: boolean;
+  /** Enable intraline (character-level) diff highlighting. Default: true. */
+  intraline?: boolean;
+  /** Options for intraline diff computation. */
+  intralineOptions?: IntralineDiffOptions;
   /** Show hunk separator lines between non-adjacent hunks. Default: true. */
   showHunkSeparators?: boolean;
 }
@@ -82,6 +89,8 @@ export function createUnifiedDiffMultiBuffer(
 ): UnifiedDiffMultiBufferResult {
   const editableEqual = options?.editableEqual ?? true;
   const editableInsert = options?.editableInsert ?? true;
+  const enableIntraline = options?.intraline ?? true;
+  const intralineOptions = options?.intralineOptions;
   const showHunkSeparators = options?.showHunkSeparators ?? true;
   const oldSnap = oldBuffer.snapshot();
   const newSnap = newBuffer.snapshot();
@@ -139,6 +148,9 @@ export function createUnifiedDiffMultiBuffer(
       separatorLineIndex += 1;
     }
 
+    // Track hunk line indices to their multibuffer row mapping for intraline
+    const hunkLineToMbRow: number[] = [];
+
     let i = 0;
     while (i < hunk.lines.length) {
       const firstLine = hunk.lines[i];
@@ -146,8 +158,10 @@ export function createUnifiedDiffMultiBuffer(
       const kind = firstLine.kind;
 
       // Count consecutive lines of the same kind.
+      const groupStart = i;
       let lineCount = 0;
       while (i < hunk.lines.length && hunk.lines[i]?.kind === kind) {
+        hunkLineToMbRow[i] = mbRow + (i - groupStart);
         i++;
         lineCount++;
       }
@@ -183,6 +197,39 @@ export function createUnifiedDiffMultiBuffer(
       }
 
       mbRow += lineCount;
+    }
+
+    // Generate intraline decorations for paired delete/insert lines
+    if (enableIntraline) {
+      const pairs = pairDeleteInsertLines(hunk.lines);
+      for (const pair of pairs) {
+        const intraline = computeIntralineDiff(
+          pair.deleteLine.text,
+          pair.insertLine.text,
+          intralineOptions,
+        );
+
+        const deleteMbRow = hunkLineToMbRow[pair.deleteIdx];
+        const insertMbRow = hunkLineToMbRow[pair.insertIdx];
+
+        // Add intraline delete decorations
+        if (deleteMbRow !== undefined) {
+          for (const range of intraline.deleteRanges) {
+            decorations.push(
+              makeColumnDecoration(deleteMbRow, range.startColumn, range.endColumn, INTRALINE_DELETE_STYLE),
+            );
+          }
+        }
+
+        // Add intraline insert decorations
+        if (insertMbRow !== undefined) {
+          for (const range of intraline.insertRanges) {
+            decorations.push(
+              makeColumnDecoration(insertMbRow, range.startColumn, range.endColumn, INTRALINE_INSERT_STYLE),
+            );
+          }
+        }
+      }
     }
   }
 

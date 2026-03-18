@@ -1,7 +1,7 @@
 export type { DiffController, DiffControllerOptions } from "./controller.ts";
 export { createDiffController } from "./controller.ts";
-export type { DiffOptions } from "./diff.ts";
-export { diff, diffLines } from "./diff.ts";
+export type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
+export { computeIntralineDiff, diff, diffLines, pairDeleteInsertLines } from "./diff.ts";
 export { formatHunkHeader, hunkToHeader } from "./helpers.ts";
 export { createMultiFileDiff, resetMultiFileDiffCounter } from "./multi-file.ts";
 export type {
@@ -25,6 +25,8 @@ export type {
   FileDiffState,
   FileDiffStats,
   HunkHeader,
+  IntralineDiff,
+  IntralineRange,
   MultiFileDiff,
   MultiFileDiffOptions,
   MultiFileDiffStats,

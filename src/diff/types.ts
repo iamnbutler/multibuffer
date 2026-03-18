@@ -47,6 +47,27 @@ export interface DiffResult {
 }
 
 /**
+ * A column range within a line that changed.
+ * Used for intraline (character-level) diff highlighting.
+ */
+export interface IntralineRange {
+  /** Start column (0-based, inclusive). */
+  readonly startColumn: number;
+  /** End column (0-based, exclusive). */
+  readonly endColumn: number;
+}
+
+/**
+ * Intraline diff result for a paired delete/insert line.
+ */
+export interface IntralineDiff {
+  /** Column ranges that changed in the deleted line. */
+  readonly deleteRanges: readonly IntralineRange[];
+  /** Column ranges that changed in the inserted line. */
+  readonly insertRanges: readonly IntralineRange[];
+}
+
+/**
  * Metadata for a hunk separator line displayed between non-adjacent hunks.
  * Contains the information needed to render the `@@ -X,Y +A,B @@ context` line.
  */
