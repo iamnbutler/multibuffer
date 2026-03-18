@@ -5,3 +5,4 @@ export * from "./diff/index.ts";
 export * from "./editor/index.ts";
 export * from "./multibuffer/index.ts";
 export * from "./renderer/index.ts";
+export * from "./worker/index.ts";

@@ -97,6 +97,17 @@ export class Highlighter implements SyntaxHighlighter {
   }
 
   /**
+   * Delete a buffer's parse tree, freeing the associated memory.
+   */
+  deleteBuffer(bufferId: string): void {
+    const tree = this._trees.get(bufferId);
+    if (tree) {
+      tree.delete();
+      this._trees.delete(bufferId);
+    }
+  }
+
+  /**
    * Get syntax tokens for a specific line of a buffer.
    * Returns tokens in startColumn order (guaranteed by depth-first tree traversal).
    */
