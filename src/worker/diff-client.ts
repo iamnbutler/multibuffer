@@ -45,7 +45,6 @@ export function createDiffClient(workerUrl?: URL | string): DiffClient {
   let _workerAvailable = false;
   const _nextRequestId = createRequestIdGenerator();
   const _pending = new Map<number, PendingRequest>();
-  let _latestRequestId = 0;
 
   // Try to create the worker
   if (workerUrl && typeof Worker !== "undefined") {
@@ -60,13 +59,7 @@ export function createDiffClient(workerUrl?: URL | string): DiffClient {
           _pending.delete(response.requestId);
 
           if (pending) {
-            // Only resolve if this is the latest request
-            if (response.requestId === _latestRequestId) {
-              pending.resolve(response.result);
-            } else {
-              // Stale response - reject with a specific error
-              pending.reject(new Error("Request superseded by newer request"));
-            }
+            pending.resolve(response.result);
           }
         }
       };
@@ -96,7 +89,6 @@ export function createDiffClient(workerUrl?: URL | string): DiffClient {
     }
 
     const requestId = _nextRequestId();
-    _latestRequestId = requestId;
 
     // Reject any pending requests (they're now stale)
     for (const [id, pending] of _pending) {

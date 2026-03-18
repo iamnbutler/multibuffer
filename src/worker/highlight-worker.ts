@@ -46,13 +46,12 @@ function sendReady(requestId: number): void {
 }
 
 function sendTokens(requestId: number, tokens: Map<number, Token[]>): void {
-  // Convert Map to array of entries for structured cloning
-  const tokensArray: Array<[number, Token[]]> = Array.from(tokens.entries());
+  // Map is natively supported by the structured clone algorithm used by postMessage
   const response: HighlightTokensResponse = {
     type: "tokens",
     requestId,
-    // biome-ignore lint/plugin/no-type-assertion: expect: Map conversion for postMessage serialization
-    tokens: new Map(tokensArray) as ReadonlyMap<number, readonly Token[]>,
+    // biome-ignore lint/plugin/no-type-assertion: expect: Map<number, Token[]> is assignable to ReadonlyMap<number, readonly Token[]> at runtime but TS needs the cast
+    tokens: tokens as ReadonlyMap<number, readonly Token[]>,
   };
   self.postMessage(response);
 }
@@ -115,12 +114,8 @@ self.onmessage = async (event: MessageEvent<HighlightWorkerMessage>) => {
     }
 
     case "deleteBuffer": {
-      // The Highlighter class doesn't expose a delete method, but we can
-      // work around this by parsing with empty text (which will clear the tree).
-      // In a production implementation, we'd add a deleteBuffer method to Highlighter.
       if (highlighter?.ready) {
-        // Parse empty string to clear the tree for this buffer
-        highlighter.parseBuffer(message.bufferId, "");
+        highlighter.deleteBuffer(message.bufferId);
       }
       sendAck(message.requestId, true);
       break;

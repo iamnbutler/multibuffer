@@ -54,10 +54,19 @@ export interface HighlightClient extends SyntaxHighlighter {
   readonly workerAvailable: boolean;
 }
 
-interface PendingRequest<T> {
-  resolve: (result: T) => void;
+interface PendingVoidRequest {
+  readonly kind: "void";
+  resolve: (result: undefined) => void;
   reject: (error: Error) => void;
 }
+
+interface PendingTokensRequest {
+  readonly kind: "tokens";
+  resolve: (result: Map<number, Token[]>) => void;
+  reject: (error: Error) => void;
+}
+
+type PendingRequest = PendingVoidRequest | PendingTokensRequest;
 
 /**
  * Create a highlight client that offloads computation to a Web Worker.
@@ -70,14 +79,22 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
   let _ready = false;
   const _nextRequestId = createRequestIdGenerator();
 
-  // biome-ignore lint/suspicious/noExplicitAny: expect: pending requests have different resolve types
-  const _pending = new Map<number, PendingRequest<any>>();
+  const _pending = new Map<number, PendingRequest>();
 
   // Token cache: bufferId -> row -> tokens
   const _tokenCache = new Map<string, Map<number, Token[]>>();
 
   // Track latest getTokens request per buffer to handle stale responses
   const _latestTokenRequests = new Map<string, number>();
+
+  // Track in-flight parse requests per buffer to prevent stale token caching.
+  // While a parse is in-flight, getTokensAsync will not populate the cache,
+  // because the worker may hold an intermediate parse state.
+  const _inflightParses = new Map<string, number>();
+
+  // Track which request IDs correspond to parse operations, so the ack handler
+  // can invalidate the cache and clear in-flight tracking on arrival.
+  const _parseRequestBuffers = new Map<number, string>();
 
   // Try to create the worker
   if (typeof Worker !== "undefined") {
@@ -94,27 +111,47 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
             _ready = true;
             if (pending) {
               _pending.delete(response.requestId);
-              pending.resolve(undefined);
+              if (pending.kind === "void") {
+                pending.resolve(undefined);
+              }
             }
             break;
 
-          case "ack":
+          case "ack": {
+            // Handle parse-specific ack: invalidate cache and clear in-flight tracking
+            const parseBufferId = _parseRequestBuffers.get(response.requestId);
+            if (parseBufferId !== undefined) {
+              _parseRequestBuffers.delete(response.requestId);
+              invalidateCache(parseBufferId);
+              if (_inflightParses.get(parseBufferId) === response.requestId) {
+                _inflightParses.delete(parseBufferId);
+              }
+            }
+
             if (pending) {
               _pending.delete(response.requestId);
               if (response.success) {
-                pending.resolve(undefined);
+                if (pending.kind === "void") {
+                  pending.resolve(undefined);
+                }
               } else {
                 pending.reject(new Error(response.error ?? "Unknown error"));
               }
             }
             break;
+          }
 
           case "tokens":
             if (pending) {
               _pending.delete(response.requestId);
-              // Convert to mutable Map for internal use
-              const tokens = new Map(response.tokens);
-              pending.resolve(tokens);
+              if (pending.kind === "tokens") {
+                // Build a mutable Map from the readonly response tokens
+                const tokens = new Map<number, Token[]>();
+                for (const [row, rowTokens] of response.tokens) {
+                  tokens.set(row, [...rowTokens]);
+                }
+                pending.resolve(tokens);
+              }
             }
             break;
         }
@@ -125,6 +162,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
           pending.reject(new Error(`Worker error: ${error.message}`));
         }
         _pending.clear();
+        _parseRequestBuffers.clear();
         _workerAvailable = false;
         _ready = false;
       };
@@ -154,7 +192,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     };
 
     return new Promise((resolve, reject) => {
-      _pending.set(requestId, { resolve, reject });
+      _pending.set(requestId, { kind: "void", resolve, reject });
       sendMessage(message);
     });
   }
@@ -168,10 +206,11 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
       return;
     }
 
-    // Invalidate cache for this buffer
-    invalidateCache(bufferId);
-
     const requestId = _nextRequestId();
+    // Track this as an in-flight parse so getTokensAsync won't cache stale results
+    _inflightParses.set(bufferId, requestId);
+    _parseRequestBuffers.set(requestId, bufferId);
+
     const message: HighlightParseRequest = {
       type: "parse",
       requestId,
@@ -181,7 +220,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     };
 
     return new Promise((resolve, reject) => {
-      _pending.set(requestId, { resolve, reject });
+      _pending.set(requestId, { kind: "void", resolve, reject });
       sendMessage(message);
     });
   }
@@ -194,19 +233,23 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     // Check cache first
     const cached = _tokenCache.get(bufferId);
     const result = new Map<number, Token[]>();
-    const missingRows: number[] = [];
+    let minMissing = Number.MAX_SAFE_INTEGER;
+    let maxMissing = -1;
+    let hasMissing = false;
 
     for (let row = startRow; row < endRow; row++) {
       const cachedTokens = cached?.get(row);
       if (cachedTokens !== undefined) {
         result.set(row, cachedTokens);
       } else {
-        missingRows.push(row);
+        if (row < minMissing) minMissing = row;
+        if (row > maxMissing) maxMissing = row;
+        hasMissing = true;
       }
     }
 
     // If all rows are cached, return immediately
-    if (missingRows.length === 0) {
+    if (!hasMissing) {
       return result;
     }
 
@@ -219,19 +262,20 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     const requestId = _nextRequestId();
     _latestTokenRequests.set(bufferId, requestId);
 
-    const minRow = Math.min(...missingRows);
-    const maxRow = Math.max(...missingRows) + 1;
-
     const message: HighlightGetTokensRequest = {
       type: "getTokens",
       requestId,
       bufferId,
-      startRow: minRow,
-      endRow: maxRow,
+      startRow: minMissing,
+      endRow: maxMissing + 1,
     };
+
+    // Capture whether a parse is in-flight at request time
+    const parseInFlight = _inflightParses.has(bufferId);
 
     return new Promise((resolve, reject) => {
       _pending.set(requestId, {
+        kind: "tokens",
         resolve: (tokens: Map<number, Token[]>) => {
           // Check if this is still the latest request
           if (_latestTokenRequests.get(bufferId) !== requestId) {
@@ -240,15 +284,23 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
             return;
           }
 
-          // Update cache and result
-          let bufferCache = _tokenCache.get(bufferId);
-          if (!bufferCache) {
-            bufferCache = new Map();
-            _tokenCache.set(bufferId, bufferCache);
+          // Only populate cache if no parse was in-flight when the request was made.
+          // Otherwise the tokens may reflect an intermediate parse state.
+          const shouldCache = !parseInFlight && !_inflightParses.has(bufferId);
+
+          let bufferCache: Map<number, Token[]> | undefined;
+          if (shouldCache) {
+            bufferCache = _tokenCache.get(bufferId);
+            if (!bufferCache) {
+              bufferCache = new Map();
+              _tokenCache.set(bufferId, bufferCache);
+            }
           }
 
           for (const [row, rowTokens] of tokens) {
-            bufferCache.set(row, rowTokens);
+            if (bufferCache) {
+              bufferCache.set(row, rowTokens);
+            }
             result.set(row, rowTokens);
           }
 
@@ -279,7 +331,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     };
 
     return new Promise((resolve, reject) => {
-      _pending.set(requestId, { resolve, reject });
+      _pending.set(requestId, { kind: "void", resolve, reject });
       sendMessage(message);
     });
   }
@@ -292,6 +344,9 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     _workerAvailable = false;
     _ready = false;
     _tokenCache.clear();
+    _latestTokenRequests.clear();
+    _inflightParses.clear();
+    _parseRequestBuffers.clear();
 
     for (const pending of _pending.values()) {
       pending.reject(new Error("Client disposed"));
