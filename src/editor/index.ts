@@ -4,6 +4,7 @@ export type { EditorView, EditorViewOptions, ThemeVars } from "./editor-view.ts"
 export {
   createEditorView,
   mergeDecorations,
+  resolveReadOnlyOptions,
 } from "./editor-view.ts";
 export {
   createMultiBufferEditor,
