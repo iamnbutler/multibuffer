@@ -22,6 +22,7 @@ export type {
   CursorState,
   Direction,
   EditorCommand,
+  EditorEventMap,
   EditorOptions,
   EditorState,
   Granularity,
