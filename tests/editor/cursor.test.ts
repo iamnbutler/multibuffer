@@ -4,8 +4,9 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/buffer/buffer.ts";
-import { isWordChar, moveCursor } from "../../src/editor/cursor.ts";
+import { isWordChar, moveCursor, moveCursorVisual } from "../../src/editor/cursor.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
+import { WrapMap } from "../../src/renderer/wrap-map.ts";
 import {
   createBufferId,
   excerptRange,
@@ -352,5 +353,145 @@ describe("Cursor - Page Granularity", () => {
   test("page right moves to line end (End)", () => {
     const snap = setup("Hello World").snapshot();
     expectPoint(moveCursor(snap, mbPoint(0, 3), "right", "page"), 0, 11);
+  });
+});
+
+describe("Cursor - Visual Line Movement (Wrapped Lines)", () => {
+  /**
+   * Test scenario: A long line wrapped to 3 visual lines.
+   * With wrapWidth=10, "abcdefghij1234567890ABCDEFGHIJ" (30 chars) wraps to:
+   *   Visual row 0: "abcdefghij" (chars 0-9)
+   *   Visual row 1: "1234567890" (chars 10-19)
+   *   Visual row 2: "ABCDEFGHIJ" (chars 20-29)
+   */
+  test("move down from first visual row stays within wrapped line", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 5 (visual row 0, visual col 5) - in the middle of "abcdefghij"
+    // Moving down should land on visual row 1, which is still buffer row 0 but col 15
+    const result = moveCursorVisual(snap, mbPoint(0, 5), "down", "character", wrapMap);
+    expectPoint(result, 0, 15); // Same buffer row, but in second segment
+  });
+
+  test("move down from second visual row stays within wrapped line", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 15 (visual row 1) - in the middle of "1234567890"
+    // Moving down should land on visual row 2, which is still buffer row 0 but col 25
+    const result = moveCursorVisual(snap, mbPoint(0, 15), "down", "character", wrapMap);
+    expectPoint(result, 0, 25); // Same buffer row, but in third segment
+  });
+
+  test("move up from second visual row stays within wrapped line", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 15 (visual row 1) - in the middle of "1234567890"
+    // Moving up should land on visual row 0, which is still buffer row 0 but col 5
+    const result = moveCursorVisual(snap, mbPoint(0, 15), "up", "character", wrapMap);
+    expectPoint(result, 0, 5); // Same buffer row, back in first segment
+  });
+
+  test("move up from third visual row stays within wrapped line", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 25 (visual row 2) - in the middle of "ABCDEFGHIJ"
+    // Moving up should land on visual row 1, which is still buffer row 0 but col 15
+    const result = moveCursorVisual(snap, mbPoint(0, 25), "up", "character", wrapMap);
+    expectPoint(result, 0, 15); // Same buffer row, but in second segment
+  });
+
+  test("move down from last visual row of wrapped line goes to next buffer line", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ\nshort").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 25 (visual row 2, last visual row of wrapped line)
+    // Moving down should land on row 1 (next buffer line)
+    const result = moveCursorVisual(snap, mbPoint(0, 25), "down", "character", wrapMap);
+    expectPoint(result, 1, 5); // Next buffer line, column 5 (or clamped if shorter)
+  });
+
+  test("move up from first visual row of second buffer line goes to last visual row of first", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ\nshort").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 1, col 3 (first line of buffer row 1)
+    // Moving up should land on last visual row of row 0 (visual row 2), col 3
+    const result = moveCursorVisual(snap, mbPoint(1, 3), "up", "character", wrapMap);
+    expectPoint(result, 0, 23); // Buffer row 0, segment 2, col 3 => char 20+3=23
+  });
+
+  test("visual column is preserved across visual rows of same buffer row", () => {
+    const snap = setup("abcdefghij1234567890ABCDEFGHIJ").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // Start at visual column 7 of first visual row (char col 7)
+    // Moving down should land at visual column 7 of second visual row (char col 17)
+    const result = moveCursorVisual(snap, mbPoint(0, 7), "down", "character", wrapMap);
+    expectPoint(result, 0, 17);
+  });
+
+  test("visual column clamps to shorter visual row", () => {
+    // Create a line that wraps unevenly: "abcdefghij12345" (15 chars)
+    // At wrapWidth=10: "abcdefghij" (10) + "12345" (5)
+    const snap = setup("abcdefghij12345").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 7 (visual row 0, visual col 7)
+    // Moving down should land on visual row 1, clamped to end of "12345"
+    const result = moveCursorVisual(snap, mbPoint(0, 7), "down", "character", wrapMap);
+    expectPoint(result, 0, 15); // row 0, segment 1 ends at char 15 (text.length)
+  });
+
+  test("move up at first visual row of buffer stays put", () => {
+    const snap = setup("abcdefghij1234567890").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 5 (visual row 0)
+    // Moving up should stay put (already at first visual row)
+    const result = moveCursorVisual(snap, mbPoint(0, 5), "up", "character", wrapMap);
+    expectPoint(result, 0, 5);
+  });
+
+  test("move down at last visual row of buffer stays put", () => {
+    const snap = setup("abcdefghij1234567890").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // At row 0, col 15 (visual row 1, last visual row)
+    // Moving down should stay put (already at last visual row)
+    const result = moveCursorVisual(snap, mbPoint(0, 15), "down", "character", wrapMap);
+    expectPoint(result, 0, 15);
+  });
+
+  test("horizontal movement ignores WrapMap (uses character boundaries)", () => {
+    const snap = setup("abcdefghij1234567890").snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+
+    // Moving right/left should work as before, ignoring visual wrapping
+    const rightResult = moveCursorVisual(snap, mbPoint(0, 9), "right", "character", wrapMap);
+    expectPoint(rightResult, 0, 10);
+
+    const leftResult = moveCursorVisual(snap, mbPoint(0, 10), "left", "character", wrapMap);
+    expectPoint(leftResult, 0, 9);
+  });
+
+  test("works with CJK characters that occupy 2 visual columns", () => {
+    // "你好世界" - 4 CJK chars, each 2 visual columns = 8 visual columns
+    // With wrapWidth=5, this wraps: "你好" (4 visual cols) + "世界" (4 visual cols)
+    const snap = setup("你好世界").snapshot();
+    const wrapMap = new WrapMap(snap, 5);
+
+    // Verify wrap structure: should be 2 visual rows
+    expect(wrapMap.totalVisualRows).toBe(2);
+
+    // At row 0, col 1 (second CJK char "好", visual col 2-3 of first segment)
+    // Moving down should land on visual row 1 (buffer row 0, col 2-3)
+    const result = moveCursorVisual(snap, mbPoint(0, 1), "down", "character", wrapMap);
+    // Visual col 2 (where "好" starts) maps to second segment visual col 2 = char col 2+floor(2/2) = char 3
+    // Actually for CJK: visual col 2 in seg 1 would be char index 2 ("世")
+    expectPoint(result, 0, 3);
   });
 });
