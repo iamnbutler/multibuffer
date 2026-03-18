@@ -163,6 +163,13 @@ export interface Renderer {
   /** Update measurements (e.g., after font change) */
   setMeasurements(measurements: Measurements): void;
 
+  /**
+   * Re-measure character dimensions from the container's current font.
+   * Call after font changes at runtime (e.g., FontFace.load(), document.fonts.onloadingdone).
+   * Optional — not all renderer implementations may support this.
+   */
+  remeasure?(): void;
+
   /** Update the visual theme at runtime. Partial updates merge onto the current theme. */
   setTheme(theme: Partial<Theme>): void;
 

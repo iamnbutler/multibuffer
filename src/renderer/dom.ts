@@ -350,6 +350,39 @@ export class DomRenderer implements Renderer {
     }
   }
 
+  /**
+   * Re-measure character width from the container's current font.
+   * Call this after font changes at runtime (e.g., after FontFace.load() resolves,
+   * or in response to document.fonts.onloadingdone).
+   *
+   * This invalidates the wrap map and triggers a full re-render.
+   */
+  remeasure(): void {
+    if (!this._container) {
+      // Not mounted yet — nothing to remeasure
+      return;
+    }
+
+    // Re-measure character width from the current font
+    this._charWidth = this._measureCharWidth(this._container);
+
+    // Rebuild wrap map with new measurements (if snapshot exists)
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
+    }
+
+    // Trigger a full re-render by simulating a scroll event
+    this._handleScroll();
+  }
+
+  /**
+   * Get the current measured character width.
+   * Returns the value measured from the font, or the default/provided value if not yet mounted.
+   */
+  getCharWidth(): number {
+    return this._charWidth;
+  }
+
   setTheme(theme: Partial<Theme>): void {
     this._theme = { ...this._theme, ...theme };
     if (this._container) {
