@@ -203,7 +203,8 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
 
   test("change at file start", () => {
     const { oldBuf, newBuf } = makeBuffers("old\nsame", "new\nsame");
-    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Disable intraline to test line-level decoration counts
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
     // Line 0 changed: delete(old), insert(new), equal(same)
     expect(multiBuffer.lineCount).toBe(3);
     expect(decorations.length).toBe(2); // one delete, one insert decoration
@@ -211,9 +212,39 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
 
   test("change at file end", () => {
     const { oldBuf, newBuf } = makeBuffers("same\nold", "same\nnew");
-    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Disable intraline to test line-level decoration counts
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
     // Line 1 changed: equal(same), delete(old), insert(new)
     expect(multiBuffer.lineCount).toBe(3);
     expect(decorations.length).toBe(2);
+  });
+
+  test("intraline decorations are included when enabled (default)", () => {
+    const { oldBuf, newBuf } = makeBuffers('const x = "foo"', 'const x = "bar"');
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Should have line-level decorations (delete + insert)
+    const lineDecorations = decorations.filter(
+      (d) => d.style?.gutterSign === "−" || d.style?.gutterSign === "+",
+    );
+    expect(lineDecorations.length).toBe(2);
+    // Should also have intraline decorations (column-level)
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    expect(intralineDecorations.length).toBeGreaterThan(0);
+  });
+
+  test("intraline decorations can be disabled", () => {
+    const { oldBuf, newBuf } = makeBuffers('const x = "foo"', 'const x = "bar"');
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
+    // Should only have line-level decorations
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    expect(intralineDecorations.length).toBe(0);
   });
 });

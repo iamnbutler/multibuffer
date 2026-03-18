@@ -6,7 +6,7 @@
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
-import { buildHighlightedSpans } from "./highlighter.ts";
+import { buildColumnDecoratedContent, buildHighlightedSpans } from "./highlighter.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
@@ -52,6 +52,26 @@ export function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: nu
     });
   }
   return result;
+}
+
+/**
+ * Slice column decorations to a segment range, adjusting offsets to be segment-relative.
+ */
+function sliceColumnDecorations(
+  decorations: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>,
+  segStart: number,
+  segEnd: number,
+): Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> | undefined {
+  const result: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> = [];
+  for (const dec of decorations) {
+    if (dec.endColumn <= segStart || dec.startColumn >= segEnd) continue;
+    result.push({
+      startColumn: Math.max(0, dec.startColumn - segStart),
+      endColumn: Math.min(segEnd - segStart, dec.endColumn - segStart),
+      style: dec.style,
+    });
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 interface RowElement {
@@ -406,12 +426,37 @@ export class DomRenderer implements Renderer {
     }
 
     // Build decoration lookup: mbRow → decoration style (last decoration wins)
+    // Separate line-level decorations from column-level (intraline) decorations
     const decorationMap = new Map<number, Partial<DecorationStyle>>();
+    const columnDecorationMap = new Map<number, Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>>();
     for (const dec of decorations) {
       if (!dec.style) continue;
-      for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
-        if (r >= viewport.startRow && r < viewport.endRow) {
-          decorationMap.set(r, dec.style);
+      const isColumnDecoration =
+        dec.range.start.row === dec.range.end.row &&
+        dec.range.start.column !== 0 ||
+        dec.range.end.column !== Number.MAX_SAFE_INTEGER;
+
+      if (isColumnDecoration && dec.range.start.row === dec.range.end.row) {
+        // Column-level (intraline) decoration
+        const row = dec.range.start.row;
+        if (row >= viewport.startRow && row < viewport.endRow) {
+          let list = columnDecorationMap.get(row);
+          if (!list) {
+            list = [];
+            columnDecorationMap.set(row, list);
+          }
+          list.push({
+            startColumn: dec.range.start.column,
+            endColumn: dec.range.end.column,
+            style: dec.style,
+          });
+        }
+      } else {
+        // Line-level decoration
+        for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
+          if (r >= viewport.startRow && r < viewport.endRow) {
+            decorationMap.set(r, dec.style);
+          }
         }
       }
     }
@@ -423,6 +468,7 @@ export class DomRenderer implements Renderer {
     const visualRows: Array<{
       mbRow: number;
       segment: number;
+      segmentCharStart: number;
       text: string;
       isHeader: boolean;
       headerPath?: string;
@@ -430,6 +476,7 @@ export class DomRenderer implements Renderer {
       tokens?: Token[];
       gutterText: string;
       decoration?: Partial<DecorationStyle>;
+      columnDecorations?: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>;
       diffGutter?: { oldLineNum?: string; newLineNum?: string };
     }> = [];
 
@@ -461,6 +508,7 @@ export class DomRenderer implements Renderer {
       const gutterBase = showLineNumber ? String(bufferRow + 1) : "";
 
       const decoration = decorationMap.get(mbRow);
+      const columnDecs = columnDecorationMap.get(mbRow);
 
       // Compute diff gutter info if in diff mode
       let diffGutter: { oldLineNum?: string; newLineNum?: string } | undefined;
@@ -491,9 +539,15 @@ export class DomRenderer implements Renderer {
             ? sliceTokensToRange(lineTokens, segStart, segEnd)
             : undefined;
 
+          // Slice column decorations for this segment
+          const segColumnDecs = columnDecs
+            ? sliceColumnDecorations(columnDecs, segStart, segEnd)
+            : undefined;
+
           visualRows.push({
             mbRow,
             segment: s,
+            segmentCharStart: segStart,
             text: seg,
             isHeader: s === 0 && header !== undefined,
             headerPath: header?.path,
@@ -501,6 +555,7 @@ export class DomRenderer implements Renderer {
             tokens: segTokens,
             gutterText: s === 0 ? gutterBase : "",
             decoration,
+            columnDecorations: segColumnDecs,
             diffGutter: s === 0 ? diffGutter : undefined,
           });
         }
@@ -508,6 +563,7 @@ export class DomRenderer implements Renderer {
         visualRows.push({
           mbRow,
           segment: 0,
+          segmentCharStart: 0,
           text: lineText,
           isHeader: header !== undefined,
           headerPath: header?.path,
@@ -515,6 +571,7 @@ export class DomRenderer implements Renderer {
           tokens: lineTokens,
           gutterText: gutterBase,
           decoration,
+          columnDecorations: columnDecs,
           diffGutter,
         });
       }
@@ -543,7 +600,7 @@ export class DomRenderer implements Renderer {
       if (vr.isHeader && vr.headerPath) {
         this._renderAsHeader(rowEl, vr.headerPath, vr.headerLabel);
       } else {
-        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration, vr.diffGutter);
+        this._renderAsLine(rowEl, vr.gutterText, vr.text, vr.tokens, vr.decoration, vr.columnDecorations, vr.diffGutter);
       }
     }
   }
@@ -770,6 +827,7 @@ export class DomRenderer implements Renderer {
     text: string,
     tokens?: Token[],
     decoration?: Partial<DecorationStyle>,
+    columnDecorations?: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>,
     diffGutter?: { oldLineNum?: string; newLineNum?: string },
   ): void {
     rowEl.root.style.display = "flex";
@@ -829,7 +887,10 @@ export class DomRenderer implements Renderer {
     }
 
     if (tokens && tokens.length > 0) {
-      buildHighlightedSpans(rowEl.content, text, tokens);
+      buildHighlightedSpans(rowEl.content, text, tokens, columnDecorations);
+    } else if (columnDecorations && columnDecorations.length > 0) {
+      // No syntax tokens but we have column decorations
+      buildColumnDecoratedContent(rowEl.content, text, columnDecorations);
     } else {
       rowEl.content.textContent = text;
     }

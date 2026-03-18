@@ -45,3 +45,24 @@ export interface DiffResult {
   /** True if the two texts are identical. */
   readonly isEqual: boolean;
 }
+
+/**
+ * A column range within a line that changed.
+ * Used for intraline (character-level) diff highlighting.
+ */
+export interface IntralineRange {
+  /** Start column (0-based, inclusive). */
+  readonly startColumn: number;
+  /** End column (0-based, exclusive). */
+  readonly endColumn: number;
+}
+
+/**
+ * Intraline diff result for a paired delete/insert line.
+ */
+export interface IntralineDiff {
+  /** Column ranges that changed in the deleted line. */
+  readonly deleteRanges: readonly IntralineRange[];
+  /** Column ranges that changed in the inserted line. */
+  readonly insertRanges: readonly IntralineRange[];
+}

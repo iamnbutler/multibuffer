@@ -15,8 +15,8 @@ import type {
   MultiBufferRow,
 } from "../multibuffer/types.ts";
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
-import type { DiffOptions } from "./diff.ts";
-import { diff } from "./diff.ts";
+import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
+import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
 import type { UnifiedDiffMultiBufferOptions } from "./multibuffer.ts";
 import { createUnifiedDiffMultiBuffer } from "./multibuffer.ts";
 
@@ -25,6 +25,10 @@ export interface DiffControllerOptions
     UnifiedDiffMultiBufferOptions {
   /** Debounce delay in milliseconds. Default: 150. */
   debounceMs?: number;
+  /** Enable intraline (character-level) diff highlighting. Default: true. */
+  intraline?: boolean;
+  /** Options for intraline diff computation. */
+  intralineOptions?: IntralineDiffOptions;
 }
 
 export interface DiffController {
@@ -51,6 +55,8 @@ export function createDiffController(
 ): DiffController {
   const debounceMs = options?.debounceMs ?? 150;
   const editableEqual = options?.editableEqual ?? true;
+  const enableIntraline = options?.intraline ?? true;
+  const intralineOptions = options?.intralineOptions;
 
   // Initial diff
   const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, options);
@@ -95,6 +101,9 @@ export function createDiffController(
       let mbRow = 0;
 
       for (const hunk of diffResult.hunks) {
+        // Track hunk line indices to their multibuffer row mapping for intraline
+        const hunkLineToMbRow: number[] = [];
+
         let i = 0;
         while (i < hunk.lines.length) {
           const firstLine = hunk.lines[i];
@@ -102,8 +111,10 @@ export function createDiffController(
           const kind = firstLine.kind;
 
           // Count consecutive lines of the same kind
+          const groupStart = i;
           let lineCount = 0;
           while (i < hunk.lines.length && hunk.lines[i]?.kind === kind) {
+            hunkLineToMbRow[i] = mbRow + (i - groupStart);
             i++;
             lineCount++;
           }
@@ -142,6 +153,39 @@ export function createDiffController(
           }
 
           mbRow += lineCount;
+        }
+
+        // Generate intraline decorations for paired delete/insert lines
+        if (enableIntraline) {
+          const pairs = pairDeleteInsertLines(hunk.lines);
+          for (const pair of pairs) {
+            const intraline = computeIntralineDiff(
+              pair.deleteLine.text,
+              pair.insertLine.text,
+              intralineOptions,
+            );
+
+            const deleteMbRow = hunkLineToMbRow[pair.deleteIdx];
+            const insertMbRow = hunkLineToMbRow[pair.insertIdx];
+
+            // Add intraline delete decorations
+            if (deleteMbRow !== undefined) {
+              for (const range of intraline.deleteRanges) {
+                newDecorations.push(
+                  makeColumnDecoration(deleteMbRow, range.startColumn, range.endColumn, INTRALINE_DELETE_STYLE),
+                );
+              }
+            }
+
+            // Add intraline insert decorations
+            if (insertMbRow !== undefined) {
+              for (const range of intraline.insertRanges) {
+                newDecorations.push(
+                  makeColumnDecoration(insertMbRow, range.startColumn, range.endColumn, INTRALINE_INSERT_STYLE),
+                );
+              }
+            }
+          }
         }
       }
 
@@ -223,6 +267,16 @@ const INSERT_STYLE = {
   gutterSignColor: "#4ade80",
 };
 
+/** Intraline delete highlighting (stronger opacity than line-level). */
+const INTRALINE_DELETE_STYLE = {
+  backgroundColor: "rgba(255, 80, 80, 0.25)",
+};
+
+/** Intraline insert highlighting (stronger opacity than line-level). */
+const INTRALINE_INSERT_STYLE = {
+  backgroundColor: "rgba(80, 200, 80, 0.25)",
+};
+
 /** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
 function makeExcerptRange(startRow: number, endRow: number): ExcerptRange {
   const bufRange: BufferRange = {
@@ -248,6 +302,22 @@ function makeDecoration(
       row: (startMbRow + lineCount - 1) as MultiBufferRow,
       column: Number.MAX_SAFE_INTEGER,
     },
+  };
+  return { range, style };
+}
+
+/** Build a column-range decoration for intraline highlighting. */
+function makeColumnDecoration(
+  mbRow: number,
+  startColumn: number,
+  endColumn: number,
+  style: Partial<DecorationStyle>,
+): Decoration {
+  const range: MultiBufferRange = {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    start: { row: mbRow as MultiBufferRow, column: startColumn },
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    end: { row: mbRow as MultiBufferRow, column: endColumn },
   };
   return { range, style };
 }

@@ -18,12 +18,16 @@ import type {
   MultiBufferRow,
 } from "../multibuffer/types.ts";
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
-import type { DiffOptions } from "./diff.ts";
-import { diff } from "./diff.ts";
+import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
+import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
 
 export interface UnifiedDiffMultiBufferOptions {
   /** Make equal (context) lines editable. Default: true. */
   editableEqual?: boolean;
+  /** Enable intraline (character-level) diff highlighting. Default: true. */
+  intraline?: boolean;
+  /** Options for intraline diff computation. */
+  intralineOptions?: IntralineDiffOptions;
 }
 
 export interface UnifiedDiffMultiBufferResult {
@@ -46,6 +50,16 @@ const INSERT_STYLE: Partial<DecorationStyle> = {
   gutterSignColor: "#4ade80",
 };
 
+/** Intraline delete highlighting (stronger opacity than line-level). */
+const INTRALINE_DELETE_STYLE: Partial<DecorationStyle> = {
+  backgroundColor: "rgba(255, 80, 80, 0.25)",
+};
+
+/** Intraline insert highlighting (stronger opacity than line-level). */
+const INTRALINE_INSERT_STYLE: Partial<DecorationStyle> = {
+  backgroundColor: "rgba(80, 200, 80, 0.25)",
+};
+
 /**
  * Build a MultiBuffer from a unified diff between two buffers.
  *
@@ -59,6 +73,8 @@ export function createUnifiedDiffMultiBuffer(
   options?: DiffOptions & UnifiedDiffMultiBufferOptions,
 ): UnifiedDiffMultiBufferResult {
   const editableEqual = options?.editableEqual ?? true;
+  const enableIntraline = options?.intraline ?? true;
+  const intralineOptions = options?.intralineOptions;
   const oldSnap = oldBuffer.snapshot();
   const newSnap = newBuffer.snapshot();
   const result = diff(oldSnap.text(), newSnap.text(), options);
@@ -80,6 +96,9 @@ export function createUnifiedDiffMultiBuffer(
   let mbRow = 0;
 
   for (const hunk of result.hunks) {
+    // Track hunk line indices to their multibuffer row mapping for intraline
+    const hunkLineToMbRow: number[] = [];
+
     let i = 0;
     while (i < hunk.lines.length) {
       const firstLine = hunk.lines[i];
@@ -87,8 +106,10 @@ export function createUnifiedDiffMultiBuffer(
       const kind = firstLine.kind;
 
       // Count consecutive lines of the same kind.
+      const groupStart = i;
       let lineCount = 0;
       while (i < hunk.lines.length && hunk.lines[i]?.kind === kind) {
+        hunkLineToMbRow[i] = mbRow + (i - groupStart);
         i++;
         lineCount++;
       }
@@ -125,6 +146,39 @@ export function createUnifiedDiffMultiBuffer(
 
       mbRow += lineCount;
     }
+
+    // Generate intraline decorations for paired delete/insert lines
+    if (enableIntraline) {
+      const pairs = pairDeleteInsertLines(hunk.lines);
+      for (const pair of pairs) {
+        const intraline = computeIntralineDiff(
+          pair.deleteLine.text,
+          pair.insertLine.text,
+          intralineOptions,
+        );
+
+        const deleteMbRow = hunkLineToMbRow[pair.deleteIdx];
+        const insertMbRow = hunkLineToMbRow[pair.insertIdx];
+
+        // Add intraline delete decorations
+        if (deleteMbRow !== undefined) {
+          for (const range of intraline.deleteRanges) {
+            decorations.push(
+              makeColumnDecoration(deleteMbRow, range.startColumn, range.endColumn, INTRALINE_DELETE_STYLE),
+            );
+          }
+        }
+
+        // Add intraline insert decorations
+        if (insertMbRow !== undefined) {
+          for (const range of intraline.insertRanges) {
+            decorations.push(
+              makeColumnDecoration(insertMbRow, range.startColumn, range.endColumn, INTRALINE_INSERT_STYLE),
+            );
+          }
+        }
+      }
+    }
   }
 
   return { multiBuffer: mb, decorations, isEqual: false };
@@ -155,6 +209,22 @@ function makeDecoration(
       row: (startMbRow + lineCount - 1) as MultiBufferRow,
       column: Number.MAX_SAFE_INTEGER,
     },
+  };
+  return { range, style };
+}
+
+/** Build a column-range decoration for intraline highlighting. */
+function makeColumnDecoration(
+  mbRow: number,
+  startColumn: number,
+  endColumn: number,
+  style: Partial<DecorationStyle>,
+): Decoration {
+  const range: MultiBufferRange = {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    start: { row: mbRow as MultiBufferRow, column: startColumn },
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
+    end: { row: mbRow as MultiBufferRow, column: endColumn },
   };
   return { range, style };
 }
