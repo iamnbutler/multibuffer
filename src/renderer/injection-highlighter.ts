@@ -37,6 +37,8 @@ interface BufferParse {
   tree: Tree;
   injections: Map<string, Tree>; // language -> tree for injected content
   injectionRanges: InjectionRange[];
+  /** O(1) row → injection range lookup, built from injectionRanges at parse time. */
+  rowIndex: Map<number, InjectionRange>;
 }
 
 /**
@@ -162,7 +164,15 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       }
     }
 
-    this._bufferParses.set(bufferId, { tree, injections, injectionRanges });
+    // Build O(1) row → injection range index. Cost: O(total injected rows), paid once per parse.
+    const rowIndex = new Map<number, InjectionRange>();
+    for (const r of injectionRanges) {
+      for (let row = r.startRow; row <= r.endRow; row++) {
+        rowIndex.set(row, r);
+      }
+    }
+
+    this._bufferParses.set(bufferId, { tree, injections, injectionRanges, rowIndex });
   }
 
   /**
@@ -175,10 +185,8 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     const tokens: Token[] = [];
 
-    // Check if this row is inside an injection range
-    const activeInjection = parse.injectionRanges.find(
-      (r) => row >= r.startRow && row <= r.endRow,
-    );
+    // Check if this row is inside an injection range — O(1) via pre-built index.
+    const activeInjection = parse.rowIndex.get(row);
 
     if (activeInjection) {
       // Get tokens from injected language
