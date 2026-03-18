@@ -58,6 +58,16 @@ export interface MultiBufferRange {
 }
 
 /**
+ * A single edit operation within a multibuffer.
+ * Used by editBatch() for atomic multi-edit operations.
+ */
+export interface MultiBufferEdit {
+  readonly start: MultiBufferPoint;
+  readonly end: MultiBufferPoint;
+  readonly text: string;
+}
+
+/**
  * A buffer-level anchor - stable position within a single buffer.
  * Survives text edits by tracking logical position relative to surrounding text.
  */
@@ -249,6 +259,13 @@ export interface MultiBuffer {
   moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void;
   createAnchor(point: MultiBufferPoint, bias: import("../buffer/types.ts").Bias): Anchor | undefined;
   edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void;
+  /**
+   * Apply multiple edits atomically, grouping by buffer for efficiency.
+   * Edits within the same buffer are applied in order. Edits spanning
+   * different buffers are applied independently. Invalid edits (points
+   * outside the multibuffer) are silently skipped.
+   */
+  editBatch(edits: readonly MultiBufferEdit[]): void;
   /**
    * Update the metadata for an excerpt by shallow-merging a patch.
    * No-op if the excerpt doesn't exist.

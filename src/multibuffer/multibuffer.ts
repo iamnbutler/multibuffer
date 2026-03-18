@@ -26,6 +26,7 @@ import type {
   ExcerptRange,
   ExcerptSpec,
   MultiBuffer,
+  MultiBufferEdit,
   MultiBufferPoint,
   MultiBufferRow,
   MultiBufferSnapshot,
@@ -952,6 +953,101 @@ class MultiBufferImpl implements MultiBuffer {
 
     // Refresh all excerpts from this buffer with new snapshots
     this._refreshExcerptsForBuffer(buffer, editRow, lineDelta);
+  }
+
+  editBatch(edits: readonly MultiBufferEdit[]): void {
+    if (edits.length === 0) return;
+
+    const snap = this.snapshot();
+
+    // Group edits by buffer for efficient batch application.
+    // Key: bufferId string, Value: array of { startOffset, endOffset, text, editRow }
+    const editsByBuffer = new Map<
+      string,
+      Array<{
+        startOffset: number;
+        endOffset: number;
+        text: string;
+        editRow: BufferRow;
+      }>
+    >();
+
+    for (const edit of edits) {
+      const startBuf = snap.toBufferPoint(edit.start);
+      if (!startBuf) continue;
+
+      const endBuf =
+        edit.start.row === edit.end.row && edit.start.column === edit.end.column
+          ? startBuf
+          : snap.toBufferPoint(edit.end);
+      if (!endBuf) continue;
+
+      // Both points must be in the same buffer (cross-buffer edits are skipped)
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      const startBufferId = startBuf.excerpt.bufferId as string;
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      const endBufferId = endBuf.excerpt.bufferId as string;
+      if (startBufferId !== endBufferId) continue;
+
+      const buffer = this._buffers.get(startBufferId);
+      if (!buffer) continue;
+
+      const bufSnap = buffer.snapshot();
+      const startOffset = bufSnap.pointToOffset(startBuf.point);
+      const endOffset = bufSnap.pointToOffset(endBuf.point);
+
+      let bufferEdits = editsByBuffer.get(startBufferId);
+      if (!bufferEdits) {
+        bufferEdits = [];
+        editsByBuffer.set(startBufferId, bufferEdits);
+      }
+      bufferEdits.push({
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferOffset is branded number
+        startOffset: startOffset as number,
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferOffset is branded number
+        endOffset: endOffset as number,
+        text: edit.text,
+        editRow: startBuf.point.row,
+      });
+    }
+
+    // Apply edits to each buffer, processing in reverse order within each buffer
+    // to preserve offset validity (edits at higher offsets are applied first).
+    for (const [bufferId, bufferEdits] of editsByBuffer) {
+      const buffer = this._buffers.get(bufferId);
+      if (!buffer) continue;
+
+      // Sort by startOffset descending so later edits don't invalidate earlier offsets
+      bufferEdits.sort((a, b) => b.startOffset - a.startOffset);
+
+      const oldLineCount = buffer.snapshot().lineCount;
+      let firstEditRow: BufferRow | undefined;
+
+      for (const { startOffset, endOffset, text, editRow } of bufferEdits) {
+        if (firstEditRow === undefined) {
+          firstEditRow = editRow;
+        } else if (editRow < firstEditRow) {
+          firstEditRow = editRow;
+        }
+
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        const start = startOffset as import("./types.ts").BufferOffset;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        const end = endOffset as import("./types.ts").BufferOffset;
+
+        if (text.length === 0) {
+          buffer.delete(start, end);
+        } else if (startOffset === endOffset) {
+          buffer.insert(start, text);
+        } else {
+          buffer.replace(start, end, text);
+        }
+      }
+
+      const newLineCount = buffer.snapshot().lineCount;
+      const lineDelta = newLineCount - oldLineCount;
+      this._refreshExcerptsForBuffer(buffer, firstEditRow, lineDelta);
+    }
   }
 
   updateExcerptMetadata(
