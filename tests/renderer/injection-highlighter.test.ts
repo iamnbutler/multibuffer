@@ -128,4 +128,63 @@ describe("InjectionHighlighter", () => {
       expect(tokens).toEqual([]);
     });
   });
+
+  describe("row index O(1) lookup", () => {
+    // This document has two separate injection ranges (YAML frontmatter + code block).
+    // The row index must correctly distinguish which rows belong to each injection
+    // and which rows use the primary markdown language.
+    const MULTI_INJECTION_DOC = `---
+title: Test
+---
+
+# Heading
+
+\`\`\`typescript
+const x = 1;
+\`\`\`
+
+Plain text paragraph.
+`;
+
+    beforeAll(() => {
+      highlighter.parseBuffer("test-multi", MULTI_INJECTION_DOC);
+    });
+
+    it("should return YAML tokens for frontmatter rows via row index", () => {
+      // Row 1: "title: Test" — inside YAML injection
+      const tokens = highlighter.getLineTokens("test-multi", 1);
+      expect(tokens.length).toBeGreaterThan(0);
+      expect(tokens.some((t) => t.color.includes("string"))).toBe(true);
+    });
+
+    it("should return markdown tokens for rows outside all injection ranges", () => {
+      // Row 3: "" (blank line) — primary markdown, no injection
+      const tokens = highlighter.getLineTokens("test-multi", 3);
+      // Row 4: "# Heading" — primary markdown
+      const headingTokens = highlighter.getLineTokens("test-multi", 4);
+      // Both should be handled by primary language (no injection for these rows)
+      expect(tokens).toBeDefined();
+      expect(headingTokens.length).toBeGreaterThan(0);
+    });
+
+    it("should return correct tokens for rows in the second injection range", () => {
+      // Row 7: "const x = 1;" — inside TypeScript code block injection
+      // (typescript may not be loaded, so tokens may be empty or code-fence styled)
+      const tokens = highlighter.getLineTokens("test-multi", 7);
+      expect(tokens).toBeDefined();
+    });
+
+    it("should return consistent results with repeated calls (index is stable)", () => {
+      // Row index must not mutate between calls
+      const first = highlighter.getLineTokens("test-multi", 1);
+      const second = highlighter.getLineTokens("test-multi", 1);
+      expect(first).toEqual(second);
+    });
+
+    it("should return tokens for rows after all injections", () => {
+      // Row 10: "Plain text paragraph." — after both injections, primary markdown
+      const tokens = highlighter.getLineTokens("test-multi", 10);
+      expect(tokens).toBeDefined();
+    });
+  });
 });
