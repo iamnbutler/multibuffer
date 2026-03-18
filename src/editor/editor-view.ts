@@ -82,6 +82,26 @@ export interface EditorView {
 }
 
 /**
+ * Resolve readOnly-related options into concrete hideCursor / skipInputHandler
+ * booleans. Extracted as a pure function so it is testable without a DOM.
+ *
+ * Rules:
+ * - `hideCursor` defaults to `readOnly` when not explicitly set.
+ * - `skipInputHandler` defaults to `readOnly` when not explicitly set.
+ * - Explicit values always win over the `readOnly` default.
+ */
+export function resolveReadOnlyOptions(options?: Pick<EditorViewOptions, "readOnly" | "hideCursor" | "skipInputHandler">): {
+  hideCursor: boolean;
+  skipInputHandler: boolean;
+} {
+  const readOnly = options?.readOnly === true;
+  return {
+    hideCursor: options?.hideCursor ?? readOnly,
+    skipInputHandler: options?.skipInputHandler ?? readOnly,
+  };
+}
+
+/**
  * Merge all decoration groups from the keyed map into a flat array.
  * Exported for testing; callers should use the EditorView API.
  */
@@ -113,9 +133,8 @@ class EditorViewImpl implements EditorView {
       wrapWidth: options?.measurements?.wrapWidth,
     };
 
-    // Determine cursor visibility: explicit option wins, else hide if readOnly
-    const hideCursor = options?.hideCursor ?? (options?.readOnly === true);
-    const skipInputHandler = options?.skipInputHandler ?? false;
+    // Determine cursor visibility and input handler from readOnly/explicit options
+    const { hideCursor, skipInputHandler } = resolveReadOnlyOptions(options);
 
     this.editor = createSingleBufferEditor(text, options);
     this.renderer = createDomRenderer(measurements);

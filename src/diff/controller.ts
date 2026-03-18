@@ -58,9 +58,10 @@ export function createDiffController(
   const readOnly = options?.readOnly ?? false;
   // In readOnly mode, force all excerpts to be non-editable
   const editableEqual = readOnly ? false : (options?.editableEqual ?? true);
-  const editableInsert = !readOnly;
+  const editableInsert = readOnly ? false : (options?.editableInsert ?? true);
 
-  // Initial diff (pass readOnly to make all excerpts non-editable)
+  // Compute editableEqual/editableInsert from readOnly and pass them explicitly,
+  // overriding any values in options.
   const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, {
     ...options,
     editableEqual,
