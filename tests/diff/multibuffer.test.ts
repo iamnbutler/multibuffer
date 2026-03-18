@@ -203,7 +203,8 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
 
   test("change at file start", () => {
     const { oldBuf, newBuf } = makeBuffers("old\nsame", "new\nsame");
-    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Disable intraline to test line-level decoration counts
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
     // Line 0 changed: delete(old), insert(new), equal(same)
     expect(multiBuffer.lineCount).toBe(3);
     expect(decorations.length).toBe(2); // one delete, one insert decoration
@@ -211,10 +212,88 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
 
   test("change at file end", () => {
     const { oldBuf, newBuf } = makeBuffers("same\nold", "same\nnew");
-    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Disable intraline to test line-level decoration counts
+    const { multiBuffer, decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
     // Line 1 changed: equal(same), delete(old), insert(new)
     expect(multiBuffer.lineCount).toBe(3);
     expect(decorations.length).toBe(2);
+  });
+
+  test("intraline decorations are included when enabled (default)", () => {
+    const { oldBuf, newBuf } = makeBuffers('const x = "foo"', 'const x = "bar"');
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    // Should have line-level decorations (delete + insert)
+    const lineDecorations = decorations.filter(
+      (d) => d.style?.gutterSign === "−" || d.style?.gutterSign === "+",
+    );
+    expect(lineDecorations.length).toBe(2);
+    // Should also have intraline decorations (column-level)
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    expect(intralineDecorations.length).toBeGreaterThan(0);
+  });
+
+  test("intraline decorations can be disabled", () => {
+    const { oldBuf, newBuf } = makeBuffers('const x = "foo"', 'const x = "bar"');
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, { intraline: false });
+    // Should only have line-level decorations
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    expect(intralineDecorations.length).toBe(0);
+  });
+});
+
+describe("createUnifiedDiffMultiBuffer - read-only mode", () => {
+  test("editableInsert: false makes insert lines non-editable", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nc", "a\nb\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: false,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The insert excerpt (line "b") should be non-editable
+    const insertExcerpt = excerpts.find(
+      (e) => e.bufferId === newBuf.id && e.startRow === 1
+    );
+    expect(insertExcerpt?.editable).toBe(false);
+  });
+
+  test("editableInsert: false with editableEqual: false makes all excerpts non-editable", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "a\nX\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: false,
+      editableEqual: false,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // All excerpts should be non-editable
+    expect(excerpts.every((e) => e.editable === false)).toBe(true);
+  });
+
+  test("default editableInsert is true", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nc", "a\nb\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The insert excerpt should be editable by default
+    const newBufExcerpts = excerpts.filter((e) => e.bufferId === newBuf.id);
+    // At least one should be the insert (line "b")
+    expect(newBufExcerpts.some((e) => e.editable === true)).toBe(true);
+  });
+
+  test("delete lines remain non-editable regardless of settings", () => {
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "a\nc");
+    const { multiBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      editableInsert: true,
+      editableEqual: true,
+    });
+    const excerpts = multiBuffer.snapshot().excerpts;
+    // The delete excerpt (from oldBuf) should always be non-editable
+    const deleteExcerpt = excerpts.find((e) => e.bufferId === oldBuf.id);
+    expect(deleteExcerpt?.editable).toBe(false);
   });
 });
 
