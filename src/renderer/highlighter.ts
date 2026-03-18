@@ -97,6 +97,17 @@ export class Highlighter implements SyntaxHighlighter {
   }
 
   /**
+   * Delete a buffer's parse tree, freeing the associated memory.
+   */
+  deleteBuffer(bufferId: string): void {
+    const tree = this._trees.get(bufferId);
+    if (tree) {
+      tree.delete();
+      this._trees.delete(bufferId);
+    }
+  }
+
+  /**
    * Get syntax tokens for a specific line of a buffer.
    * Returns tokens in startColumn order (guaranteed by depth-first tree traversal).
    */
@@ -200,39 +211,105 @@ export class Highlighter implements SyntaxHighlighter {
   }
 }
 
+/** Column decoration for intraline highlighting. */
+interface ColumnDecoration {
+  startColumn: number;
+  endColumn: number;
+  style: { backgroundColor?: string };
+}
+
 /**
  * Build highlighted span elements inside a container.
  * Fills gaps between tokens with default-colored text.
+ * Optionally applies column decorations (intraline highlights) as backgrounds.
  */
 export function buildHighlightedSpans(
   container: HTMLElement,
   text: string,
   tokens: Token[],
+  columnDecorations?: ColumnDecoration[],
 ): void {
   container.textContent = "";
+
+  // Build a list of background ranges from column decorations
+  const bgRanges = columnDecorations ?? [];
 
   let pos = 0;
   for (const token of tokens) {
     if (token.startColumn > pos) {
-      const gap = document.createElement("span");
-      gap.textContent = text.slice(pos, token.startColumn);
-      container.appendChild(gap);
+      // Gap between tokens - render with any applicable column decorations
+      renderTextWithBackground(container, text, pos, token.startColumn, undefined, bgRanges);
     }
 
     const end = Math.min(token.endColumn, text.length);
     if (token.startColumn < end) {
-      const span = document.createElement("span");
-      span.style.color = token.color;
-      span.textContent = text.slice(token.startColumn, end);
-      container.appendChild(span);
+      // Token range - render with syntax color and any applicable column decorations
+      renderTextWithBackground(container, text, token.startColumn, end, token.color, bgRanges);
     }
 
     pos = Math.max(pos, end);
   }
 
   if (pos < text.length) {
-    const trailing = document.createElement("span");
-    trailing.textContent = text.slice(pos);
-    container.appendChild(trailing);
+    // Trailing text
+    renderTextWithBackground(container, text, pos, text.length, undefined, bgRanges);
   }
+}
+
+/**
+ * Render a text range, splitting it by column decoration boundaries.
+ */
+function renderTextWithBackground(
+  container: HTMLElement,
+  text: string,
+  start: number,
+  end: number,
+  color: string | undefined,
+  bgRanges: ColumnDecoration[],
+): void {
+  // Find all column decoration boundaries within [start, end)
+  const boundaries = new Set<number>();
+  boundaries.add(start);
+  boundaries.add(end);
+  for (const bg of bgRanges) {
+    if (bg.startColumn > start && bg.startColumn < end) {
+      boundaries.add(bg.startColumn);
+    }
+    if (bg.endColumn > start && bg.endColumn < end) {
+      boundaries.add(bg.endColumn);
+    }
+  }
+
+  const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
+
+  for (let i = 0; i < sortedBoundaries.length - 1; i++) {
+    const segStart = sortedBoundaries[i] ?? start;
+    const segEnd = sortedBoundaries[i + 1] ?? end;
+
+    // Find background color for this segment (last decoration wins)
+    let bgColor: string | undefined;
+    for (const bg of bgRanges) {
+      if (bg.startColumn <= segStart && bg.endColumn >= segEnd && bg.style.backgroundColor) {
+        bgColor = bg.style.backgroundColor;
+      }
+    }
+
+    const span = document.createElement("span");
+    if (color) span.style.color = color;
+    if (bgColor) span.style.backgroundColor = bgColor;
+    span.textContent = text.slice(segStart, segEnd);
+    container.appendChild(span);
+  }
+}
+
+/**
+ * Build content with column decorations but no syntax highlighting.
+ */
+export function buildColumnDecoratedContent(
+  container: HTMLElement,
+  text: string,
+  columnDecorations: ColumnDecoration[],
+): void {
+  container.textContent = "";
+  renderTextWithBackground(container, text, 0, text.length, undefined, columnDecorations);
 }
