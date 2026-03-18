@@ -1134,6 +1134,127 @@ describe("clearExcerpts", () => {
   });
 });
 
+describe("addExcerpts (batch)", () => {
+  test("empty batch returns empty array", () => {
+    const mb = createMultiBuffer();
+    const ids = mb.addExcerpts([]);
+    expect(ids).toEqual([]);
+    expect(mb.lineCount).toBe(0);
+  });
+
+  test("single-spec batch returns one ID and correct lineCount", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    const ids = mb.addExcerpts([{ buffer, range: excerptRange(0, 10) }]);
+    expect(ids.length).toBe(1);
+    expect(mb.lineCount).toBe(10);
+    expect(mb.excerpts.length).toBe(1);
+  });
+
+  test("batch returns correct IDs (non-null, unique)", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(20));
+    const ids = mb.addExcerpts([
+      { buffer, range: excerptRange(0, 5) },
+      { buffer, range: excerptRange(5, 10) },
+      { buffer, range: excerptRange(10, 20) },
+    ]);
+    expect(ids.length).toBe(3);
+    // All IDs must be distinct
+    const keys = ids.map((id) => `${id.index}:${id.generation}`);
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  test("lineCount matches equivalent individual addExcerpt calls", () => {
+    const buffer = createBuffer(createBufferId(), generateText(30));
+
+    const mbBatch = createMultiBuffer();
+    mbBatch.addExcerpts([
+      { buffer, range: excerptRange(0, 10) },
+      { buffer, range: excerptRange(10, 20) },
+      { buffer, range: excerptRange(20, 30) },
+    ]);
+
+    const mbSingle = createMultiBuffer();
+    mbSingle.addExcerpt(buffer, excerptRange(0, 10));
+    mbSingle.addExcerpt(buffer, excerptRange(10, 20));
+    mbSingle.addExcerpt(buffer, excerptRange(20, 30));
+
+    expect(mbBatch.lineCount).toBe(mbSingle.lineCount);
+    expect(mbBatch.excerpts.length).toBe(mbSingle.excerpts.length);
+  });
+
+  test("mixed-buffer batch adds excerpts from multiple buffers", () => {
+    const buf1 = createBuffer(createBufferId(), generateText(10));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    const mb = createMultiBuffer();
+    const ids = mb.addExcerpts([
+      { buffer: buf1, range: excerptRange(0, 10) },
+      { buffer: buf2, range: excerptRange(0, 5) },
+    ]);
+    expect(ids.length).toBe(2);
+    expect(mb.lineCount).toBe(15);
+    expect(mb.excerpts.length).toBe(2);
+  });
+
+  test("options are respected (hasTrailingNewline, editable)", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpts([
+      { buffer, range: excerptRange(0, 5), options: { hasTrailingNewline: true, editable: false } },
+    ]);
+    const info = mb.excerpts[0];
+    expect(info?.hasTrailingNewline).toBe(true);
+    expect(info?.editable).toBe(false);
+  });
+
+  test("batch appends after existing excerpts", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(20));
+    mb.addExcerpt(buffer, excerptRange(0, 5));
+    const ids = mb.addExcerpts([
+      { buffer, range: excerptRange(5, 10) },
+      { buffer, range: excerptRange(10, 20) },
+    ]);
+    expect(mb.excerpts.length).toBe(3);
+    expect(ids.length).toBe(2);
+    expect(mb.lineCount).toBe(20);
+  });
+
+  test("100-excerpt batch completes in <50ms", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(1000));
+    const specs = Array.from({ length: 100 }, (_, i) => ({
+      buffer,
+      range: excerptRange(i * 10, (i + 1) * 10),
+    }));
+    const { durationMs } = time(() => mb.addExcerpts(specs));
+    expect(durationMs).toBeLessThan(50);
+    expect(mb.excerpts.length).toBe(100);
+  });
+
+  test("version increments exactly once for a batch (not per-spec)", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(30));
+    const vBefore = mb.snapshot().version;
+    mb.addExcerpts([
+      { buffer, range: excerptRange(0, 10) },
+      { buffer, range: excerptRange(10, 20) },
+      { buffer, range: excerptRange(20, 30) },
+    ]);
+    const vAfter = mb.snapshot().version;
+    // Version should have advanced, but only by one (single cache rebuild)
+    expect(vAfter).toBeGreaterThan(vBefore);
+    // Compare against addExcerpt: each single call increments by 1
+    const mbSingle = createMultiBuffer();
+    const v0 = mbSingle.snapshot().version;
+    mbSingle.addExcerpt(buffer, excerptRange(0, 10));
+    const v1 = mbSingle.snapshot().version;
+    const delta = v1 - v0;
+    // batch of 3 should increment by exactly delta (same as a single addExcerpt call)
+    expect(vAfter - vBefore).toBe(delta);
+  });
+});
 
 describe("MultiBuffer - Snapshot version", () => {
   // The snapshot version is the key used by DomRenderer to skip rebuilding

@@ -22,6 +22,7 @@ import type {
   ExcerptId,
   ExcerptInfo,
   ExcerptRange,
+  ExcerptSpec,
   MultiBuffer,
   MultiBufferPoint,
   MultiBufferRow,
@@ -561,6 +562,35 @@ class MultiBufferImpl implements MultiBuffer {
     excSet.set(MultiBufferImpl._excKey(id), id);
     this._markDirty();
     return id;
+  }
+
+  addExcerpts(specs: readonly ExcerptSpec[]): readonly ExcerptId[] {
+    if (specs.length === 0) return [];
+    const ids: ExcerptId[] = [];
+    for (const spec of specs) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+      const bufferId = spec.buffer.id as string;
+      this._buffers.set(bufferId, spec.buffer);
+      const snapshot = spec.buffer.snapshot();
+      const hasTrailing = spec.options?.hasTrailingNewline ?? false;
+      const editable = spec.options?.editable ?? true;
+      // biome-ignore lint/plugin/no-type-assertion: expect: SlotMap placeholder insert requires cast; immediately overwritten via set()
+      const id = this._excerpts.insert(undefined as unknown as Excerpt) as unknown as ExcerptId;
+      const excerpt = createExcerpt(id, snapshot, spec.range, hasTrailing, editable);
+      this._excerpts.set(id, excerpt);
+      this._order.push(id);
+      // Maintain reverse index
+      let excSet = this._bufferToExcerpts.get(bufferId);
+      if (!excSet) {
+        excSet = new Map<string, ExcerptId>();
+        this._bufferToExcerpts.set(bufferId, excSet);
+      }
+      excSet.set(MultiBufferImpl._excKey(id), id);
+      ids.push(id);
+    }
+    // Single version bump + lazy cache rebuild for the entire batch
+    this._markDirty();
+    return ids;
   }
 
   removeExcerpt(excerptId: ExcerptId): void {
