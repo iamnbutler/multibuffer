@@ -24,6 +24,7 @@ import type {
   ExcerptRange,
   ExcerptSpec,
   MultiBuffer,
+  MultiBufferEventMap,
   MultiBufferPoint,
   MultiBufferRow,
   MultiBufferSnapshot,
@@ -572,6 +573,9 @@ class MultiBufferImpl implements MultiBuffer {
   private _version = ++nextMultiBufferVersion;
   /** True when _cachedInfos/_cachedLineCount reflect the current _order and _excerpts state. */
   private _cacheValid = false;
+  /** Event listeners: event name → Set of callbacks. */
+  // biome-ignore lint/suspicious/noExplicitAny: expect: callback signatures vary by event type; typed at on/off boundaries
+  private _listeners: Map<keyof MultiBufferEventMap, Set<(...args: any[]) => void>> = new Map();
 
   /** Serialize an ExcerptId to a string key. */
   private static _excKey(id: ExcerptId): string {
@@ -589,6 +593,39 @@ class MultiBufferImpl implements MultiBuffer {
     if (this._cacheValid) return;
     this._rebuildCache();
     this._cacheValid = true;
+  }
+
+  /** Emit an event to all registered listeners. */
+  private _emit<K extends keyof MultiBufferEventMap>(
+    event: K,
+    ...args: MultiBufferEventMap[K]
+  ): void {
+    const listeners = this._listeners.get(event);
+    if (!listeners) return;
+    for (const cb of listeners) {
+      cb(...args);
+    }
+  }
+
+  on<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void {
+    let listeners = this._listeners.get(event);
+    if (!listeners) {
+      listeners = new Set();
+      this._listeners.set(event, listeners);
+    }
+    listeners.add(cb);
+  }
+
+  off<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void {
+    const listeners = this._listeners.get(event);
+    if (!listeners) return;
+    listeners.delete(cb);
   }
 
   get lineCount(): number {
@@ -648,6 +685,12 @@ class MultiBufferImpl implements MultiBuffer {
     }
     excSet.set(MultiBufferImpl._excKey(id), id);
     this._markDirty();
+    // Emit event after cache rebuild so listeners see updated state
+    this._ensureCache();
+    const info = this._cachedInfos.find(
+      (i) => i.id.index === id.index && i.id.generation === id.generation,
+    );
+    if (info) this._emit("excerptAdded", info);
     return id;
   }
 
@@ -677,12 +720,21 @@ class MultiBufferImpl implements MultiBuffer {
     }
     // Single version bump + lazy cache rebuild for the entire batch
     this._markDirty();
+    // Emit events after cache rebuild so listeners see updated state
+    this._ensureCache();
+    for (const id of ids) {
+      const info = this._cachedInfos.find(
+        (i) => i.id.index === id.index && i.id.generation === id.generation,
+      );
+      if (info) this._emit("excerptAdded", info);
+    }
     return ids;
   }
 
   removeExcerpt(excerptId: ExcerptId): void {
     // Update reverse index before removing from SlotMap (while bufferId is still accessible)
     const exc = this._excerpts.get(excerptId);
+    const existed = !!exc;
     if (exc) {
       // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
       const bid = exc.bufferId as string;
@@ -697,6 +749,8 @@ class MultiBufferImpl implements MultiBuffer {
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
     );
     this._markDirty();
+    // Only emit if the excerpt actually existed
+    if (existed) this._emit("excerptRemoved", excerptId);
   }
 
   clearExcerpts(): readonly ExcerptId[] {
@@ -707,6 +761,10 @@ class MultiBufferImpl implements MultiBuffer {
     this._order = [];
     this._bufferToExcerpts.clear();
     this._markDirty();
+    // Emit events for each removed excerpt
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
     return oldIds;
   }
 
@@ -717,6 +775,9 @@ class MultiBufferImpl implements MultiBuffer {
       options?: { hasTrailingNewline?: boolean; editable?: boolean };
     }>,
   ): readonly ExcerptId[] {
+    // Collect old IDs before removing for event emission
+    const oldIds = [...this._order];
+
     // Remove all existing excerpts without triggering a cache rebuild each time.
     for (const id of this._order) {
       this._excerpts.remove(id);
@@ -751,6 +812,19 @@ class MultiBufferImpl implements MultiBuffer {
 
     // Single rebuild at the end instead of N+1 rebuilds.
     this._markDirty();
+
+    // Emit removal events first (before add events)
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
+    // Emit add events after cache rebuild so listeners see updated state
+    this._ensureCache();
+    for (const id of newIds) {
+      const info = this._cachedInfos.find(
+        (i) => i.id.index === id.index && i.id.generation === id.generation,
+      );
+      if (info) this._emit("excerptAdded", info);
+    }
     return newIds;
   }
 
@@ -802,6 +876,19 @@ class MultiBufferImpl implements MultiBuffer {
     }
 
     this._markDirty();
+
+    // Emit removal events first (before add events)
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
+    // Emit add events after cache rebuild so listeners see updated state
+    this._ensureCache();
+    for (const id of newIds) {
+      const info = this._cachedInfos.find(
+        (i) => i.id.index === id.index && i.id.generation === id.generation,
+      );
+      if (info) this._emit("excerptAdded", info);
+    }
     return newIds;
   }
 

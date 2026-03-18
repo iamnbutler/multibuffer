@@ -133,6 +133,17 @@ export interface ExcerptBoundary {
 }
 
 /**
+ * Event map for the MultiBuffer event emitter.
+ * Keys are event names; values are tuples of callback argument types.
+ */
+export type MultiBufferEventMap = {
+  /** Fires when an excerpt is added. Provides the new excerpt info. */
+  excerptAdded: [info: ExcerptInfo];
+  /** Fires when an excerpt is removed. Provides the removed excerpt's ID. */
+  excerptRemoved: [id: ExcerptId];
+};
+
+/**
  * Immutable snapshot of multibuffer state.
  */
 export interface MultiBufferSnapshot {
@@ -234,6 +245,16 @@ export interface MultiBuffer {
     point: BufferPoint,
   ): MultiBufferPoint | undefined;
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
+  /** Register a listener for the given event. */
+  on<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void;
+  /** Unregister a listener for the given event. */
+  off<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void;
 }
 
 /**
