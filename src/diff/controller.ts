@@ -99,10 +99,25 @@ export function createDiffController(
   const _subscribers: Set<(decorations: readonly Decoration[]) => void> =
     new Set();
 
+  // Version cache: skip re-diffing when neither buffer has changed since last run.
+  let _lastOldVersion = -1;
+  let _lastNewVersion = -1;
+
   function reDiff(): boolean {
     // Get current text from both buffers
     const oldSnap = oldBuffer.snapshot();
     const newSnap = newBuffer.snapshot();
+
+    // Fast path: skip the diff entirely if neither buffer has changed.
+    // snapshot().version is a monotonically-incrementing integer that advances
+    // on every edit(). If both versions match the last run, the excerpt state
+    // and decorations are still valid — return immediately.
+    if (
+      oldSnap.version === _lastOldVersion &&
+      newSnap.version === _lastNewVersion
+    ) {
+      return _isEqual;
+    }
 
     // Run diff
     const diffResult = diff(oldSnap.text(), newSnap.text(), options);
@@ -260,6 +275,10 @@ export function createDiffController(
       _isEqual = false;
       _separatorBuffer = separatorBuffer;
     }
+
+    // Update version cache so the next reDiff() call can skip if nothing changed.
+    _lastOldVersion = oldSnap.version;
+    _lastNewVersion = newSnap.version;
 
     // Notify subscribers
     for (const callback of _subscribers) {
