@@ -18,10 +18,9 @@ import type {
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
 import type { DiffOptions } from "./diff.ts";
 import { diff } from "./diff.ts";
+import { formatHunkHeader, hunkToHeader } from "./helpers.ts";
 import type { UnifiedDiffMultiBufferOptions } from "./multibuffer.ts";
 import { createUnifiedDiffMultiBuffer, HUNK_HEADER_STYLE } from "./multibuffer.ts";
-import type { DiffHunk } from "./types.ts";
-import { formatHunkHeader } from "./types.ts";
 
 export interface DiffControllerOptions
   extends DiffOptions,
@@ -52,19 +51,6 @@ let controllerSeparatorBufferCounter = 0;
 function createControllerSeparatorBufferId(): BufferId {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for BufferId
   return `__controller_hunk_separator_${++controllerSeparatorBufferCounter}__` as BufferId;
-}
-
-/**
- * Create a HunkHeader from a DiffHunk.
- * Converts 0-based internal indices to 1-based display values.
- */
-function hunkToHeader(hunk: DiffHunk): { oldStart: number; oldCount: number; newStart: number; newCount: number } {
-  return {
-    oldStart: hunk.oldStart + 1, // Convert to 1-based
-    oldCount: hunk.oldCount,
-    newStart: hunk.newStart + 1, // Convert to 1-based
-    newCount: hunk.newCount,
-  };
 }
 
 export function createDiffController(

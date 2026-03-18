@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { diff } from "../../src/diff/diff.ts";
-import { formatHunkHeader } from "../../src/diff/types.ts";
+import { formatHunkHeader } from "../../src/diff/helpers.ts";
 
 describe("diff", () => {
   test("identical texts produce no hunks", () => {
