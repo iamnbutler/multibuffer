@@ -1169,6 +1169,17 @@ describe("MultiBuffer - Snapshot version", () => {
     expect(v1).toBeGreaterThan(v0);
   });
 
+  test("version changes after setExcerpts", () => {
+    const mb = createMultiBuffer();
+    const buf1 = createBuffer(createBufferId(), generateText(5));
+    const buf2 = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf1, excerptRange(0, 5));
+    const v0 = mb.snapshot().version;
+    mb.setExcerpts([{ buffer: buf2, range: excerptRange(0, 5) }]);
+    const v1 = mb.snapshot().version;
+    expect(v1).toBeGreaterThan(v0);
+  });
+
   test("version changes after setExcerptsForBuffer", () => {
     const mb = createMultiBuffer();
     const buf = createBuffer(createBufferId(), generateText(10));
@@ -1292,5 +1303,30 @@ describe("setExcerpts (batch)", () => {
     expect(mbBatch.lines(mbRow(0), mbRow(4))).toEqual(
       mbRef.lines(mbRow(0), mbRow(4)),
     );
+  });
+
+  test("all returned IDs are unique", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const ids = mb.setExcerpts([
+      { buffer: buf, range: excerptRange(0, 10) },
+      { buffer: buf, range: excerptRange(10, 20) },
+      { buffer: buf, range: excerptRange(20, 30) },
+    ]);
+    const keys = new Set(ids.map((id) => `${id.index}:${id.generation}`));
+    expect(keys.size).toBe(3);
+  });
+
+  test("hasTrailingNewline option is honored", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "A\nB");
+    mb.setExcerpts([
+      {
+        buffer: buf,
+        range: excerptRange(0, 2),
+        options: { hasTrailingNewline: true },
+      },
+    ]);
+    expect(mb.excerpts[0]?.hasTrailingNewline).toBe(true);
   });
 });
