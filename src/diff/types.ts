@@ -46,9 +46,7 @@ export interface DiffResult {
   readonly isEqual: boolean;
 }
 
-// ============================================================================
 // Multi-file diff types
-// ============================================================================
 
 /**
  * Aggregate statistics for a multi-file diff.
@@ -118,8 +116,6 @@ export interface MultiFileDiffOptions {
   readonly context?: number;
   /** Callback when a file's collapsed state changes. */
   readonly onFileToggle?: (filename: string, collapsed: boolean) => void;
-  /** Callback when aggregate stats change. */
-  readonly onStatsChange?: (stats: MultiFileDiffStats) => void;
 }
 
 /**

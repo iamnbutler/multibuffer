@@ -11,6 +11,8 @@
 
 import { createBuffer } from "../buffer/buffer.ts";
 import type { Buffer, BufferId } from "../buffer/types.ts";
+import type { MultiBufferRow } from "../multibuffer/types.ts";
+import type { Decoration } from "../renderer/types.ts";
 import type { DiffController, DiffControllerOptions } from "./controller.ts";
 import { createDiffController } from "./controller.ts";
 import { diff } from "./diff.ts";
@@ -24,6 +26,11 @@ import type {
 } from "./types.ts";
 
 let _multiFileDiffCounter = 0;
+
+/** Reset the internal counter (for test isolation). */
+export function resetMultiFileDiffCounter(): void {
+  _multiFileDiffCounter = 0;
+}
 
 function nextMultiFileBufferId(prefix: string, filename: string): BufferId {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for internal buffer ID
@@ -174,6 +181,22 @@ function updateHeaderUI(state: InternalFileState): void {
 }
 
 /**
+ * Build a row-indexed decoration lookup from a decoration list.
+ * Each row maps to the first decoration whose range covers it, giving O(1) per-row access.
+ */
+function buildDecorationIndex(decorations: readonly Decoration[]): Map<number, Decoration> {
+  const index = new Map<number, Decoration>();
+  for (const d of decorations) {
+    for (let r = d.range.start.row; r <= d.range.end.row; r++) {
+      if (!index.has(r)) {
+        index.set(r, d);
+      }
+    }
+  }
+  return index;
+}
+
+/**
  * Initialize the diff controller and renderer for a file.
  */
 function initializeFileDiff(
@@ -204,28 +227,26 @@ function initializeFileDiff(
   const controller = createDiffController(oldBuffer, newBuffer, controllerOptions);
   state.controller = controller;
 
-  // Create a simple text-based diff view for now
-  // In a full implementation, this would use DomRenderer with the multiBuffer
   const diffView = document.createElement("div");
   diffView.className = "multi-file-diff-view";
   diffView.style.cssText =
     "font-family: monospace; font-size: 13px; line-height: 20px; background: var(--editor-bg, #282828); overflow: auto;";
 
-  // Render a simple diff view
+  // Render the diff using the controller's multiBuffer snapshot
   const snap = controller.multiBuffer.snapshot();
   const lineCount = snap.lineCount;
 
-  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-  const lines = snap.lines(0 as import("../multibuffer/types.ts").MultiBufferRow, lineCount as import("../multibuffer/types.ts").MultiBufferRow);
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for MultiBufferRow
+  const lines = snap.lines(0 as MultiBufferRow, lineCount as MultiBufferRow);
+
+  // Pre-build O(1) row-to-decoration index (avoids O(n*d) inner-loop scan)
+  const decorationIndex = buildDecorationIndex(controller.decorations);
 
   for (let i = 0; i < lines.length; i++) {
     const lineEl = document.createElement("div");
     lineEl.style.cssText = "padding: 0 12px; white-space: pre;";
 
-    // Find decoration for this row
-    const decoration = controller.decorations.find((d) => {
-      return d.range.start.row <= i && d.range.end.row >= i;
-    });
+    const decoration = decorationIndex.get(i);
 
     if (decoration?.style) {
       lineEl.style.backgroundColor = decoration.style.backgroundColor ?? "";
@@ -254,6 +275,8 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
 
   // Internal state for each file
   const fileStates: InternalFileState[] = [];
+  // O(1) filename-to-state lookup (avoids O(n) scan on every public method call)
+  const fileStatesByName = new Map<string, InternalFileState>();
 
   // Compute initial stats for all files
   let totalAdditions = 0;
@@ -269,7 +292,7 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
     totalAdditions += stats.additions;
     totalDeletions += stats.deletions;
 
-    fileStates.push({
+    const state: InternalFileState = {
       entry,
       stats,
       collapsed: false,
@@ -281,7 +304,9 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
       element: null,
       headerElement: null,
       contentElement: null,
-    });
+    };
+    fileStates.push(state);
+    fileStatesByName.set(entry.filename, state);
   }
 
   const _stats: MultiFileDiffStats = {
@@ -296,7 +321,7 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
   function handleToggle(filename: string): void {
     if (_disposed) return;
 
-    const state = fileStates.find((f) => f.entry.filename === filename);
+    const state = fileStatesByName.get(filename);
     if (!state) return;
 
     state.collapsed = !state.collapsed;
@@ -367,9 +392,37 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
     }));
   }
 
-  // Find file state by filename
-  function findFile(filename: string): InternalFileState | undefined {
-    return fileStates.find((f) => f.entry.filename === filename);
+  function collapseFile(filename: string): void {
+    if (_disposed) return;
+
+    const state = fileStatesByName.get(filename);
+    if (!state || state.collapsed) return;
+
+    state.collapsed = true;
+    if (state.contentElement) {
+      state.contentElement.style.display = "none";
+    }
+    updateHeaderUI(state);
+    options.onFileToggle?.(filename, true);
+  }
+
+  function expandFile(filename: string): void {
+    if (_disposed) return;
+
+    const state = fileStatesByName.get(filename);
+    if (!state || !state.collapsed) return;
+
+    state.collapsed = false;
+    if (state.contentElement) {
+      state.contentElement.style.display = "";
+    }
+    updateHeaderUI(state);
+
+    if (!state.initialized) {
+      initializeFileDiff(state, { context });
+    }
+
+    options.onFileToggle?.(filename, false);
   }
 
   return {
@@ -384,7 +437,7 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
     scrollToFile(filename: string): void {
       if (_disposed) return;
 
-      const state = findFile(filename);
+      const state = fileStatesByName.get(filename);
       if (!state) return;
 
       // Expand if collapsed
@@ -408,49 +461,19 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
       }
     },
 
-    collapseFile(filename: string): void {
-      if (_disposed) return;
-
-      const state = findFile(filename);
-      if (!state || state.collapsed) return;
-
-      state.collapsed = true;
-      if (state.contentElement) {
-        state.contentElement.style.display = "none";
-      }
-      updateHeaderUI(state);
-      options.onFileToggle?.(filename, true);
-    },
-
-    expandFile(filename: string): void {
-      if (_disposed) return;
-
-      const state = findFile(filename);
-      if (!state || !state.collapsed) return;
-
-      state.collapsed = false;
-      if (state.contentElement) {
-        state.contentElement.style.display = "";
-      }
-      updateHeaderUI(state);
-
-      if (!state.initialized) {
-        initializeFileDiff(state, { context });
-      }
-
-      options.onFileToggle?.(filename, false);
-    },
+    collapseFile,
+    expandFile,
 
     toggleFile(filename: string): void {
       if (_disposed) return;
 
-      const state = findFile(filename);
+      const state = fileStatesByName.get(filename);
       if (!state) return;
 
       if (state.collapsed) {
-        this.expandFile(filename);
+        expandFile(filename);
       } else {
-        this.collapseFile(filename);
+        collapseFile(filename);
       }
     },
 
@@ -464,6 +487,11 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
             state.contentElement.style.display = "none";
           }
           updateHeaderUI(state);
+        }
+      }
+      // Single batch notification instead of N individual callbacks
+      for (const state of fileStates) {
+        if (state.collapsed) {
           options.onFileToggle?.(state.entry.filename, true);
         }
       }
@@ -483,7 +511,11 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
           if (!state.initialized) {
             initializeFileDiff(state, { context });
           }
-
+        }
+      }
+      // Single batch notification instead of N individual callbacks
+      for (const state of fileStates) {
+        if (!state.collapsed) {
           options.onFileToggle?.(state.entry.filename, false);
         }
       }
@@ -508,6 +540,7 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
         state.headerElement = null;
         state.contentElement = null;
       }
+      fileStatesByName.clear();
     },
   };
 }

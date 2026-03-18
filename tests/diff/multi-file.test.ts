@@ -10,7 +10,7 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createMultiFileDiff } from "../../src/diff/multi-file.ts";
+import { createMultiFileDiff, resetMultiFileDiffCounter } from "../../src/diff/multi-file.ts";
 import type { FileDiffEntry } from "../../src/diff/types.ts";
 import { resetCounters } from "../helpers.ts";
 
@@ -37,6 +37,7 @@ function createMockContainer(): HTMLElement {
 
 beforeEach(() => {
   resetCounters();
+  resetMultiFileDiffCounter();
 });
 
 describe("MultiFileDiff creation", () => {
