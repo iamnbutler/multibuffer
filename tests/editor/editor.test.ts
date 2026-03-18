@@ -2214,3 +2214,124 @@ describe("Editor - selectWordAt with Unicode", () => {
     if (end) expectPoint(end, 0, 6);
   });
 });
+
+// ─── Visual Line Navigation (Wrapped Lines) ──────────────────────
+
+describe("Editor - Visual Line Navigation with wrapWidth", () => {
+  /**
+   * Create an editor with wrapWidth enabled.
+   * "abcdefghij1234567890ABCDEFGHIJ" (30 chars) at wrapWidth=10 wraps to:
+   *   Visual row 0: "abcdefghij" (chars 0-9)
+   *   Visual row 1: "1234567890" (chars 10-19)
+   *   Visual row 2: "ABCDEFGHIJ" (chars 20-29)
+   */
+  function setupWithWrap(text: string, wrapWidth: number): { mb: MultiBuffer; editor: Editor } {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    const editor = new Editor(mb, { wrapWidth });
+    return { mb, editor };
+  }
+
+  test("down arrow moves within wrapped line (not to next buffer line)", () => {
+    const { editor } = setupWithWrap("abcdefghij1234567890ABCDEFGHIJ", 10);
+    // Start at col 5 (visual row 0)
+    editor.setCursor(mbPoint(0, 5));
+    expectPoint(editor.cursor, 0, 5);
+
+    // Press down - should move to visual row 1 (still buffer row 0), col 15
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 15);
+  });
+
+  test("multiple down arrows traverse all wrapped visual rows", () => {
+    const { editor } = setupWithWrap("abcdefghij1234567890ABCDEFGHIJ", 10);
+    editor.setCursor(mbPoint(0, 5));
+
+    // First down: visual row 0 -> visual row 1
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 15);
+
+    // Second down: visual row 1 -> visual row 2
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 25);
+
+    // Third down: already at last visual row, stays put
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 25);
+  });
+
+  test("up arrow moves within wrapped line (not to previous buffer line)", () => {
+    const { editor } = setupWithWrap("abcdefghij1234567890ABCDEFGHIJ", 10);
+    // Start at col 15 (visual row 1)
+    editor.setCursor(mbPoint(0, 15));
+
+    // Press up - should move to visual row 0 (still buffer row 0), col 5
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  test("down from last visual row moves to next buffer line", () => {
+    const { editor } = setupWithWrap("abcdefghij1234567890\nshort", 10);
+    // Row 0 wraps to 2 visual rows (20 chars), row 1 is unwrapped (5 chars)
+    // Start at col 15 (visual row 1 of row 0)
+    editor.setCursor(mbPoint(0, 15));
+
+    // First down: visual row 1 -> visual row 2 (row 1, col 5 clamped)
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 1, 5);
+  });
+
+  test("up from first visual row of second line moves to last visual row of first", () => {
+    const { editor } = setupWithWrap("abcdefghij1234567890\nshort", 10);
+    // Start at row 1, col 3
+    editor.setCursor(mbPoint(1, 3));
+
+    // Press up - should move to last visual row of row 0 (col 13)
+    editor.dispatch({ type: "moveCursor", direction: "up", granularity: "character" });
+    expectPoint(editor.cursor, 0, 13);
+  });
+
+  test("setWrapWidth enables visual navigation dynamically", () => {
+    const { editor } = setup("abcdefghij1234567890ABCDEFGHIJ");
+    editor.setCursor(mbPoint(0, 5));
+
+    // Without wrapWidth, down skips the whole buffer line
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 5); // Stays put - single buffer line
+
+    // Enable wrapWidth
+    editor.setWrapWidth(10);
+    editor.setCursor(mbPoint(0, 5));
+
+    // Now down navigates visual rows
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    expectPoint(editor.cursor, 0, 15);
+  });
+
+  test("wrapWidth getter returns current value", () => {
+    const { editor } = setupWithWrap("test", 80);
+    expect(editor.wrapWidth).toBe(80);
+
+    editor.setWrapWidth(120);
+    expect(editor.wrapWidth).toBe(120);
+  });
+
+  test("Shift+down extends selection within wrapped line", () => {
+    const { editor, mb } = setupWithWrap("abcdefghij1234567890ABCDEFGHIJ", 10);
+    editor.setCursor(mbPoint(0, 5));
+
+    // Shift+down extends selection to next visual row
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+
+    const snap = mb.snapshot();
+    const sel = editor.selection;
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 5);
+    if (end) expectPoint(end, 0, 15);
+  });
+});

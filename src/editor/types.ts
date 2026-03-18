@@ -38,6 +38,12 @@ export interface EditorOptions {
   bracketMatching?: boolean;
   /** When true, all text-mutating commands are ignored. Defaults to false. */
   readOnly?: boolean;
+  /**
+   * Wrap width in visual columns for soft line wrapping. When set, vertical
+   * cursor movement (up/down) navigates between visual rows rather than
+   * buffer rows. 0 or undefined disables visual line wrapping.
+   */
+  wrapWidth?: number;
 }
 
 /** Direction for cursor movement and selection extension. */

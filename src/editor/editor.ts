@@ -17,8 +17,9 @@ import type {
   Selection,
 } from "../multibuffer/types.ts";
 import { Bias } from "../multibuffer/types.ts";
+import { WrapMap } from "../renderer/wrap-map.ts";
 import { type BracketMatch, findMatchingBracket } from "./bracket-match.ts";
-import { isWordChar, moveCursor } from "./cursor.ts";
+import { isWordChar, moveCursor, moveCursorVisual } from "./cursor.ts";
 import {
   collapseSelection,
   extendSelection,
@@ -67,11 +68,21 @@ export class Editor {
   private _goalColumn: number | undefined = undefined;
   private _readOnly: boolean;
   private _bracketMatching: boolean;
+  /**
+   * Wrap width for visual line navigation. When > 0, vertical cursor
+   * movement uses visual rows instead of buffer rows.
+   */
+  private _wrapWidth: number;
+  /** Cached WrapMap for visual navigation; rebuilt when snapshot changes. */
+  private _wrapMap: WrapMap | null = null;
+  /** Snapshot version used to build the current _wrapMap (cache key). */
+  private _wrapMapVersion = -1;
 
   constructor(multiBuffer: MultiBuffer, options?: EditorOptions) {
     this.multiBuffer = multiBuffer;
     this._readOnly = options?.readOnly ?? false;
     this._bracketMatching = options?.bracketMatching ?? false;
+    this._wrapWidth = options?.wrapWidth ?? 0;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     this._cursor = { row: 0 as MultiBufferRow, column: 0 };
     this._selection = selectionAtPoint(multiBuffer, this._cursor);
@@ -85,6 +96,37 @@ export class Editor {
   /** Toggle read-only mode at runtime. */
   setReadOnly(value: boolean): void {
     this._readOnly = value;
+  }
+
+  /** Current wrap width for visual line navigation. 0 = disabled. */
+  get wrapWidth(): number {
+    return this._wrapWidth;
+  }
+
+  /**
+   * Set the wrap width for visual line navigation at runtime.
+   * When > 0, vertical cursor movement uses visual rows instead of buffer rows.
+   */
+  setWrapWidth(value: number): void {
+    if (this._wrapWidth !== value) {
+      this._wrapWidth = value;
+      this._wrapMap = null; // Invalidate cached WrapMap
+      this._wrapMapVersion = -1;
+    }
+  }
+
+  /**
+   * Get the WrapMap for visual line navigation, rebuilding if necessary.
+   * Returns null if wrapWidth is 0 (wrapping disabled).
+   */
+  private _getWrapMap(snap: MultiBufferSnapshot): WrapMap | null {
+    if (this._wrapWidth <= 0) return null;
+    // Rebuild if snapshot version changed
+    if (this._wrapMap === null || this._wrapMapVersion !== snap.version) {
+      this._wrapMap = new WrapMap(snap, this._wrapWidth);
+      this._wrapMapVersion = snap.version;
+    }
+    return this._wrapMap;
   }
 
   /**
@@ -589,13 +631,25 @@ export class Editor {
     let newCursor: MultiBufferPoint;
 
     if (direction === "up" || direction === "down") {
-      // Save the goal column on the first vertical move, then use it to
-      // maintain the intended column across lines of varying lengths.
-      if (this._goalColumn === undefined) {
-        this._goalColumn = cursor.column;
+      // Use visual-row navigation when wrapWidth is set
+      const wrapMap = this._getWrapMap(snap);
+      if (wrapMap && granularity === "character") {
+        // For visual navigation, pass the actual cursor position so
+        // moveCursorVisual can determine the correct current visual row.
+        // The visual column is preserved internally by moveCursorVisual.
+        // We don't use the traditional goal column mechanism here because
+        // the visual column preservation is based on the current segment,
+        // not an absolute character column.
+        newCursor = moveCursorVisual(snap, cursor, direction, granularity, wrapMap);
+      } else {
+        // Buffer-row navigation uses the goal column mechanism to maintain
+        // the intended column across lines of varying lengths.
+        if (this._goalColumn === undefined) {
+          this._goalColumn = cursor.column;
+        }
+        const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: this._goalColumn ?? cursor.column };
+        newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
       }
-      const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: this._goalColumn ?? cursor.column };
-      newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
     } else {
       // Horizontal move — discard the goal column
       this._goalColumn = undefined;
@@ -624,19 +678,30 @@ export class Editor {
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) return;
 
-      // Save goal column on the first vertical extend
-      if (this._goalColumn === undefined) {
-        this._goalColumn = headPoint.column;
-      }
+      // Use visual-row navigation when wrapWidth is set
+      const wrapMap = this._getWrapMap(snap);
+      let newHeadPoint: MultiBufferPoint;
+      if (wrapMap && granularity === "character") {
+        // For visual navigation, use the actual cursor position to determine
+        // the current visual row. Visual column preservation is handled
+        // internally by moveCursorVisual.
+        newHeadPoint = moveCursorVisual(snap, this._cursor, direction, granularity, wrapMap);
+      } else {
+        // Buffer-row navigation uses the goal column mechanism.
+        // Save goal column on the first vertical extend
+        if (this._goalColumn === undefined) {
+          this._goalColumn = headPoint.column;
+        }
 
-      // Use this._cursor.row (not headPoint.row) to advance the effective head.
-      // Resolved anchors snap back to the last content row for trailing-newline
-      // rows (which have no corresponding buffer row), so headPoint.row gets
-      // stuck there on repeated Shift+Down presses.  this._cursor.row is updated
-      // to the nominal target row after every vertical move, so using it allows
-      // the next key-press to advance past the excerpt header.
-      const effectiveHead: MultiBufferPoint = { row: this._cursor.row, column: this._goalColumn };
-      const newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
+        // Use this._cursor.row (not headPoint.row) to advance the effective head.
+        // Resolved anchors snap back to the last content row for trailing-newline
+        // rows (which have no corresponding buffer row), so headPoint.row gets
+        // stuck there on repeated Shift+Down presses.  this._cursor.row is updated
+        // to the nominal target row after every vertical move, so using it allows
+        // the next key-press to advance past the excerpt header.
+        const effectiveHead: MultiBufferPoint = { row: this._cursor.row, column: this._goalColumn };
+        newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
+      }
       const newHeadAnchor = this.multiBuffer.createAnchor(newHeadPoint, Bias.Right);
       if (!newHeadAnchor) return;
 
