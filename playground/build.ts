@@ -2,7 +2,7 @@
  * Static build: generates a self-contained _site/ directory
  * suitable for GitHub Pages or any static host.
  *
- * Usage: bun run demo/build.ts
+ * Usage: bun run playground/build.ts
  */
 
 import {
