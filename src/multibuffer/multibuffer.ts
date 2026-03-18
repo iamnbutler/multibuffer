@@ -605,12 +605,15 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.remove(id);
     }
     this._order = [];
+    // Clear the reverse index — it is rebuilt below alongside the new excerpts.
+    this._bufferToExcerpts.clear();
 
     // Register all buffers and insert all excerpts without intermediate rebuilds.
     const newIds: ExcerptId[] = [];
     for (const { buffer, range, options } of entries) {
       // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
-      this._buffers.set(buffer.id as string, buffer);
+      const bufferId = buffer.id as string;
+      this._buffers.set(bufferId, buffer);
       const snapshot = buffer.snapshot();
       const hasTrailing = options?.hasTrailingNewline ?? false;
       const editable = options?.editable ?? true;
@@ -620,6 +623,13 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       newIds.push(id);
+      // Maintain reverse index so subsequent edit() calls can find these excerpts.
+      let excSet = this._bufferToExcerpts.get(bufferId);
+      if (!excSet) {
+        excSet = new Map<string, ExcerptId>();
+        this._bufferToExcerpts.set(bufferId, excSet);
+      }
+      excSet.set(MultiBufferImpl._excKey(id), id);
     }
 
     // Single rebuild at the end instead of N+1 rebuilds.
@@ -676,6 +686,32 @@ class MultiBufferImpl implements MultiBuffer {
 
     this._markDirty();
     return newIds;
+  }
+
+  moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void {
+    // No-op if the excerpt doesn't exist
+    if (!this._excerpts.get(id)) return;
+
+    const idKey = MultiBufferImpl._excKey(id);
+    const currentIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === idKey);
+    if (currentIdx === -1) return;
+
+    // Remove from current position
+    this._order.splice(currentIdx, 1);
+
+    if (insertBefore === undefined) {
+      this._order.push(id);
+    } else {
+      const beforeKey = MultiBufferImpl._excKey(insertBefore);
+      const targetIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === beforeKey);
+      if (targetIdx === -1) {
+        // insertBefore not found; append to end
+        this._order.push(id);
+      } else {
+        this._order.splice(targetIdx, 0, id);
+      }
+    }
+    this._markDirty();
   }
 
   expandExcerpt(

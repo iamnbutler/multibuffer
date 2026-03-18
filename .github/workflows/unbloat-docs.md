@@ -118,6 +118,7 @@ Scan the repository for markdown documentation files. Common locations include:
 - Changelog files
 - License files
 - Code of conduct files
+- **Workflow definition files in `.github/workflows/`** - These are workflow configs, not documentation
 - **Files with `disable-agentic-editing: true` in frontmatter** - These files are protected from automated editing
 
 Look for documentation files that were recently modified or are likely to benefit from cleanup.
@@ -134,6 +135,7 @@ Look for documentation files that were recently modified or are likely to benefi
 - Auto-generated documentation
 - Changelog or release notes
 - License or legal files
+- **Any file under `.github/workflows/`** - These are workflow definitions with protected paths
 - **Files with `disable-agentic-editing: true` in frontmatter** - These files are explicitly protected from automated editing
 
 Before selecting a file, check its frontmatter to ensure it doesn't have `disable-agentic-editing: true`:
