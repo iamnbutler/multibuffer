@@ -44,13 +44,13 @@ interface EditOp {
 interface HistoryEntry {
   readonly edits: ReadonlyArray<EditOp>;
   readonly cursorBefore: MultiBufferPoint;
-  readonly selectionBefore: Selection | undefined;
+  readonly selectionsBefore: readonly Selection[];
 }
 
 export class Editor {
   readonly multiBuffer: MultiBuffer;
   private _cursor: MultiBufferPoint;
-  private _selection: Selection | undefined;
+  private _selections: Selection[] = [];
   // biome-ignore lint/suspicious/noExplicitAny: expect: event emitter internal storage uses any args for heterogeneous listener sets
   private _listeners: Map<keyof EditorEventMap, Set<(...args: any[]) => void>> = new Map();
   /** Incremented on every text mutation — used to detect textChange in dispatch(). */
@@ -85,7 +85,8 @@ export class Editor {
     this._wrapWidth = options?.wrapWidth ?? 0;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     this._cursor = { row: 0 as MultiBufferRow, column: 0 };
-    this._selection = selectionAtPoint(multiBuffer, this._cursor);
+    const initialSel = selectionAtPoint(multiBuffer, this._cursor);
+    this._selections = initialSel ? [initialSel] : [];
   }
 
   /** Whether the editor is in read-only mode. */
@@ -141,19 +142,20 @@ export class Editor {
   }
 
   get cursor(): MultiBufferPoint {
-    if (this._selection) {
+    const primarySelection = this._selections[this._selections.length - 1];
+    if (primarySelection) {
       // Fast path: selectionAtPoint() always uses the same anchor object for both
       // start and end (collapsed cursor). In that case _cursor is authoritative and
       // we can skip snapshot creation and anchor resolution entirely.
-      if (this._selection.range.start !== this._selection.range.end) {
+      if (primarySelection.range.start !== primarySelection.range.end) {
         const snap = this.multiBuffer.snapshot();
         // For non-collapsed selections, resolve the head anchor to get
         // the accurate cursor position after edits may have moved it
-        if (!isCollapsed(snap, this._selection)) {
+        if (!isCollapsed(snap, primarySelection)) {
           const head =
-            this._selection.head === "end"
-              ? this._selection.range.end
-              : this._selection.range.start;
+            primarySelection.head === "end"
+              ? primarySelection.range.end
+              : primarySelection.range.start;
           const resolved = snap.resolveAnchor(head);
           if (resolved) return resolved;
         }
@@ -164,46 +166,60 @@ export class Editor {
     return this._cursor;
   }
 
+  /**
+   * The primary (most recently added) selection, or undefined if none.
+   * For backward compatibility with single-selection code paths.
+   */
   get selection(): Selection | undefined {
-    return this._selection;
+    return this._selections[this._selections.length - 1];
   }
 
-  /** Set cursor to a specific point (e.g. from mouse click). */
+  /**
+   * All active selections. The last element is the "primary" selection
+   * (most recently added). Empty array means no selections.
+   */
+  get selections(): readonly Selection[] {
+    return this._selections;
+  }
+
+  /** Set cursor to a specific point (e.g. from mouse click). Clears multi-cursor. */
   setCursor(point: MultiBufferPoint): void {
     this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
     const clipped = snap.clipPoint(point, Bias.Left);
     const prevCursor = this._cursor;
-    const prevSelection = this._selection;
+    const prevSelections = this._selections;
     this._cursor = clipped;
-    this._selection = selectionAtPoint(this.multiBuffer, clipped);
+    const newSel = selectionAtPoint(this.multiBuffer, clipped);
+    this._selections = newSel ? [newSel] : [];
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
     }
-    if (this._selection !== prevSelection) {
-      this._emit("selectionChange", this._selection);
+    if (!_selectionsEqual(this._selections, prevSelections)) {
+      this._emit("selectionChange", this._selections);
     }
-    this._emit("change", { cursor: this._cursor, selection: this._selection });
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
   /** Extend selection from current anchor to a new point (for mouse drag). */
   extendSelectionTo(point: MultiBufferPoint): void {
     this._goalColumn = undefined;
-    if (!this._selection) {
+    const primarySelection = this._selections[this._selections.length - 1];
+    if (!primarySelection) {
       this.setCursor(point);
       return;
     }
 
     const prevCursor = this._cursor;
-    const prevSelection = this._selection;
+    const prevSelections = this._selections;
     const snap = this.multiBuffer.snapshot();
     const clipped = snap.clipPoint(point, Bias.Left);
 
     // The anchor end is the non-head end of the current selection
     const anchorEnd =
-      this._selection.head === "end"
-        ? this._selection.range.start
-        : this._selection.range.end;
+      primarySelection.head === "end"
+        ? primarySelection.range.start
+        : primarySelection.range.end;
     const anchorPoint = snap.resolveAnchor(anchorEnd);
     if (!anchorPoint) return;
 
@@ -211,31 +227,34 @@ export class Editor {
     if (!newHeadAnchor) return;
 
     // Determine ordering
+    let newSelection: Selection;
     if (
       clipped.row < anchorPoint.row ||
       (clipped.row === anchorPoint.row && clipped.column <= anchorPoint.column)
     ) {
-      this._selection = createSelection(
+      newSelection = createSelection(
         createAnchorRange(newHeadAnchor, anchorEnd),
         "start",
       );
     } else {
-      this._selection = createSelection(
+      newSelection = createSelection(
         createAnchorRange(anchorEnd, newHeadAnchor),
         "end",
       );
     }
+    // Replace primary selection, keep others
+    this._selections = [...this._selections.slice(0, -1), newSelection];
     this._cursor = clipped;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
     }
-    if (this._selection !== prevSelection) {
-      this._emit("selectionChange", this._selection);
+    if (!_selectionsEqual(this._selections, prevSelections)) {
+      this._emit("selectionChange", this._selections);
     }
-    this._emit("change", { cursor: this._cursor, selection: this._selection });
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
-  /** Select the word at a point (for double-click). */
+  /** Select the word at a point (for double-click). Clears multi-cursor. */
   selectWordAt(point: MultiBufferPoint): void {
     this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
@@ -294,22 +313,23 @@ export class Editor {
     if (!startAnchor || !endAnchor) return;
 
     const prevCursor = this._cursor;
-    const prevSelection = this._selection;
-    this._selection = createSelection(
+    const prevSelections = this._selections;
+    const newSel = createSelection(
       createAnchorRange(startAnchor, endAnchor),
       "end",
     );
+    this._selections = [newSel];
     this._cursor = endPoint;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
     }
-    if (this._selection !== prevSelection) {
-      this._emit("selectionChange", this._selection);
+    if (!_selectionsEqual(this._selections, prevSelections)) {
+      this._emit("selectionChange", this._selections);
     }
-    this._emit("change", { cursor: this._cursor, selection: this._selection });
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
-  /** Select the entire line at a point (for triple-click). */
+  /** Select the entire line at a point (for triple-click). Clears multi-cursor. */
   selectLineAt(point: MultiBufferPoint): void {
     this._goalColumn = undefined;
     const snap = this.multiBuffer.snapshot();
@@ -325,19 +345,20 @@ export class Editor {
     if (!startAnchor || !endAnchor) return;
 
     const prevCursor = this._cursor;
-    const prevSelection = this._selection;
-    this._selection = createSelection(
+    const prevSelections = this._selections;
+    const newSel = createSelection(
       createAnchorRange(startAnchor, endAnchor),
       "end",
     );
+    this._selections = [newSel];
     this._cursor = endPoint;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
     }
-    if (this._selection !== prevSelection) {
-      this._emit("selectionChange", this._selection);
+    if (!_selectionsEqual(this._selections, prevSelections)) {
+      this._emit("selectionChange", this._selections);
     }
-    this._emit("change", { cursor: this._cursor, selection: this._selection });
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
   /** Subscribe to a granular editor event. */
@@ -369,50 +390,71 @@ export class Editor {
   }
 
   /**
-   * Return the text content of the current selection, or "" if the
-   * selection is collapsed or absent.  Callers use this to populate
-   * the platform clipboard before dispatching `copy`.
+   * Return the text content of all selections, joined by newlines.
+   * Returns "" if all selections are collapsed or no selections exist.
+   * Callers use this to populate the platform clipboard before dispatching `copy`.
    */
   getSelectedText(): string {
-    if (!this._selection) return "";
+    if (this._selections.length === 0) return "";
     const snap = this.multiBuffer.snapshot();
-    if (isCollapsed(snap, this._selection)) return "";
-    const resolved = resolveAnchorRange(snap, this._selection.range);
-    if (!resolved) return "";
+    const texts: string[] = [];
 
-    const { start, end } = resolved;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
-    const lines = snap.lines(start.row, (end.row + 1) as MultiBufferRow);
-    if (lines.length === 0) return "";
-    if (start.row === end.row) {
-      return (lines[0] ?? "").slice(start.column, end.column);
+    for (const sel of this._selections) {
+      if (isCollapsed(snap, sel)) continue;
+      const resolved = resolveAnchorRange(snap, sel.range);
+      if (!resolved) continue;
+
+      const { start, end } = resolved;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lines = snap.lines(start.row, (end.row + 1) as MultiBufferRow);
+      if (lines.length === 0) continue;
+      if (start.row === end.row) {
+        texts.push((lines[0] ?? "").slice(start.column, end.column));
+      } else {
+        const firstLine = (lines[0] ?? "").slice(start.column);
+        const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
+        const middleLines = lines.slice(1, -1);
+        texts.push([firstLine, ...middleLines, lastLine].join("\n"));
+      }
     }
-    const firstLine = (lines[0] ?? "").slice(start.column);
-    const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
-    const middleLines = lines.slice(1, -1);
-    return [firstLine, ...middleLines, lastLine].join("\n");
+
+    return texts.join("\n");
   }
 
   /**
-   * Return the text that `cut` will remove. If there's a selection,
-   * returns the selected text. Otherwise returns the full current line
-   * (including its trailing newline when present).
+   * Return the text that `cut` will remove. If there are non-collapsed selections,
+   * returns their selected text joined by newlines. Otherwise returns the full
+   * current line (including its trailing newline when present) for each cursor.
    */
   getCutText(): string {
     const snap = this.multiBuffer.snapshot();
-    if (this._selection && !isCollapsed(snap, this._selection)) {
+    const hasNonCollapsedSelection = this._selections.some(
+      (sel) => !isCollapsed(snap, sel),
+    );
+    if (hasNonCollapsedSelection) {
       return this.getSelectedText();
     }
-    // No selection — cut targets the entire line
-    const cursor = this.cursor;
-    const row = cursor.row;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
-    const lineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
-    // Include the trailing newline if this isn't the last line
-    if (row + 1 < snap.lineCount) {
-      return `${lineText}\n`;
+    // No non-collapsed selections — cut targets entire lines for each cursor
+    // Collect unique rows (multiple cursors on same row should cut once)
+    const rows = new Set<number>();
+    for (const sel of this._selections) {
+      const resolved = resolveAnchorRange(snap, sel.range);
+      if (resolved) {
+        rows.add(resolved.start.row);
+      }
     }
-    return lineText;
+    const sortedRows = [...rows].sort((a, b) => a - b);
+    const texts: string[] = [];
+    for (const row of sortedRows) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lineText = snap.lines(row as MultiBufferRow, (row + 1) as MultiBufferRow)[0] ?? "";
+      if (row + 1 < snap.lineCount) {
+        texts.push(`${lineText}\n`);
+      } else {
+        texts.push(lineText);
+      }
+    }
+    return texts.join("");
   }
 
   /** Execute a command. */
@@ -422,7 +464,7 @@ export class Editor {
 
     const snap = this.multiBuffer.snapshot();
     const prevCursor = this._cursor;
-    const prevSelection = this._selection;
+    const prevSelections = this._selections;
     const prevTextVersion = this._textVersion;
 
     switch (command.type) {
@@ -434,7 +476,7 @@ export class Editor {
         break;
       case "insertTab":
         // If there's a non-collapsed selection, indent the selected lines
-        if (this._selection && !isCollapsed(snap, this._selection)) {
+        if (this._selections.some((sel) => !isCollapsed(snap, sel))) {
           this._indentLines(snap);
         } else {
           this._insertText(snap, "  ");
@@ -489,6 +531,18 @@ export class Editor {
       case "paste":
         this._insertText(snap, command.text);
         break;
+      case "addCursor":
+        this._addCursor(snap, command.at);
+        break;
+      case "addCursorAbove":
+        this._addCursorsVertical(snap, "up");
+        break;
+      case "addCursorBelow":
+        this._addCursorsVertical(snap, "down");
+        break;
+      case "clearExtraCursors":
+        this._clearExtraCursors();
+        break;
       case "undo": {
         const entry = this._undoStack.pop();
         if (entry) {
@@ -512,91 +566,321 @@ export class Editor {
     const textChanged = this._textVersion !== prevTextVersion;
     const newSnap = textChanged ? this.multiBuffer.snapshot() : snap;
     const cursorChanged = !_pointsEqual(this._cursor, prevCursor);
-    const selectionChanged = this._selection !== prevSelection;
+    const selectionChanged = !_selectionsEqual(this._selections, prevSelections);
 
     if (textChanged) this._emit("textChange", newSnap);
     if (cursorChanged) this._emit("cursorChange", this._cursor, prevCursor);
-    if (selectionChanged) this._emit("selectionChange", this._selection);
+    if (selectionChanged) this._emit("selectionChange", this._selections);
     if (textChanged || cursorChanged || selectionChanged) {
-      this._emit("change", { cursor: this._cursor, selection: this._selection });
+      this._emit("change", { cursor: this._cursor, selections: this._selections });
     }
   }
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
     this._goalColumn = undefined;
 
-    // Auto-indent: when inserting a newline, match the current line's indentation
-    let insertText = text;
-    if (text === "\n") {
+    if (this._selections.length === 0) return;
+
+    // For single selection, use the original path that maintains all existing behavior
+    if (this._selections.length === 1) {
+      const primarySel = this._selections[0];
+      if (!primarySel) return;
+
+      // Auto-indent: when inserting a newline, match the current line's indentation
+      let insertText = text;
+      if (text === "\n") {
+        const cursor = this.cursor;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+        const lineText = snap.lines(cursor.row, (cursor.row + 1) as MultiBufferRow)[0] ?? "";
+        const match = lineText.match(/^( +)/);
+        if (match?.[1]) {
+          insertText = `\n${match[1]}`;
+        }
+      }
+
+      if (!isCollapsed(snap, primarySel)) {
+        // Replace selection with text
+        const range = resolveAnchorRange(snap, primarySel.range);
+        if (range) {
+          if (!this._edit(snap, range.start, range.end, insertText)) return;
+          const newSnap = this.multiBuffer.snapshot();
+          const newCursor = this._advancePoint(range.start, insertText, newSnap);
+          this._cursor = newCursor;
+          const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+          this._selections = newSel ? [newSel] : [];
+          return;
+        }
+      }
+
+      // Insert at cursor
       const cursor = this.cursor;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
-      const lineText = snap.lines(cursor.row, (cursor.row + 1) as MultiBufferRow)[0] ?? "";
-      const match = lineText.match(/^( +)/);
-      if (match?.[1]) {
-        insertText = `\n${match[1]}`;
+      if (!this._edit(snap, cursor, cursor, insertText)) return;
+      const newSnap = this.multiBuffer.snapshot();
+      const newCursor = this._advancePoint(cursor, insertText, newSnap);
+      this._cursor = newCursor;
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      this._selections = newSel ? [newSel] : [];
+      return;
+    }
+
+    // Multi-selection path: apply edits bottom-to-top
+    const resolved = this._resolveSelectionsBottomUp(snap);
+    if (resolved.length === 0) return;
+
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const { start, end } of resolved) {
+      // Check editability
+      const startBuf = currentSnap.toBufferPoint(start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      let insertText = text;
+      if (text === "\n") {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+        const lineText = currentSnap.lines(start.row, (start.row + 1) as MultiBufferRow)[0] ?? "";
+        const match = lineText.match(/^( +)/);
+        if (match?.[1]) {
+          insertText = `\n${match[1]}`;
+        }
+      }
+
+      const removedText = this._getTextInRange(currentSnap, start, end);
+      edits.push({ editStart: start, removedText, insertedText: insertText });
+
+      this.multiBuffer.edit(start, end, insertText);
+      currentSnap = this.multiBuffer.snapshot();
+
+      const newCursor = this._advancePoint(start, insertText, currentSnap);
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      if (newSel) {
+        newSelections.unshift(newSel);
       }
     }
 
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      // Replace selection with text
-      const range = resolveAnchorRange(snap, this._selection.range);
-      if (range) {
-        if (!this._edit(snap, range.start, range.end, insertText)) return;
-        const newSnap = this.multiBuffer.snapshot();
-        const newCursor = this._advancePoint(range.start, insertText, newSnap);
-        this._cursor = newCursor;
-        this._selection = selectionAtPoint(this.multiBuffer, newCursor);
-        return;
+    if (edits.length > 0) {
+      this._undoStack.push({
+        edits,
+        cursorBefore: this._cursor,
+        selectionsBefore: this._selections,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
       }
+      this._redoStack = [];
+      this._textVersion++;
     }
 
-    // Insert at cursor
-    const cursor = this.cursor;
-    if (!this._edit(snap, cursor, cursor, insertText)) return;
-    const newSnap = this.multiBuffer.snapshot();
-    const newCursor = this._advancePoint(cursor, insertText, newSnap);
-    this._cursor = newCursor;
-    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolvedHead = currentSnap.resolveAnchor(headAnchor);
+      if (resolvedHead) this._cursor = resolvedHead;
+    }
   }
 
   private _deleteBackward(snap: MultiBufferSnapshot, granularity: Granularity): void {
     this._goalColumn = undefined;
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      const range = resolveAnchorRange(snap, this._selection.range);
-      if (range) {
-        if (!this._edit(snap, range.start, range.end, "")) return;
-        this._cursor = range.start;
-        this._selection = selectionAtPoint(this.multiBuffer, range.start);
+    if (this._selections.length === 0) return;
+
+    // For single selection, use the original path
+    if (this._selections.length === 1) {
+      const primarySel = this._selections[0];
+      if (!primarySel) return;
+
+      if (!isCollapsed(snap, primarySel)) {
+        const range = resolveAnchorRange(snap, primarySel.range);
+        if (range) {
+          if (!this._edit(snap, range.start, range.end, "")) return;
+          this._cursor = range.start;
+          const newSel = selectionAtPoint(this.multiBuffer, range.start);
+          this._selections = newSel ? [newSel] : [];
+        }
+        return;
+      }
+
+      const cursor = this.cursor;
+      const target = moveCursor(snap, cursor, "left", granularity);
+      if (target.row !== cursor.row || target.column !== cursor.column) {
+        if (!this._edit(snap, target, cursor, "")) return;
+        this._cursor = target;
+        const newSel = selectionAtPoint(this.multiBuffer, target);
+        this._selections = newSel ? [newSel] : [];
       }
       return;
     }
 
-    const cursor = this.cursor;
-    const target = moveCursor(snap, cursor, "left", granularity);
-    if (target.row !== cursor.row || target.column !== cursor.column) {
-      if (!this._edit(snap, target, cursor, "")) return;
-      this._cursor = target;
-      this._selection = selectionAtPoint(this.multiBuffer, target);
+    // Multi-selection path
+    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> = [];
+    for (let i = 0; i < this._selections.length; i++) {
+      const sel = this._selections[i];
+      if (!sel) continue;
+      if (!isCollapsed(snap, sel)) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) {
+          deleteRanges.push({ start: range.start, end: range.end, index: i });
+        }
+      } else {
+        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const cursor = snap.resolveAnchor(headAnchor);
+        if (cursor) {
+          const target = moveCursor(snap, cursor, "left", granularity);
+          if (target.row !== cursor.row || target.column !== cursor.column) {
+            deleteRanges.push({ start: target, end: cursor, index: i });
+          }
+        }
+      }
+    }
+
+    if (deleteRanges.length === 0) return;
+
+    deleteRanges.sort((a, b) => {
+      if (b.start.row !== a.start.row) return b.start.row - a.start.row;
+      return b.start.column - a.start.column;
+    });
+
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const { start, end } of deleteRanges) {
+      const startBuf = currentSnap.toBufferPoint(start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, start, end);
+      edits.push({ editStart: start, removedText, insertedText: "" });
+
+      this.multiBuffer.edit(start, end, "");
+      currentSnap = this.multiBuffer.snapshot();
+
+      const newSel = selectionAtPoint(this.multiBuffer, start);
+      if (newSel) {
+        newSelections.unshift(newSel);
+      }
+    }
+
+    if (edits.length > 0) {
+      this._undoStack.push({
+        edits,
+        cursorBefore: this._cursor,
+        selectionsBefore: this._selections,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
+      }
+      this._redoStack = [];
+      this._textVersion++;
+    }
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
   private _deleteForward(snap: MultiBufferSnapshot, granularity: Granularity): void {
     this._goalColumn = undefined;
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      const range = resolveAnchorRange(snap, this._selection.range);
-      if (range) {
-        if (!this._edit(snap, range.start, range.end, "")) return;
-        this._cursor = range.start;
-        this._selection = selectionAtPoint(this.multiBuffer, range.start);
+    if (this._selections.length === 0) return;
+
+    // For single selection, use the original path
+    if (this._selections.length === 1) {
+      const primarySel = this._selections[0];
+      if (!primarySel) return;
+
+      if (!isCollapsed(snap, primarySel)) {
+        const range = resolveAnchorRange(snap, primarySel.range);
+        if (range) {
+          if (!this._edit(snap, range.start, range.end, "")) return;
+          this._cursor = range.start;
+          const newSel = selectionAtPoint(this.multiBuffer, range.start);
+          this._selections = newSel ? [newSel] : [];
+        }
+        return;
+      }
+
+      const cursor = this.cursor;
+      const target = moveCursor(snap, cursor, "right", granularity);
+      if (target.row !== cursor.row || target.column !== cursor.column) {
+        if (!this._edit(snap, cursor, target, "")) return;
+        const newSel = selectionAtPoint(this.multiBuffer, cursor);
+        this._selections = newSel ? [newSel] : [];
       }
       return;
     }
 
-    const cursor = this.cursor;
-    const target = moveCursor(snap, cursor, "right", granularity);
-    if (target.row !== cursor.row || target.column !== cursor.column) {
-      if (!this._edit(snap, cursor, target, "")) return;
-      this._selection = selectionAtPoint(this.multiBuffer, cursor);
+    // Multi-selection path
+    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> = [];
+    for (let i = 0; i < this._selections.length; i++) {
+      const sel = this._selections[i];
+      if (!sel) continue;
+      if (!isCollapsed(snap, sel)) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) {
+          deleteRanges.push({ start: range.start, end: range.end, index: i });
+        }
+      } else {
+        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const cursor = snap.resolveAnchor(headAnchor);
+        if (cursor) {
+          const target = moveCursor(snap, cursor, "right", granularity);
+          if (target.row !== cursor.row || target.column !== cursor.column) {
+            deleteRanges.push({ start: cursor, end: target, index: i });
+          }
+        }
+      }
+    }
+
+    if (deleteRanges.length === 0) return;
+
+    deleteRanges.sort((a, b) => {
+      if (b.start.row !== a.start.row) return b.start.row - a.start.row;
+      return b.start.column - a.start.column;
+    });
+
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const { start, end } of deleteRanges) {
+      const startBuf = currentSnap.toBufferPoint(start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, start, end);
+      edits.push({ editStart: start, removedText, insertedText: "" });
+
+      this.multiBuffer.edit(start, end, "");
+      currentSnap = this.multiBuffer.snapshot();
+
+      const newSel = selectionAtPoint(this.multiBuffer, start);
+      if (newSel) {
+        newSelections.unshift(newSel);
+      }
+    }
+
+    if (edits.length > 0) {
+      this._undoStack.push({
+        edits,
+        cursorBefore: this._cursor,
+        selectionsBefore: this._selections,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
+      }
+      this._redoStack = [];
+      this._textVersion++;
+    }
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
@@ -605,59 +889,73 @@ export class Editor {
     direction: Direction,
     granularity: Granularity,
   ): void {
-    // If there's a non-collapsed selection and we're moving without shift,
-    // collapse to the appropriate end first
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      if (direction === "left" || direction === "up") {
-        const start = snap.resolveAnchor(this._selection.range.start);
-        if (start) {
-          this._goalColumn = undefined;
-          this._cursor = start;
-          this._selection = selectionAtPoint(this.multiBuffer, start);
-          return;
+    if (this._selections.length === 0) return;
+
+    const newSelections: Selection[] = [];
+    const wrapMap = this._getWrapMap(snap);
+
+    for (const sel of this._selections) {
+      // If there's a non-collapsed selection and we're moving without shift,
+      // collapse to the appropriate end first
+      if (!isCollapsed(snap, sel)) {
+        if (direction === "left" || direction === "up") {
+          const start = snap.resolveAnchor(sel.range.start);
+          if (start) {
+            const newSel = selectionAtPoint(this.multiBuffer, start);
+            if (newSel) newSelections.push(newSel);
+          }
+        } else {
+          const end = snap.resolveAnchor(sel.range.end);
+          if (end) {
+            const newSel = selectionAtPoint(this.multiBuffer, end);
+            if (newSel) newSelections.push(newSel);
+          }
+        }
+        continue;
+      }
+
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const cursor = snap.resolveAnchor(headAnchor);
+      if (!cursor) continue;
+
+      let newCursor: MultiBufferPoint;
+
+      if (direction === "up" || direction === "down") {
+        if (wrapMap && granularity === "character") {
+          newCursor = moveCursorVisual(snap, cursor, direction, granularity, wrapMap);
+        } else {
+          // Use goal column or cursor column
+          const goalCol = this._goalColumn ?? cursor.column;
+          const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: goalCol };
+          newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
         }
       } else {
-        const end = snap.resolveAnchor(this._selection.range.end);
-        if (end) {
-          this._goalColumn = undefined;
-          this._cursor = end;
-          this._selection = selectionAtPoint(this.multiBuffer, end);
-          return;
-        }
+        newCursor = moveCursor(snap, cursor, direction, granularity);
       }
+
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      if (newSel) newSelections.push(newSel);
     }
 
-    const cursor = this.cursor;
-    let newCursor: MultiBufferPoint;
-
+    // Handle goal column
     if (direction === "up" || direction === "down") {
-      // Use visual-row navigation when wrapWidth is set
-      const wrapMap = this._getWrapMap(snap);
-      if (wrapMap && granularity === "character") {
-        // For visual navigation, pass the actual cursor position so
-        // moveCursorVisual can determine the correct current visual row.
-        // The visual column is preserved internally by moveCursorVisual.
-        // We don't use the traditional goal column mechanism here because
-        // the visual column preservation is based on the current segment,
-        // not an absolute character column.
-        newCursor = moveCursorVisual(snap, cursor, direction, granularity, wrapMap);
-      } else {
-        // Buffer-row navigation uses the goal column mechanism to maintain
-        // the intended column across lines of varying lengths.
-        if (this._goalColumn === undefined) {
-          this._goalColumn = cursor.column;
-        }
-        const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: this._goalColumn ?? cursor.column };
-        newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
+      if (this._goalColumn === undefined) {
+        this._goalColumn = this._cursor.column;
       }
     } else {
-      // Horizontal move — discard the goal column
       this._goalColumn = undefined;
-      newCursor = moveCursor(snap, cursor, direction, granularity);
     }
 
-    this._cursor = newCursor;
-    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    // Merge overlapping selections
+    this._selections = this._mergeSelections(newSelections, snap);
+
+    // Update primary cursor
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    }
   }
 
   private _extendSelection(
@@ -665,94 +963,69 @@ export class Editor {
     direction: Direction,
     granularity: Granularity,
   ): void {
-    if (!this._selection) return;
+    if (this._selections.length === 0) return;
 
-    if (direction === "up" || direction === "down") {
-      // Resolve the current head position for column tracking.
-      // Horizontal extends update the head anchor but not this._cursor, so
-      // we must derive the initial goal column from the resolved anchor.
-      const headAnchor =
-        this._selection.head === "end"
-          ? this._selection.range.end
-          : this._selection.range.start;
+    const wrapMap = this._getWrapMap(snap);
+    const newSelections: Selection[] = [];
+
+    // For vertical movement, set goal column from primary cursor if not set
+    if ((direction === "up" || direction === "down") && this._goalColumn === undefined) {
+      this._goalColumn = this._cursor.column;
+    }
+
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
       const headPoint = snap.resolveAnchor(headAnchor);
-      if (!headPoint) return;
+      if (!headPoint) continue;
 
-      // Use visual-row navigation when wrapWidth is set
-      const wrapMap = this._getWrapMap(snap);
       let newHeadPoint: MultiBufferPoint;
-      if (wrapMap && granularity === "character") {
-        // For visual navigation, use the actual cursor position to determine
-        // the current visual row. Visual column preservation is handled
-        // internally by moveCursorVisual.
-        newHeadPoint = moveCursorVisual(snap, this._cursor, direction, granularity, wrapMap);
-      } else {
-        // Buffer-row navigation uses the goal column mechanism.
-        // Save goal column on the first vertical extend
-        if (this._goalColumn === undefined) {
-          this._goalColumn = headPoint.column;
-        }
 
-        // Use this._cursor.row (not headPoint.row) to advance the effective head.
-        // Resolved anchors snap back to the last content row for trailing-newline
-        // rows (which have no corresponding buffer row), so headPoint.row gets
-        // stuck there on repeated Shift+Down presses.  this._cursor.row is updated
-        // to the nominal target row after every vertical move, so using it allows
-        // the next key-press to advance past the excerpt header.
-        const effectiveHead: MultiBufferPoint = { row: this._cursor.row, column: this._goalColumn };
-        newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
+      if (direction === "up" || direction === "down") {
+        if (wrapMap && granularity === "character") {
+          newHeadPoint = moveCursorVisual(snap, headPoint, direction, granularity, wrapMap);
+        } else {
+          const goalCol = this._goalColumn ?? headPoint.column;
+          const effectiveHead: MultiBufferPoint = { row: headPoint.row, column: goalCol };
+          newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
+        }
+      } else {
+        newHeadPoint = moveCursor(snap, headPoint, direction, granularity);
       }
+
       const newHeadAnchor = this.multiBuffer.createAnchor(newHeadPoint, Bias.Right);
-      if (!newHeadAnchor) return;
+      if (!newHeadAnchor) continue;
 
       // Keep the anchor end fixed and re-determine ordering
-      const anchorEnd =
-        this._selection.head === "end"
-          ? this._selection.range.start
-          : this._selection.range.end;
+      const anchorEnd = sel.head === "end" ? sel.range.start : sel.range.end;
       const anchorPoint = snap.resolveAnchor(anchorEnd);
-      if (!anchorPoint) return;
+      if (!anchorPoint) continue;
 
+      let newSel: Selection;
       if (
         newHeadPoint.row < anchorPoint.row ||
-        (newHeadPoint.row === anchorPoint.row &&
-          newHeadPoint.column <= anchorPoint.column)
+        (newHeadPoint.row === anchorPoint.row && newHeadPoint.column <= anchorPoint.column)
       ) {
-        this._selection = createSelection(
-          createAnchorRange(newHeadAnchor, anchorEnd),
-          "start",
-        );
+        newSel = createSelection(createAnchorRange(newHeadAnchor, anchorEnd), "start");
       } else {
-        this._selection = createSelection(
-          createAnchorRange(anchorEnd, newHeadAnchor),
-          "end",
-        );
+        newSel = createSelection(createAnchorRange(anchorEnd, newHeadAnchor), "end");
       }
-      this._cursor = newHeadPoint;
-    } else {
-      // Horizontal extend resets goal column
+      newSelections.push(newSel);
+    }
+
+    // Horizontal extend resets goal column
+    if (direction === "left" || direction === "right") {
       this._goalColumn = undefined;
-      const extended = extendSelection(
-        snap,
-        this.multiBuffer,
-        this._selection,
-        direction,
-        granularity,
-      );
-      if (extended) {
-        this._selection = extended;
-        // Keep _cursor in sync with the head so that a subsequent vertical
-        // extend uses the correct row.  Horizontal extends can wrap to the
-        // next row (Shift+Right past EOL), and without this update _cursor
-        // would still hold the pre-wrap row, causing the next Shift+Down to
-        // re-visit the same row instead of advancing further.
-        const newHead =
-          extended.head === "end" ? extended.range.end : extended.range.start;
-        const newHeadPoint = snap.resolveAnchor(newHead);
-        if (newHeadPoint) {
-          this._cursor = newHeadPoint;
-        }
-      }
+    }
+
+    // Merge overlapping selections
+    this._selections = this._mergeSelections(newSelections, snap);
+
+    // Update primary cursor
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
@@ -760,18 +1033,31 @@ export class Editor {
     this._goalColumn = undefined;
     const sel = selectAll(snap, this.multiBuffer);
     if (sel) {
-      this._selection = sel;
+      // Select all clears multi-cursor to a single selection
+      this._selections = [sel];
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
   private _collapseSelection(snap: MultiBufferSnapshot, to: "start" | "end"): void {
     this._goalColumn = undefined;
-    if (!this._selection) return;
-    const collapsed = collapseSelection(snap, this.multiBuffer, this._selection, to);
-    if (collapsed) {
-      this._selection = collapsed;
-      const anchor =
-        to === "start" ? collapsed.range.start : collapsed.range.end;
+    if (this._selections.length === 0) return;
+
+    const newSelections: Selection[] = [];
+    for (const sel of this._selections) {
+      const collapsed = collapseSelection(snap, this.multiBuffer, sel, to);
+      if (collapsed) {
+        newSelections.push(collapsed);
+      }
+    }
+
+    this._selections = this._mergeSelections(newSelections, snap);
+
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const anchor = to === "start" ? primarySel.range.start : primarySel.range.end;
       const point = snap.resolveAnchor(anchor);
       if (point) this._cursor = point;
     }
@@ -822,7 +1108,8 @@ export class Editor {
     if (!this._edit(snap, deleteStart, deleteEnd, "")) return;
     const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
     this._cursor = newCursor;
-    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+    this._selections = newSel ? [newSel] : [];
   }
 
 private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
@@ -854,7 +1141,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
       const newCursor: MultiBufferPoint = { row: belowRow, column: cursor.column };
       this._cursor = newCursor;
-      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      this._selections = newSel ? [newSel] : [];
     } else {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const aboveRow = (row - 1) as MultiBufferRow;
@@ -872,7 +1160,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
       const newCursor: MultiBufferPoint = { row: aboveRow, column: cursor.column };
       this._cursor = newCursor;
-      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      this._selections = newSel ? [newSel] : [];
     }
   }
 
@@ -892,13 +1181,15 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: cursor.column };
       this._cursor = newCursor;
-      this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      this._selections = newSel ? [newSel] : [];
     } else {
       const insertPoint: MultiBufferPoint = { row, column: 0 };
       if (!this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`)) return;
 
       this._cursor = { row, column: cursor.column };
-      this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
     }
   }
 
@@ -921,7 +1212,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: indent.length };
     this._cursor = newCursor;
-    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+    this._selections = newSel ? [newSel] : [];
   }
 
   private _insertLineAbove(snap: MultiBufferSnapshot): void {
@@ -941,7 +1233,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // Cursor moves to the new blank line after any indentation
     const newCursor: MultiBufferPoint = { row, column: indent.length };
     this._cursor = newCursor;
-    this._selection = selectionAtPoint(this.multiBuffer, newCursor);
+    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+    this._selections = newSel ? [newSel] : [];
   }
 
   /**
@@ -969,7 +1262,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const newCursor: MultiBufferPoint = { row: cursor.row, column: cursor.column + 2 };
     const newSnap = this.multiBuffer.snapshot();
     this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+    this._selections = newSel ? [newSel] : [];
   }
 
   /**
@@ -1023,7 +1317,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const newCursor: MultiBufferPoint = { row: cursor.row, column: newCol };
     const newSnap = this.multiBuffer.snapshot();
     this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    this._selection = selectionAtPoint(this.multiBuffer, this._cursor);
+    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+    this._selections = newSel ? [newSel] : [];
   }
 
   /**
@@ -1034,27 +1329,37 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     startRow: MultiBufferRow;
     endRow: MultiBufferRow;
   } {
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      const range = resolveAnchorRange(snap, this._selection.range);
-      if (range) {
-        return { startRow: range.start.row, endRow: range.end.row };
+    // Collect all rows touched by any selection
+    let minRow = this.cursor.row;
+    let maxRow = this.cursor.row;
+    for (const sel of this._selections) {
+      if (!isCollapsed(snap, sel)) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) {
+          minRow = Math.min(minRow, range.start.row) as MultiBufferRow;
+          maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
+        }
+      } else {
+        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const resolved = snap.resolveAnchor(headAnchor);
+        if (resolved) {
+          minRow = Math.min(minRow, resolved.row) as MultiBufferRow;
+          maxRow = Math.max(maxRow, resolved.row) as MultiBufferRow;
+        }
       }
     }
-    const cursor = this.cursor;
-    return { startRow: cursor.row, endRow: cursor.row };
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+    return { startRow: minRow as MultiBufferRow, endRow: maxRow as MultiBufferRow };
   }
 
   private _cut(snap: MultiBufferSnapshot): void {
-    if (this._selection && !isCollapsed(snap, this._selection)) {
-      const range = resolveAnchorRange(snap, this._selection.range);
-      if (range) {
-        if (!this._edit(snap, range.start, range.end, "")) return;
-        this._cursor = range.start;
-        this._selection = selectionAtPoint(this.multiBuffer, range.start);
-      }
+    const hasNonCollapsed = this._selections.some((sel) => !isCollapsed(snap, sel));
+    if (hasNonCollapsed) {
+      // Cut all non-collapsed selections, similar to delete
+      this._deleteBackward(snap, "character");
       return;
     }
-    // No selection — cut the entire line (same behavior as Cmd+X in VS Code)
+    // No non-collapsed selections — cut the entire line (same behavior as Cmd+X in VS Code)
     this._deleteLine(snap);
   }
 
@@ -1110,7 +1415,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.push({
         edits: [{ editStart: start, removedText, insertedText: newText }],
         cursorBefore: this._cursor,
-        selectionBefore: this._selection,
+        selectionsBefore: this._selections,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1134,7 +1439,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.push({
         edits: [{ editStart: start, removedText, insertedText: newText }],
         cursorBefore: this._cursor,
-        selectionBefore: this._selection,
+        selectionsBefore: this._selections,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1164,7 +1469,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._undoStack.push({
       edits: editOps,
       cursorBefore: this._cursor,
-      selectionBefore: this._selection,
+      selectionsBefore: this._selections,
     });
     if (this._undoStack.length > Editor._MAX_HISTORY) {
       this._undoStack.shift();
@@ -1265,10 +1570,10 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const inverse: HistoryEntry = {
       edits: inverseOps,
       cursorBefore: this._cursor,
-      selectionBefore: this._selection,
+      selectionsBefore: this._selections,
     };
     this._cursor = entry.cursorBefore;
-    this._selection = entry.selectionBefore;
+    this._selections = [...entry.selectionsBefore];
     return inverse;
   }
 
@@ -1293,11 +1598,202 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLine = lines[lines.length - 1] ?? "";
     return { row: newRow, column: lastLine.length };
   }
+
+  /**
+   * Add a new cursor at a specific point. If the point overlaps with an
+   * existing selection, this is a no-op.
+   */
+  private _addCursor(snap: MultiBufferSnapshot, point: MultiBufferPoint): void {
+    const clipped = snap.clipPoint(point, Bias.Left);
+    const newSel = selectionAtPoint(this.multiBuffer, clipped);
+    if (!newSel) return;
+
+    // Check if this point overlaps any existing selection
+    for (const sel of this._selections) {
+      const range = resolveAnchorRange(snap, sel.range);
+      if (!range) continue;
+      if (
+        (clipped.row > range.start.row ||
+          (clipped.row === range.start.row && clipped.column >= range.start.column)) &&
+        (clipped.row < range.end.row ||
+          (clipped.row === range.end.row && clipped.column <= range.end.column))
+      ) {
+        // Point is within an existing selection, don't add
+        return;
+      }
+    }
+
+    this._selections = [...this._selections, newSel];
+    this._cursor = clipped;
+  }
+
+  /**
+   * Add cursors one line above or below each existing cursor.
+   */
+  private _addCursorsVertical(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+    const newSelections: Selection[] = [...this._selections];
+
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headPoint = snap.resolveAnchor(headAnchor);
+      if (!headPoint) continue;
+
+      // Move cursor in direction
+      const newPoint = moveCursor(snap, headPoint, direction, "character");
+      if (newPoint.row === headPoint.row) continue; // Couldn't move
+
+      const newSel = selectionAtPoint(this.multiBuffer, newPoint);
+      if (newSel) {
+        newSelections.push(newSel);
+      }
+    }
+
+    this._selections = this._mergeSelections(newSelections, snap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    }
+  }
+
+  /**
+   * Remove all cursors except the primary (last) one.
+   */
+  private _clearExtraCursors(): void {
+    if (this._selections.length <= 1) return;
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      this._selections = [primarySel];
+    }
+  }
+
+  /**
+   * Resolve all selections to concrete points, sorted bottom-to-top for editing.
+   * Returns array of { start, end, index } where index is original selection index.
+   */
+  private _resolveSelectionsBottomUp(
+    snap: MultiBufferSnapshot,
+  ): Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> {
+    const resolved: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> = [];
+
+    for (let i = 0; i < this._selections.length; i++) {
+      const sel = this._selections[i];
+      if (!sel) continue;
+
+      if (!isCollapsed(snap, sel)) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) {
+          resolved.push({ start: range.start, end: range.end, index: i });
+        }
+      } else {
+        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const point = snap.resolveAnchor(headAnchor);
+        if (point) {
+          resolved.push({ start: point, end: point, index: i });
+        }
+      }
+    }
+
+    // Sort bottom-to-top (higher row first, then higher column)
+    resolved.sort((a, b) => {
+      if (b.start.row !== a.start.row) return b.start.row - a.start.row;
+      return b.start.column - a.start.column;
+    });
+
+    return resolved;
+  }
+
+  /**
+   * Merge overlapping or adjacent selections.
+   * Maintains the "primary" selection as the last element.
+   */
+  private _mergeSelections(selections: Selection[], snap: MultiBufferSnapshot): Selection[] {
+    if (selections.length <= 1) return selections;
+
+    // Resolve all selections to points
+    const resolved: Array<{
+      sel: Selection;
+      start: MultiBufferPoint;
+      end: MultiBufferPoint;
+    }> = [];
+
+    for (const sel of selections) {
+      const range = resolveAnchorRange(snap, sel.range);
+      if (range) {
+        resolved.push({ sel, start: range.start, end: range.end });
+      }
+    }
+
+    // Sort by start position
+    resolved.sort((a, b) => {
+      if (a.start.row !== b.start.row) return a.start.row - b.start.row;
+      return a.start.column - b.start.column;
+    });
+
+    // Merge overlapping
+    const merged: Selection[] = [];
+    for (const r of resolved) {
+      if (merged.length === 0) {
+        merged.push(r.sel);
+        continue;
+      }
+
+      const lastSel = merged[merged.length - 1];
+      if (!lastSel) {
+        merged.push(r.sel);
+        continue;
+      }
+
+      const lastRange = resolveAnchorRange(snap, lastSel.range);
+      if (!lastRange) {
+        merged.push(r.sel);
+        continue;
+      }
+
+      // Check overlap: new start <= last end
+      if (
+        r.start.row < lastRange.end.row ||
+        (r.start.row === lastRange.end.row && r.start.column <= lastRange.end.column)
+      ) {
+        // Merge: use the selection that extends further
+        if (
+          r.end.row > lastRange.end.row ||
+          (r.end.row === lastRange.end.row && r.end.column > lastRange.end.column)
+        ) {
+          // New selection extends further - create merged selection
+          const mergedStart = this.multiBuffer.createAnchor(lastRange.start, Bias.Left);
+          const mergedEnd = this.multiBuffer.createAnchor(r.end, Bias.Right);
+          if (mergedStart && mergedEnd) {
+            merged[merged.length - 1] = createSelection(
+              createAnchorRange(mergedStart, mergedEnd),
+              "end",
+            );
+          }
+        }
+        // Otherwise keep the existing one
+      } else {
+        // No overlap, add as new
+        merged.push(r.sel);
+      }
+    }
+
+    return merged;
+  }
 }
 
 /** Returns true if two MultiBufferPoints are at the same row and column. */
 function _pointsEqual(a: MultiBufferPoint, b: MultiBufferPoint): boolean {
   return a.row === b.row && a.column === b.column;
+}
+
+/** Returns true if two selection arrays are equal by reference (shallow comparison). */
+function _selectionsEqual(a: readonly Selection[], b: readonly Selection[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 /**
