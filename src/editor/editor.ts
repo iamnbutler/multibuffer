@@ -17,6 +17,7 @@ import type {
   Selection,
 } from "../multibuffer/types.ts";
 import { Bias } from "../multibuffer/types.ts";
+import { type BracketMatch, findMatchingBracket } from "./bracket-match.ts";
 import { isWordChar, moveCursor } from "./cursor.ts";
 import {
   collapseSelection,
@@ -64,10 +65,12 @@ export class Editor {
    */
   private _goalColumn: number | undefined = undefined;
   private _readOnly: boolean;
+  private _bracketMatching: boolean;
 
   constructor(multiBuffer: MultiBuffer, options?: EditorOptions) {
     this.multiBuffer = multiBuffer;
     this._readOnly = options?.readOnly ?? false;
+    this._bracketMatching = options?.bracketMatching ?? false;
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     this._cursor = { row: 0 as MultiBufferRow, column: 0 };
     this._selection = selectionAtPoint(multiBuffer, this._cursor);
@@ -81,6 +84,17 @@ export class Editor {
   /** Toggle read-only mode at runtime. */
   setReadOnly(value: boolean): void {
     this._readOnly = value;
+  }
+
+  /**
+   * Returns the matching bracket pair for the character at the current cursor
+   * position, or `null` if no bracket is at the cursor, no match is found, or
+   * bracket matching is disabled (`bracketMatching: false` in EditorOptions).
+   */
+  get bracketMatch(): BracketMatch | null {
+    if (!this._bracketMatching) return null;
+    const snap = this.multiBuffer.snapshot();
+    return findMatchingBracket(snap, this._cursor);
   }
 
   get cursor(): MultiBufferPoint {
