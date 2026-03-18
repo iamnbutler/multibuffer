@@ -106,6 +106,12 @@ describe("keyEventToCommand — ArrowRight", () => {
       type: "extendSelection", direction: "right", granularity: "line",
     });
   });
+
+  test("Alt+Shift → extendSelection word right", () => {
+    expect(keyEventToCommand(keyEvent("ArrowRight", { altKey: true, shiftKey: true }))).toEqual({
+      type: "extendSelection", direction: "right", granularity: "word",
+    });
+  });
 });
 
 
@@ -176,6 +182,12 @@ describe("keyEventToCommand — ArrowDown", () => {
   test("Alt+Shift → duplicateLine down", () => {
     expect(keyEventToCommand(keyEvent("ArrowDown", { altKey: true, shiftKey: true }))).toEqual({
       type: "duplicateLine", direction: "down",
+    });
+  });
+
+  test("Ctrl+Shift → extendSelection buffer down", () => {
+    expect(keyEventToCommand(keyEvent("ArrowDown", { ctrlKey: true, shiftKey: true }))).toEqual({
+      type: "extendSelection", direction: "down", granularity: "buffer",
     });
   });
 });
