@@ -3,6 +3,7 @@ export { createDiffController } from "./controller.ts";
 export type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
 export { computeIntralineDiff, diff, diffLines, pairDeleteInsertLines } from "./diff.ts";
 export { formatHunkHeader, hunkToHeader } from "./helpers.ts";
+export { createMultiFileDiff, resetMultiFileDiffCounter } from "./multi-file.ts";
 export type {
   UnifiedDiffMultiBufferOptions,
   UnifiedDiffMultiBufferResult,
@@ -20,9 +21,15 @@ export type {
   DiffKind,
   DiffLine,
   DiffResult,
+  FileDiffEntry,
+  FileDiffState,
+  FileDiffStats,
   HunkHeader,
   IntralineDiff,
   IntralineRange,
+  MultiFileDiff,
+  MultiFileDiffOptions,
+  MultiFileDiffStats,
   ParsedPatch,
   PatchFile,
   PatchFileStatus,
