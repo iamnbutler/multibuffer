@@ -254,6 +254,79 @@ describe("dispose", () => {
   });
 });
 
+describe("DiffController readOnly mode", () => {
+  test("readOnly: true makes all excerpts non-editable", () => {
+    const oldBuffer = createBuffer(createBufferId(), "a\nb\nc\n");
+    const newBuffer = createBuffer(createBufferId(), "a\nX\nc\n");
+
+    const controller = createDiffController(oldBuffer, newBuffer, {
+      readOnly: true,
+    });
+
+    const excerpts = controller.multiBuffer.snapshot().excerpts;
+    // All excerpts should be non-editable
+    expect(excerpts.every((e) => e.editable === false)).toBe(true);
+  });
+
+  test("readOnly: true overrides editableEqual option", () => {
+    const oldBuffer = createBuffer(createBufferId(), "same\ntext\n");
+    const newBuffer = createBuffer(createBufferId(), "same\ntext\n");
+
+    const controller = createDiffController(oldBuffer, newBuffer, {
+      readOnly: true,
+      editableEqual: true, // This should be ignored in readOnly mode
+    });
+
+    const excerpts = controller.multiBuffer.snapshot().excerpts;
+    expect(excerpts.every((e) => e.editable === false)).toBe(true);
+  });
+
+  test("readOnly: false allows editable insert and equal lines", () => {
+    const oldBuffer = createBuffer(createBufferId(), "a\nc\n");
+    const newBuffer = createBuffer(createBufferId(), "a\nb\nc\n");
+
+    const controller = createDiffController(oldBuffer, newBuffer, {
+      readOnly: false,
+    });
+
+    const excerpts = controller.multiBuffer.snapshot().excerpts;
+    // Insert and equal lines should be editable
+    const editableExcerpts = excerpts.filter((e) => e.editable);
+    expect(editableExcerpts.length).toBeGreaterThan(0);
+  });
+
+  test("default readOnly is false", () => {
+    const oldBuffer = createBuffer(createBufferId(), "a\nc\n");
+    const newBuffer = createBuffer(createBufferId(), "a\nb\nc\n");
+
+    const controller = createDiffController(oldBuffer, newBuffer);
+
+    const excerpts = controller.multiBuffer.snapshot().excerpts;
+    // By default, insert lines should be editable
+    const editableExcerpts = excerpts.filter((e) => e.editable);
+    expect(editableExcerpts.length).toBeGreaterThan(0);
+  });
+
+  test("readOnly mode persists after reDiff", () => {
+    const oldBuffer = createBuffer(createBufferId(), "a\n");
+    const newBuffer = createBuffer(createBufferId(), "a\n");
+
+    const controller = createDiffController(oldBuffer, newBuffer, {
+      readOnly: true,
+    });
+
+    // Edit new buffer to create a difference
+    editBuffer(newBuffer, 0, 0, 0, 1, "X");
+
+    // Re-diff
+    controller.reDiff();
+
+    // All excerpts should still be non-editable after re-diff
+    const excerpts = controller.multiBuffer.snapshot().excerpts;
+    expect(excerpts.every((e) => e.editable === false)).toBe(true);
+  });
+});
+
 describe("Editor backspace in diff view", () => {
   test("backspace at start of insert line merges with previous equal line", async () => {
     // Scenario: old has "A\nC\n", new has "A\nB\nC\n" (B inserted between A and C)
