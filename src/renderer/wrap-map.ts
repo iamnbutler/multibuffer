@@ -195,6 +195,14 @@ export function wrapLineCount(text: string, wrapWidth: number): number {
 export class WrapMap {
   /** prefix[i] = total visual rows for buffer rows 0..i-1. prefix[0] = 0. */
   private _prefix: Uint32Array;
+  /**
+   * Flat array of segment char-start offsets, indexed by visual-row index.
+   * For buffer row r and segment s: `charStart = _segCharStart[_prefix[r] + s]`.
+   *
+   * Enables O(1) lookup of a segment's character offset within its line,
+   * eliminating `wrapLine()` recomputation in the hit-test and cursor hot paths.
+   */
+  private _segCharStart: Uint32Array;
   private _wrapWidth: number;
   readonly totalVisualRows: number;
 
@@ -202,7 +210,7 @@ export class WrapMap {
     this._wrapWidth = wrapWidth;
     const lineCount = snapshot.lineCount;
 
-    // Build prefix sum
+    // Build prefix sum and segment char-start offsets in a single pass.
     this._prefix = new Uint32Array(lineCount + 1);
     this._prefix[0] = 0;
 
@@ -212,13 +220,23 @@ export class WrapMap {
     const endRow = lineCount as MultiBufferRow;
     const lines = snapshot.lines(startRow, endRow);
 
+    // Collect segment char-start offsets into a temporary array, then
+    // compact into a Uint32Array once totalVisualRows is known.
+    const segCharStartArr: number[] = [];
+
     for (let i = 0; i < lineCount; i++) {
       const line = lines[i] ?? "";
-      const visualRows = wrapLineCount(line, wrapWidth);
-      this._prefix[i + 1] = (this._prefix[i] ?? 0) + visualRows;
+      const segments = wrapLine(line, wrapWidth);
+      this._prefix[i + 1] = (this._prefix[i] ?? 0) + segments.length;
+      let charPos = 0;
+      for (const seg of segments) {
+        segCharStartArr.push(charPos);
+        charPos += seg.length;
+      }
     }
 
     this.totalVisualRows = this._prefix[lineCount] ?? 0;
+    this._segCharStart = new Uint32Array(segCharStartArr);
   }
 
   /** How many visual rows does a buffer row occupy? */
@@ -250,6 +268,18 @@ export class WrapMap {
     const segment = visualRow - (this._prefix[lo] ?? 0);
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     return { mbRow: lo as MultiBufferRow, segment };
+  }
+
+  /**
+   * Character offset (UTF-16 code-unit index) of the first character of
+   * segment `s` within buffer row `mbRow`'s line text. O(1).
+   *
+   * Used by hit-test and cursor rendering to avoid recomputing wrap segments
+   * on every mouse-move event.
+   */
+  segmentCharStart(mbRow: MultiBufferRow, segment: number): number {
+    const baseIdx = this._prefix[mbRow] ?? 0;
+    return this._segCharStart[baseIdx + segment] ?? 0;
   }
 
   /** Total content height in pixels. */
