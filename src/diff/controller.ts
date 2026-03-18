@@ -7,7 +7,8 @@
  * - Subscriber notifications when diff changes
  */
 
-import type { Buffer, BufferRange, BufferRow } from "../buffer/types.ts";
+import { createBuffer } from "../buffer/buffer.ts";
+import type { Buffer, BufferId, BufferRange, BufferRow } from "../buffer/types.ts";
 import type {
   ExcerptRange,
   MultiBuffer,
@@ -17,8 +18,9 @@ import type {
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
 import type { DiffOptions } from "./diff.ts";
 import { diff } from "./diff.ts";
+import { formatHunkHeader, hunkToHeader } from "./helpers.ts";
 import type { UnifiedDiffMultiBufferOptions } from "./multibuffer.ts";
-import { createUnifiedDiffMultiBuffer } from "./multibuffer.ts";
+import { createUnifiedDiffMultiBuffer, HUNK_HEADER_STYLE } from "./multibuffer.ts";
 
 export interface DiffControllerOptions
   extends DiffOptions,
@@ -44,6 +46,13 @@ export interface DiffController {
   dispose(): void;
 }
 
+/** Unique buffer ID counter for separator buffers in controllers. */
+let controllerSeparatorBufferCounter = 0;
+function createControllerSeparatorBufferId(): BufferId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for BufferId
+  return `__controller_hunk_separator_${++controllerSeparatorBufferCounter}__` as BufferId;
+}
+
 export function createDiffController(
   oldBuffer: Buffer,
   newBuffer: Buffer,
@@ -51,12 +60,15 @@ export function createDiffController(
 ): DiffController {
   const debounceMs = options?.debounceMs ?? 150;
   const editableEqual = options?.editableEqual ?? true;
+  const showHunkSeparators = options?.showHunkSeparators ?? true;
 
   // Initial diff
   const result = createUnifiedDiffMultiBuffer(oldBuffer, newBuffer, options);
   const _multiBuffer = result.multiBuffer;
   let _decorations = result.decorations;
   let _isEqual = result.isEqual;
+  // Keep a reference to separator buffer to prevent GC
+  let _separatorBuffer: Buffer | undefined = result.separatorBuffer;
 
   let _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const _subscribers: Set<(decorations: readonly Decoration[]) => void> =
@@ -86,6 +98,7 @@ export function createDiffController(
       _multiBuffer.setExcerpts(entries);
       _decorations = [];
       _isEqual = true;
+      _separatorBuffer = undefined;
     } else {
       // Build the full excerpt list and decoration list up front, then set
       // all excerpts in one call (single _rebuildCache instead of N+1).
@@ -94,7 +107,41 @@ export function createDiffController(
       const newDecorations: Decoration[] = [];
       let mbRow = 0;
 
-      for (const hunk of diffResult.hunks) {
+      // Create separator buffer if needed (multiple hunks and separators enabled)
+      const hunkCount = diffResult.hunks.length;
+      let separatorBuffer: Buffer | undefined;
+      if (showHunkSeparators && hunkCount > 1) {
+        const separatorLines: string[] = [];
+        for (let h = 1; h < hunkCount; h++) {
+          const hunk = diffResult.hunks[h];
+          if (hunk) {
+            separatorLines.push(formatHunkHeader(hunkToHeader(hunk)));
+          }
+        }
+        separatorBuffer = createBuffer(
+          createControllerSeparatorBufferId(),
+          separatorLines.join("\n"),
+        );
+      }
+
+      let separatorLineIndex = 0;
+
+      for (let hunkIndex = 0; hunkIndex < diffResult.hunks.length; hunkIndex++) {
+        const hunk = diffResult.hunks[hunkIndex];
+        if (!hunk) continue;
+
+        // Insert hunk separator before all hunks except the first
+        if (showHunkSeparators && hunkIndex > 0 && separatorBuffer) {
+          entries.push({
+            buffer: separatorBuffer,
+            range: makeExcerptRange(separatorLineIndex, separatorLineIndex + 1),
+            options: { editable: false },
+          });
+          newDecorations.push(makeDecoration(mbRow, 1, HUNK_HEADER_STYLE));
+          mbRow += 1;
+          separatorLineIndex += 1;
+        }
+
         let i = 0;
         while (i < hunk.lines.length) {
           const firstLine = hunk.lines[i];
@@ -148,6 +195,7 @@ export function createDiffController(
       _multiBuffer.setExcerpts(entries);
       _decorations = newDecorations;
       _isEqual = false;
+      _separatorBuffer = separatorBuffer;
     }
 
     // Notify subscribers
