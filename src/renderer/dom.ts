@@ -785,8 +785,21 @@ export class DomRenderer implements Renderer {
     rowEl.content.style.fontSize = "";
 
     const isDiffMode = this._measurements.gutterMode === "diff";
+    const isHunkSeparator = decoration?.isHunkSeparator === true;
 
-    if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
+    if (isHunkSeparator) {
+      // Hunk separator: full-width gutter area with centered text, no line numbers
+      // Hide all gutter columns and use a single span for the separator styling
+      rowEl.gutter.style.display = "none";
+      if (rowEl.oldGutter) rowEl.oldGutter.style.display = "none";
+      if (rowEl.newGutter) rowEl.newGutter.style.display = "none";
+      if (rowEl.sign) rowEl.sign.style.display = "none";
+
+      // The content area shows the hunk header text with muted styling
+      rowEl.content.style.paddingLeft = "8px";
+      rowEl.content.style.borderTop = "1px solid var(--editor-separator-border, #444444)";
+      rowEl.content.style.borderBottom = "1px solid var(--editor-separator-border, #444444)";
+    } else if (isDiffMode && rowEl.oldGutter && rowEl.newGutter && rowEl.sign) {
       // Diff mode: show old/new gutters and sign, hide standard gutter
       rowEl.gutter.style.display = "none";
       rowEl.oldGutter.style.display = "inline-block";
@@ -803,6 +816,11 @@ export class DomRenderer implements Renderer {
       rowEl.sign.textContent = decoration?.gutterSign ?? " ";
       rowEl.sign.style.color = decoration?.gutterSignColor ?? "";
       rowEl.sign.style.background = decoration?.gutterBackground ?? bg;
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     } else {
       // Standard mode: show standard gutter, hide diff gutters
       rowEl.gutter.style.display = "inline-block";
@@ -826,6 +844,11 @@ export class DomRenderer implements Renderer {
       } else {
         rowEl.gutter.textContent = gutterText;
       }
+
+      // Reset content padding/border for regular lines
+      rowEl.content.style.paddingLeft = "";
+      rowEl.content.style.borderTop = "";
+      rowEl.content.style.borderBottom = "";
     }
 
     if (tokens && tokens.length > 0) {
