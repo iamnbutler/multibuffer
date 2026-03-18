@@ -1330,3 +1330,94 @@ describe("setExcerpts (batch)", () => {
     expect(mb.excerpts[0]?.hasTrailingNewline).toBe(true);
   });
 });
+
+describe("moveExcerpt", () => {
+  test("moves excerpt before another", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10)); // rows 0–9
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20)); // rows 10–19
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30)); // rows 20–29
+
+    // Move C before B → order becomes A, C, B
+    mb.moveExcerpt(idC, idB);
+
+    expect(mb.excerpts.length).toBe(3);
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idC);
+    expect(mb.excerpts[2]?.id).toEqual(idB);
+  });
+
+  test("startRows are recalculated after move", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    mb.addExcerpt(buf, excerptRange(0, 10));  // 10 lines
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20)); // 10 lines
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30)); // 10 lines
+
+    // Move C before B → C gets rows 10–19, B gets rows 20–29
+    mb.moveExcerpt(idC, idB);
+
+    expect(num(mb.excerpts[1]?.startRow ?? mbRow(-1))).toBe(10);
+    expect(num(mb.excerpts[1]?.endRow ?? mbRow(-1))).toBe(20);
+    expect(num(mb.excerpts[2]?.startRow ?? mbRow(-1))).toBe(20);
+    expect(num(mb.excerpts[2]?.endRow ?? mbRow(-1))).toBe(30);
+  });
+
+  test("moves excerpt to end when insertBefore is undefined", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30));
+
+    // Move A to end → order becomes B, C, A
+    mb.moveExcerpt(idA, undefined);
+
+    expect(mb.excerpts[0]?.id).toEqual(idB);
+    expect(mb.excerpts[1]?.id).toEqual(idC);
+    expect(mb.excerpts[2]?.id).toEqual(idA);
+  });
+
+  test("no-op when id is stale/not found", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+
+    mb.removeExcerpt(idA);
+    const orderBefore = mb.excerpts.map((e) => e.id);
+    const vBefore = mb.snapshot().version;
+
+    // idA is now stale — moveExcerpt should be a no-op
+    mb.moveExcerpt(idA, idB);
+
+    expect(mb.excerpts.map((e) => e.id)).toEqual(orderBefore);
+    expect(mb.snapshot().version).toBe(vBefore);
+  });
+
+  test("version changes after moveExcerpt", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const v0 = mb.snapshot().version;
+
+    mb.moveExcerpt(idB, undefined);
+
+    expect(mb.snapshot().version).toBeGreaterThan(v0);
+  });
+
+  test("lineCount is unchanged after move", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    mb.addExcerpt(buf, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30));
+    const totalBefore = mb.lineCount;
+
+    mb.moveExcerpt(idA, idC);
+
+    expect(mb.lineCount).toBe(totalBefore);
+  });
+});
