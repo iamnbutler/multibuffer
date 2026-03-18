@@ -265,3 +265,115 @@ describe("createUnifiedDiffMultiBuffer - read-only mode", () => {
     expect(deleteExcerpt?.editable).toBe(false);
   });
 });
+
+describe("createUnifiedDiffMultiBuffer - hunk separators", () => {
+  // Create a file with two non-adjacent changes (separated by more than 2*context lines)
+  // With default context=3, changes need >6 lines between them to be in separate hunks
+  function makeSeparateHunks() {
+    // 20-line file with changes at line 2 and line 15 (0-indexed)
+    const oldLines = Array.from({ length: 20 }, (_, i) => `line${i}`);
+    const newLines = [...oldLines];
+    newLines[2] = "CHANGED_FIRST";
+    newLines[15] = "CHANGED_SECOND";
+    return makeBuffers(oldLines.join("\n"), newLines.join("\n"));
+  }
+
+  test("no separator when single hunk", () => {
+    // Single change: should not have any separator
+    const { oldBuf, newBuf } = makeBuffers("a\nb\nc", "a\nX\nc");
+    const { decorations, separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+    const separatorDecs = decorations.filter((d) => d.style?.isHunkSeparator === true);
+    expect(separatorDecs.length).toBe(0);
+    expect(separatorBuffer).toBeUndefined();
+  });
+
+  test("separator inserted between non-adjacent hunks", () => {
+    const { oldBuf, newBuf } = makeSeparateHunks();
+    const { decorations, separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    // Should have a separator buffer
+    expect(separatorBuffer).toBeDefined();
+
+    // Should have exactly one hunk separator decoration
+    const separatorDecs = decorations.filter((d) => d.style?.isHunkSeparator === true);
+    expect(separatorDecs.length).toBe(1);
+
+    // The separator should span exactly 1 row
+    const sepDec = separatorDecs[0];
+    if (!sepDec) throw new Error("expected separator decoration");
+    expect(num(sepDec.range.end.row) - num(sepDec.range.start.row) + 1).toBe(1);
+  });
+
+  test("separator excerpt is non-editable", () => {
+    const { oldBuf, newBuf } = makeSeparateHunks();
+    const { multiBuffer, separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    if (!separatorBuffer) throw new Error("expected separator buffer");
+
+    // Find excerpts from the separator buffer
+    const excerpts = multiBuffer.snapshot().excerpts;
+    const separatorExcerpts = excerpts.filter((e) => e.bufferId === separatorBuffer.id);
+    expect(separatorExcerpts.length).toBe(1);
+    expect(separatorExcerpts[0]?.editable).toBe(false);
+  });
+
+  test("separator text contains hunk header format", () => {
+    const { oldBuf, newBuf } = makeSeparateHunks();
+    const { separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    if (!separatorBuffer) throw new Error("expected separator buffer");
+
+    // The separator buffer should contain the @@ header format
+    const text = separatorBuffer.snapshot().text();
+    expect(text).toMatch(/@@ -\d+,?\d* \+\d+,?\d* @@/);
+  });
+
+  test("showHunkSeparators: false disables separators", () => {
+    const { oldBuf, newBuf } = makeSeparateHunks();
+    const { decorations, separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      showHunkSeparators: false,
+    });
+
+    // Should not have separator buffer or decorations
+    expect(separatorBuffer).toBeUndefined();
+    const separatorDecs = decorations.filter((d) => d.style?.isHunkSeparator === true);
+    expect(separatorDecs.length).toBe(0);
+  });
+
+  test("separator line count adds to total multiBuffer lines", () => {
+    const { oldBuf, newBuf } = makeSeparateHunks();
+
+    // With separators
+    const withSep = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      showHunkSeparators: true,
+    });
+
+    // Without separators
+    const withoutSep = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      showHunkSeparators: false,
+    });
+
+    // Line count with separators should be 1 more (for the single separator line)
+    expect(withSep.multiBuffer.lineCount).toBe(withoutSep.multiBuffer.lineCount + 1);
+  });
+
+  test("multiple separators for three or more hunks", () => {
+    // Create a file with three non-adjacent changes
+    const oldLines = Array.from({ length: 30 }, (_, i) => `line${i}`);
+    const newLines = [...oldLines];
+    newLines[2] = "CHANGE_1";
+    newLines[15] = "CHANGE_2";
+    newLines[27] = "CHANGE_3";
+    const { oldBuf, newBuf } = makeBuffers(oldLines.join("\n"), newLines.join("\n"));
+
+    const { decorations, separatorBuffer } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    // Should have 2 separator decorations (between hunk1-2 and hunk2-3)
+    const separatorDecs = decorations.filter((d) => d.style?.isHunkSeparator === true);
+    expect(separatorDecs.length).toBe(2);
+
+    // Separator buffer should have 2 lines
+    if (!separatorBuffer) throw new Error("expected separator buffer");
+    expect(separatorBuffer.snapshot().lineCount).toBe(2);
+  });
+});

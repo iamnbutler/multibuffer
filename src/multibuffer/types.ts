@@ -151,6 +151,17 @@ export interface MultiBufferSnapshot {
   lines(startRow: MultiBufferRow, endRow: MultiBufferRow): readonly string[];
   resolveAnchor(anchor: Anchor): MultiBufferPoint | undefined;
   resolveAnchors(anchors: readonly Anchor[]): (MultiBufferPoint | undefined)[];
+  /**
+   * Resolve anchors that are visible within a viewport row range.
+   * Anchors whose excerpt doesn't overlap [startRow, endRow) return undefined
+   * without doing the expensive resolution work (edit replay, offset adjustment).
+   * Returns same-length array as input to preserve index correspondence.
+   */
+  resolveAnchorsInViewport(
+    anchors: readonly Anchor[],
+    startRow: MultiBufferRow,
+    endRow: MultiBufferRow,
+  ): (MultiBufferPoint | undefined)[];
   clipPoint(point: MultiBufferPoint, bias: import("../buffer/types.ts").Bias): MultiBufferPoint;
   excerptBoundaries(
     startRow: MultiBufferRow,
