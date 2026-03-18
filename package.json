@@ -33,6 +33,10 @@
     "./react": {
       "import": "./src/react/index.ts",
       "types": "./src/react/index.ts"
+    },
+    "./worker": {
+      "import": "./src/worker/index.ts",
+      "types": "./src/worker/index.ts"
     }
   },
   "peerDependencies": {
