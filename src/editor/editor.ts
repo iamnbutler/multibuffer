@@ -54,6 +54,7 @@ export class Editor {
   private _listeners: Map<keyof EditorEventMap, Set<(...args: any[]) => void>> = new Map();
   /** Incremented on every text mutation — used to detect textChange in dispatch(). */
   private _textVersion = 0;
+  private _onCustomCommand: ((action: string) => void) | null = null;
   private _undoStack: HistoryEntry[] = [];
   private _redoStack: HistoryEntry[] = [];
   private static readonly _MAX_HISTORY = 100;
@@ -320,6 +321,11 @@ export class Editor {
     for (const cb of set) (cb as (...a: any[]) => void)(...(args as any[]));
   }
 
+  /** Set a callback to be notified when a custom command is dispatched. Pass null to remove. */
+  onCustomCommand(cb: ((action: string) => void) | null): void {
+    this._onCustomCommand = cb;
+  }
+
   /**
    * Return the text content of the current selection, or "" if the
    * selection is collapsed or absent.  Callers use this to populate
@@ -455,6 +461,9 @@ export class Editor {
         }
         break;
       }
+      case "custom":
+        this._onCustomCommand?.(command.action);
+        return; // no state change, no onChange notification
     }
 
     // Emit granular events based on what actually changed
