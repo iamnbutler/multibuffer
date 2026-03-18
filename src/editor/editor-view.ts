@@ -251,7 +251,7 @@ class EditorViewImpl implements EditorView {
     this.renderer.render(
       {
         viewport,
-        selections: this.editor.selection ? [this.editor.selection] : [],
+        selections: this.editor.selections,
         decorations: mergeDecorations(this._decorations),
         excerptHeaders,
         focused: this.inputHandler?.hasFocus ?? false,
@@ -259,11 +259,15 @@ class EditorViewImpl implements EditorView {
       lines,
     );
 
-    // Render cursor and selection overlay separately (DomRenderer API)
+    // Render cursor for primary selection
     this.renderer.renderCursor(this.editor.cursor);
 
-    if (this.editor.selection) {
-      const resolved = resolveAnchorRange(snap, this.editor.selection.range);
+    // Render all selection overlays
+    // For now, render the primary (last) selection. Multi-selection rendering
+    // will need DomRenderer updates to handle multiple overlays.
+    const primarySelection = this.editor.selection;
+    if (primarySelection) {
+      const resolved = resolveAnchorRange(snap, primarySelection.range);
       this.renderer.renderSelection(resolved?.start, resolved?.end);
     } else {
       this.renderer.renderSelection(undefined, undefined);

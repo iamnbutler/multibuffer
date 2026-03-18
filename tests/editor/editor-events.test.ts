@@ -227,10 +227,11 @@ describe("Editor events - cursorChange", () => {
 describe("Editor events - selectionChange", () => {
   test("fires on extendSelection command", () => {
     const { editor } = setup("Hello");
-    let newSel: Selection | undefined;
-    editor.on("selectionChange", (sel) => { newSel = sel; });
+    let newSels: readonly Selection[] | undefined;
+    editor.on("selectionChange", (sels) => { newSels = sels; });
     editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
-    expect(newSel).toBeDefined();
+    expect(newSels).toBeDefined();
+    expect(newSels?.length).toBeGreaterThan(0);
   });
 
   test("fires on selectAll", () => {
@@ -355,7 +356,7 @@ describe("Editor events - change (compound)", () => {
     expect(state).toBeDefined();
     if (state) {
       expectPoint(state.cursor, 0, 5);
-      expect(state.selection).toBeDefined();
+      expect(state.selections.length).toBeGreaterThan(0);
     }
   });
 });
