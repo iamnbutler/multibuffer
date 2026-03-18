@@ -10,22 +10,28 @@
  */
 
 import { createBuffer } from "../buffer/buffer.ts";
-import type { Buffer, BufferId, BufferRange, BufferRow } from "../buffer/types.ts";
+import type { Buffer, BufferId } from "../buffer/types.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
-import type {
-  ExcerptRange,
-  MultiBuffer,
-  MultiBufferRange,
-  MultiBufferRow,
-} from "../multibuffer/types.ts";
+import type { MultiBuffer } from "../multibuffer/types.ts";
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
 import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
 import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
+import {
+  DELETE_STYLE,
+  INSERT_STYLE,
+  INTRALINE_DELETE_STYLE,
+  INTRALINE_INSERT_STYLE,
+  makeColumnDecoration,
+  makeDecoration,
+  makeExcerptRange,
+} from "./diff-styles.ts";
 import { formatHunkHeader, hunkToHeader } from "./helpers.ts";
 
 export interface UnifiedDiffMultiBufferOptions {
   /** Make equal (context) lines editable. Default: true. */
   editableEqual?: boolean;
+  /** Make insert lines editable. Default: true. */
+  editableInsert?: boolean;
   /** Enable intraline (character-level) diff highlighting. Default: true. */
   intraline?: boolean;
   /** Options for intraline diff computation. */
@@ -45,30 +51,6 @@ export interface UnifiedDiffMultiBufferResult {
    */
   readonly separatorBuffer?: Buffer;
 }
-
-const DELETE_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(255, 80, 80, 0.10)",
-  gutterBackground: "rgba(255, 80, 80, 0.18)",
-  gutterSign: "−",
-  gutterSignColor: "#f87171",
-};
-
-const INSERT_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(80, 200, 80, 0.10)",
-  gutterBackground: "rgba(80, 200, 80, 0.18)",
-  gutterSign: "+",
-  gutterSignColor: "#4ade80",
-};
-
-/** Intraline delete highlighting (stronger opacity than line-level). */
-const INTRALINE_DELETE_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(255, 80, 80, 0.25)",
-};
-
-/** Intraline insert highlighting (stronger opacity than line-level). */
-const INTRALINE_INSERT_STYLE: Partial<DecorationStyle> = {
-  backgroundColor: "rgba(80, 200, 80, 0.25)",
-};
 
 /**
  * Style for hunk separator lines.
@@ -106,6 +88,7 @@ export function createUnifiedDiffMultiBuffer(
   options?: DiffOptions & UnifiedDiffMultiBufferOptions,
 ): UnifiedDiffMultiBufferResult {
   const editableEqual = options?.editableEqual ?? true;
+  const editableInsert = options?.editableInsert ?? true;
   const enableIntraline = options?.intraline ?? true;
   const intralineOptions = options?.intralineOptions;
   const showHunkSeparators = options?.showHunkSeparators ?? true;
@@ -198,7 +181,7 @@ export function createUnifiedDiffMultiBuffer(
         mb.addExcerpt(
           newBuffer,
           makeExcerptRange(firstRow, firstRow + lineCount),
-          { editable: true },
+          { editable: editableInsert },
         );
         decorations.push(makeDecoration(mbRow, lineCount, INSERT_STYLE));
       } else {
@@ -251,49 +234,4 @@ export function createUnifiedDiffMultiBuffer(
   }
 
   return { multiBuffer: mb, decorations, isEqual: false, separatorBuffer };
-}
-
-/** Build an ExcerptRange covering [startRow, endRow) in buffer coordinates. */
-function makeExcerptRange(startRow: number, endRow: number): ExcerptRange {
-  const bufRange: BufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    start: { row: startRow as BufferRow, column: 0 },
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for buffer row
-    end: { row: endRow as BufferRow, column: 0 },
-  };
-  return { context: bufRange, primary: bufRange };
-}
-
-/** Build a line-range decoration covering [startMbRow, startMbRow + lineCount - 1]. */
-function makeDecoration(
-  startMbRow: number,
-  lineCount: number,
-  style: Partial<DecorationStyle>,
-): Decoration {
-  const range: MultiBufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-    start: { row: startMbRow as MultiBufferRow, column: 0 },
-    end: {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-      row: (startMbRow + lineCount - 1) as MultiBufferRow,
-      column: Number.MAX_SAFE_INTEGER,
-    },
-  };
-  return { range, style };
-}
-
-/** Build a column-range decoration for intraline highlighting. */
-function makeColumnDecoration(
-  mbRow: number,
-  startColumn: number,
-  endColumn: number,
-  style: Partial<DecorationStyle>,
-): Decoration {
-  const range: MultiBufferRange = {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-    start: { row: mbRow as MultiBufferRow, column: startColumn },
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for multibuffer row
-    end: { row: mbRow as MultiBufferRow, column: endColumn },
-  };
-  return { range, style };
 }

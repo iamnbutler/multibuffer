@@ -8,10 +8,6 @@
  */
 
 import { describe, expect, test } from "bun:test";
-
-// ── Type export smoke tests ─────────────────────────────────────────────────
-
-// These imports verify that the exports compile correctly.
 import type {
   Decoration,
   DiffViewProps,
@@ -22,14 +18,14 @@ import type {
   UseDiffViewOptions,
   UseEditorViewOptions,
 } from "../../src/react/index.ts";
-
-// Verify hooks and components are exported
 import {
   DiffView,
   EditorViewComponent,
   useDiffView,
   useEditorView,
 } from "../../src/react/index.ts";
+
+// Type export smoke tests
 
 describe("React bindings exports", () => {
   test("useEditorView is exported as a function", () => {

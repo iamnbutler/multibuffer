@@ -238,6 +238,8 @@ export class DomRenderer implements Renderer {
   /** Measured character width from actual font rendering */
   private _charWidth: number = 8; // Default, will be measured on mount
   private _theme: Partial<Theme> | null = null;
+  /** When true, the cursor is never rendered (for read-only mode). */
+  private _cursorHidden = false;
   /** Cursor blink interval in milliseconds, or false to disable blinking. */
   private _blinkIntervalMs: number | false = 600;
   /** Cached CSS animation string — updated only when _focused or _blinkIntervalMs change. */
@@ -1076,10 +1078,26 @@ export class DomRenderer implements Renderer {
     this._onTripleClickCallback = cb;
   }
 
+  /**
+   * Set whether the cursor should be hidden.
+   * When true, renderCursor() becomes a no-op (for read-only mode).
+   */
+  setCursorHidden(hidden: boolean): void {
+    this._cursorHidden = hidden;
+    if (hidden && this._cursorEl) {
+      this._cursorEl.style.display = "none";
+    }
+  }
+
+  /** Returns true if the cursor is hidden. */
+  get cursorHidden(): boolean {
+    return this._cursorHidden;
+  }
+
   /** Render cursor at a multibuffer point. */
   renderCursor(point: MultiBufferPoint | undefined): void {
     if (!this._cursorEl) return;
-    if (!point) {
+    if (this._cursorHidden || !point) {
       this._cursorEl.style.display = "none";
       return;
     }
