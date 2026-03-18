@@ -8,6 +8,11 @@ import type {
   MultiBufferRow,
   MultiBufferSnapshot,
 } from "../multibuffer/types.ts";
+import {
+  charColToVisualCol,
+  visualColToCharCol,
+  type WrapMap,
+} from "../renderer/wrap-map.ts";
 import type { Direction, Granularity } from "./types.ts";
 
 /**
@@ -32,6 +37,129 @@ export function moveCursor(
     case "buffer":
       return moveBuffer(snapshot, direction);
   }
+}
+
+/**
+ * Move cursor accounting for soft line wrapping.
+ * For up/down with character granularity, respects visual rows rather
+ * than buffer rows.  For horizontal movement, delegates to standard
+ * moveCursor.
+ *
+ * Callers must only pass character granularity for up/down — other
+ * granularities (word, line, page, buffer) are handled by the Editor
+ * before reaching this function.
+ */
+export function moveCursorVisual(
+  snapshot: MultiBufferSnapshot,
+  current: MultiBufferPoint,
+  direction: Direction,
+  granularity: Granularity,
+  wrapMap: WrapMap,
+): MultiBufferPoint {
+  // For horizontal movement, use standard cursor movement
+  if (direction === "left" || direction === "right") {
+    return moveCursor(snapshot, current, direction, granularity);
+  }
+
+  // For character granularity up/down, use visual row movement
+  return moveVisualRow(snapshot, current, direction, wrapMap);
+}
+
+/**
+ * Move up or down by one visual row, accounting for soft line wrapping.
+ * This is the core visual navigation logic.
+ */
+function moveVisualRow(
+  snapshot: MultiBufferSnapshot,
+  current: MultiBufferPoint,
+  direction: "up" | "down",
+  wrapMap: WrapMap,
+): MultiBufferPoint {
+  const { row, column } = current;
+  const lineCount = snapshot.lineCount;
+
+  // Get the current line text
+  const lineText = snapshot.lines(row, nextRow(row, lineCount));
+  const text = lineText[0] ?? "";
+
+  // Compute current visual row and segment within the buffer row
+  const firstVisualRow = wrapMap.bufferRowToFirstVisualRow(row);
+  const visualRowsForLine = wrapMap.visualRowsForLine(row);
+
+  // Find which segment the cursor is in by checking segment char starts
+  let currentSegment = 0;
+  for (let seg = 0; seg < visualRowsForLine; seg++) {
+    const segStart = wrapMap.segmentCharStart(row, seg);
+    const nextSegStart =
+      seg + 1 < visualRowsForLine
+        ? wrapMap.segmentCharStart(row, seg + 1)
+        : text.length;
+    if (column >= segStart && column < nextSegStart) {
+      currentSegment = seg;
+      break;
+    }
+    if (seg === visualRowsForLine - 1 && column >= segStart) {
+      currentSegment = seg;
+    }
+  }
+
+  // Calculate the visual column within the current segment
+  const segStart = wrapMap.segmentCharStart(row, currentSegment);
+  const visualColInSegment = charColToVisualCol(text, column) - charColToVisualCol(text, segStart);
+
+  const currentVisualRow = firstVisualRow + currentSegment;
+
+  if (direction === "down") {
+    if (currentVisualRow + 1 >= wrapMap.totalVisualRows) {
+      return current; // Stay put at end
+    }
+    return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
+  }
+
+  // direction === "up"
+  if (currentVisualRow <= 0) {
+    return current; // Stay put at start
+  }
+  return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow - 1, visualColInSegment, lineCount);
+}
+
+/**
+ * Resolve a target visual row and visual column offset into a concrete
+ * MultiBufferPoint. Shared by both the up and down branches of
+ * moveVisualRow to avoid duplicating the buffer-position calculation.
+ */
+function resolveTargetVisualRow(
+  snapshot: MultiBufferSnapshot,
+  wrapMap: WrapMap,
+  targetVisualRow: number,
+  visualColInSegment: number,
+  lineCount: number,
+): MultiBufferPoint {
+  // Convert target visual row to buffer position
+  const { mbRow: targetBufferRow, segment: targetSegment } =
+    wrapMap.visualRowToBufferRow(targetVisualRow);
+
+  // Get target line text
+  const targetLineText = snapshot.lines(
+    targetBufferRow,
+    nextRow(targetBufferRow, lineCount),
+  );
+  const targetText = targetLineText[0] ?? "";
+
+  // Find the target column based on visual column
+  const targetSegStart = wrapMap.segmentCharStart(targetBufferRow, targetSegment);
+  const targetSegVisualRowsForLine = wrapMap.visualRowsForLine(targetBufferRow);
+  const targetNextSegStart =
+    targetSegment + 1 < targetSegVisualRowsForLine
+      ? wrapMap.segmentCharStart(targetBufferRow, targetSegment + 1)
+      : targetText.length;
+
+  // Calculate target char column from visual column
+  const targetSegText = targetText.slice(targetSegStart, targetNextSegStart);
+  const targetCharCol = visualColToCharCol(targetSegText, visualColInSegment);
+  const finalColumn = Math.min(targetSegStart + targetCharCol, targetNextSegStart);
+
+  return { row: targetBufferRow, column: finalColumn };
 }
 
 function moveCharacter(

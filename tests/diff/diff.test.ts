@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { diff } from "../../src/diff/diff.ts";
+import { formatHunkHeader } from "../../src/diff/helpers.ts";
 
 describe("diff", () => {
   test("identical texts produce no hunks", () => {
@@ -120,5 +121,48 @@ describe("diff", () => {
       (l, i) => l.kind === "equal" && i < hunk.lines.findIndex((x) => x.kind !== "equal"),
     );
     expect(equalBefore.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("formatHunkHeader", () => {
+  test("formats basic hunk header", () => {
+    const result = formatHunkHeader({
+      oldStart: 10,
+      oldCount: 5,
+      newStart: 12,
+      newCount: 7,
+    });
+    expect(result).toBe("@@ -10,5 +12,7 @@");
+  });
+
+  test("single line count omits comma", () => {
+    const result = formatHunkHeader({
+      oldStart: 10,
+      oldCount: 1,
+      newStart: 12,
+      newCount: 1,
+    });
+    expect(result).toBe("@@ -10 +12 @@");
+  });
+
+  test("mixed single and multiple counts", () => {
+    const result = formatHunkHeader({
+      oldStart: 5,
+      oldCount: 1,
+      newStart: 7,
+      newCount: 3,
+    });
+    expect(result).toBe("@@ -5 +7,3 @@");
+  });
+
+  test("includes context when provided", () => {
+    const result = formatHunkHeader({
+      oldStart: 10,
+      oldCount: 5,
+      newStart: 12,
+      newCount: 7,
+      context: "function handleClick()",
+    });
+    expect(result).toBe("@@ -10,5 +12,7 @@ function handleClick()");
   });
 });
