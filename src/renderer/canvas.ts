@@ -329,23 +329,6 @@ export class CanvasRenderer implements Renderer {
   }
 
   /**
-   * Schedule a render on the next animation frame.
-   * Coalesces multiple render requests into a single frame.
-   */
-  private _scheduleRender(): void {
-    if (this._renderFrame !== null) return;
-
-    if (typeof requestAnimationFrame !== "undefined") {
-      this._renderFrame = requestAnimationFrame(() => {
-        this._renderFrame = null;
-        this._handleScroll();
-      });
-    } else {
-      this._handleScroll();
-    }
-  }
-
-  /**
    * Handle scroll events from the scroll container.
    * Updates the viewport and triggers a render.
    */

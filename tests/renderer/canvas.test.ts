@@ -6,14 +6,14 @@
  * Actual canvas rendering is tested via Playwright (e2e).
  */
 
-import { describe, expect, test, beforeEach, mock } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
-import type { Measurements, Viewport } from "../../src/renderer/types.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
   createViewport,
 } from "../../src/renderer/measurement.ts";
+import type { Measurements } from "../../src/renderer/types.ts";
 import { num } from "../helpers.ts";
 
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
