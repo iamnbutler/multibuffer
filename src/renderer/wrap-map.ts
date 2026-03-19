@@ -207,6 +207,57 @@ export function wrapLineCount(text: string, wrapWidth: number): number {
   return count;
 }
 
+/**
+ * Compute the UTF-16 code-unit start position of each wrap segment for a line.
+ * Appends start positions into `out` and returns the segment count.
+ *
+ * Equivalent to calling `wrapLine(text, wrapWidth)` and accumulating
+ * `seg.length` values, but avoids all intermediate string slice allocations
+ * and the redundant `visualWidth()` pre-scan that `wrapLine` performs.
+ *
+ * Used by WrapMap._ensureComputedUpTo to build `_segCharStart` in a single
+ * O(n) pass per line.
+ *
+ * Uses charCodeAt with an ASCII fast-path (≤ 0x7F) consistent with
+ * wrapLineCount and visualWidth.
+ */
+export function wrapLineSegmentCharStarts(
+  text: string,
+  wrapWidth: number,
+  out: number[],
+): number {
+  out.push(0); // segment 0 always starts at char offset 0
+  if (wrapWidth <= 0 || text.length === 0) return 1;
+  let count = 1;
+  let segVW = 0;
+  for (let i = 0; i < text.length; ) {
+    const c = text.charCodeAt(i);
+    let cw: number;
+    let stride: number;
+    if (c <= 0x7f) {
+      cw = 1;
+      stride = 1;
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      const low = text.charCodeAt(i + 1);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      cw = codePointWidth(cp);
+      stride = 2;
+    } else {
+      cw = codePointWidth(c);
+      stride = 1;
+    }
+    if (segVW + cw > wrapWidth && segVW > 0) {
+      out.push(i); // new segment starts at this char offset
+      count++;
+      segVW = cw;
+    } else {
+      segVW += cw;
+    }
+    i += stride;
+  }
+  return count;
+}
+
 export interface WrapMapOptions {
   lazy?: boolean;
 }
@@ -257,18 +308,15 @@ export class WrapMap {
     const lines = this._snapshot.lines(startRow, endRowBranded);
 
     // Build prefix sums and collect segment char-start offsets for the new rows.
+    // wrapLineSegmentCharStarts does a single O(n) pass per line with no string
+    // slice allocations, unlike wrapLine() which allocates a string[].
     const segCharStartArr: number[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
-      const segments = wrapLine(line, this._wrapWidth);
+      const count = wrapLineSegmentCharStarts(line, this._wrapWidth, segCharStartArr);
       const rowIdx = this._computedUpTo + i;
-      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + segments.length;
-      let charPos = 0;
-      for (const seg of segments) {
-        segCharStartArr.push(charPos);
-        charPos += seg.length;
-      }
+      this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + count;
     }
 
     // Append new segment offsets to the existing _segCharStart array.

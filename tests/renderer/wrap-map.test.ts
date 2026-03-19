@@ -19,6 +19,7 @@ import {
   visualWidth,
   WrapMap,
   wrapLine,
+  wrapLineSegmentCharStarts,
 } from "../../src/renderer/wrap-map.ts";
 import { createBufferId, excerptRange, generateText, num, resetCounters } from "../helpers.ts";
 
@@ -209,6 +210,94 @@ describe("wrapLine with visual width", () => {
     // Char offsets: seg 0 starts at 0, seg 1 starts at 3
     expect(segs[0]?.length).toBe(3); // 3 CJK chars
     expect(segs[1]?.length).toBe(4); // 4 ASCII chars
+  });
+});
+
+describe("wrapLineSegmentCharStarts", () => {
+  test("empty string: pushes [0] and returns 1", () => {
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("", 8, out);
+    expect(count).toBe(1);
+    expect(out).toEqual([0]);
+  });
+
+  test("wrapWidth <= 0: pushes [0] and returns 1", () => {
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("hello world", 0, out);
+    expect(count).toBe(1);
+    expect(out).toEqual([0]);
+
+    const out2: number[] = [];
+    const count2 = wrapLineSegmentCharStarts("hello", -1, out2);
+    expect(count2).toBe(1);
+    expect(out2).toEqual([0]);
+  });
+
+  test("non-wrapping line: pushes [0] and returns 1", () => {
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("hello", 8, out);
+    expect(count).toBe(1);
+    expect(out).toEqual([0]);
+  });
+
+  test("ASCII wrap: correct segment starts", () => {
+    // "abcdefgh" at wrapWidth=4 → segments ["abcd","efgh"] → starts [0, 4]
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("abcdefgh", 4, out);
+    expect(count).toBe(2);
+    expect(out).toEqual([0, 4]);
+  });
+
+  test("three-segment line: all starts correct", () => {
+    // "abcdefghijklmno" at wrapWidth=5 → ["abcde","fghij","klmno"] → starts [0, 5, 10]
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("abcdefghijklmno", 5, out);
+    expect(count).toBe(3);
+    expect(out).toEqual([0, 5, 10]);
+  });
+
+  test("CJK wide chars: starts are UTF-16 code-unit offsets", () => {
+    // "日日日" vw=6, wrapWidth=4 → ["日日","日"] → starts [0, 2] (each CJK char = 1 UTF-16 unit)
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("日日日", 4, out);
+    expect(count).toBe(2);
+    expect(out).toEqual([0, 2]);
+  });
+
+  test("CJK: never splits mid-glyph even if wrapWidth is odd", () => {
+    // "日日" vw=4, wrapWidth=3 → ["日","日"] → starts [0, 1]
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("日日", 3, out);
+    expect(count).toBe(2);
+    expect(out).toEqual([0, 1]);
+  });
+
+  test("emoji surrogate pair: starts reflect 2 UTF-16 units per emoji", () => {
+    // "ab😀cd" vw=6, wrapWidth=4 → ["ab😀","cd"] → starts [0, 4] (😀 = 2 UTF-16 units)
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("ab😀cd", 4, out);
+    expect(count).toBe(2);
+    expect(out).toEqual([0, 4]);
+  });
+
+  test("appends to out without clearing existing entries", () => {
+    // Used by _ensureComputedUpTo to accumulate across all lines into one array
+    const out: number[] = [99]; // pre-existing entry
+    wrapLineSegmentCharStarts("abcdefgh", 4, out);
+    expect(out).toEqual([99, 0, 4]);
+  });
+
+  test("matches wrapLine() char boundaries for a mixed ASCII+CJK line", () => {
+    // "abc日ef" vw=8, wrapWidth=5 → ["abc日","ef"]
+    // "abc日" has length 4 (3 ASCII + 1 CJK), so seg 1 starts at char offset 4
+    const out: number[] = [];
+    const count = wrapLineSegmentCharStarts("abc日ef", 5, out);
+    expect(count).toBe(2);
+    expect(out).toEqual([0, 4]);
+    // Cross-check with wrapLine
+    const segs = wrapLine("abc日ef", 5);
+    expect(segs[0]?.length).toBe(4);
+    expect(segs[1]?.length).toBe(2);
   });
 });
 
