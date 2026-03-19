@@ -113,14 +113,30 @@ function moveVisualRow(
     if (currentVisualRow + 1 >= wrapMap.totalVisualRows) {
       return current; // Stay put at end
     }
-    return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
+    const target = resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
+    // Skip trailing newline rows (excerpt headers) just like moveCharacter does
+    const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "down", lineCount);
+    if (skippedRow !== target.row) {
+      // Re-resolve on the skipped-to row so visualColInSegment is applied correctly
+      const skippedFirstVisualRow = wrapMap.bufferRowToFirstVisualRow(skippedRow);
+      return resolveTargetVisualRow(snapshot, wrapMap, skippedFirstVisualRow, visualColInSegment, lineCount);
+    }
+    return target;
   }
 
   // direction === "up"
   if (currentVisualRow <= 0) {
     return current; // Stay put at start
   }
-  return resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow - 1, visualColInSegment, lineCount);
+  const target = resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow - 1, visualColInSegment, lineCount);
+  // Skip trailing newline rows (excerpt headers) just like moveCharacter does
+  const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "up", lineCount);
+  if (skippedRow !== target.row) {
+    // Re-resolve on the skipped-to row so visualColInSegment is applied correctly
+    const skippedFirstVisualRow = wrapMap.bufferRowToFirstVisualRow(skippedRow);
+    return resolveTargetVisualRow(snapshot, wrapMap, skippedFirstVisualRow, visualColInSegment, lineCount);
+  }
+  return target;
 }
 
 /**
