@@ -17,9 +17,8 @@
 import { type CSSProperties, forwardRef, type HTMLAttributes, useImperativeHandle } from "react";
 import type { DiffController, DiffControllerOptions } from "../diff/controller.ts";
 import type { Editor } from "../editor/editor.ts";
-import type { Theme } from "../editor/editor-view.ts";
 import type { Keymap } from "../editor/types.ts";
-import type { Decoration, Measurements } from "../renderer/types.ts";
+import type { Decoration, Measurements, Theme } from "../renderer/types.ts";
 import { useDiffView } from "./use-diff-view.ts";
 
 export interface DiffViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
@@ -35,8 +34,8 @@ export interface DiffViewProps extends Omit<HTMLAttributes<HTMLDivElement>, "chi
   keymap?: Keymap;
   /** Callback for custom commands from keymap. */
   onCustomCommand?: (action: string) => void;
-  /** Theme CSS variables to apply. */
-  theme?: Theme;
+  /** Theme CSS variables to apply. Partial themes merge with defaults. */
+  theme?: Partial<Theme>;
   /** Additional decorations to merge with diff decorations. */
   decorations?: Decoration[];
   /** Diff controller options (context lines, debounce, etc.). */
@@ -57,7 +56,7 @@ export interface DiffViewHandle {
   /** Update decorations imperatively. */
   setDecorations: (key: string, decorations: Decoration[]) => void;
   /** Update theme imperatively. */
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Partial<Theme>) => void;
   /** Force re-diff. */
   reDiff: () => void;
 }
