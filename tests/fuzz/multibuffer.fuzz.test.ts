@@ -172,8 +172,7 @@ describe("MultiBuffer fuzz: position round-trips", () => {
               );
 
               if (!roundTripped) return false;
-              // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-              if ((roundTripped.row as number) !== r) return false;
+              if (num(roundTripped.row) !== r) return false;
               if (roundTripped.column !== col) return false;
             }
           }
@@ -237,9 +236,11 @@ describe("MultiBuffer fuzz: anchor bias semantics", () => {
           const leftCol = leftResolved.column;
           const rightCol = rightResolved.column;
 
-          // Left anchor stays at or before insertion point
-          // Right anchor moves past the inserted text
-          return leftCol <= rightCol;
+          // Left-biased anchor must remain at the original column
+          if (leftCol !== testCol) return false;
+          // Right-biased anchor must advance by the insertion length
+          if (rightCol !== testCol + insertText.length) return false;
+          return true;
         },
       ),
       fcParams,
@@ -271,8 +272,7 @@ describe("MultiBuffer fuzz: excerptBoundaries correctness", () => {
 
           // Each boundary should have a valid row within bounds
           for (const b of boundaries) {
-            // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-            const r = b.row as number;
+            const r = num(b.row);
             if (r < 0 || r > mb.lineCount) return false;
           }
 
@@ -281,8 +281,7 @@ describe("MultiBuffer fuzz: excerptBoundaries correctness", () => {
             const prev = boundaries[i - 1];
             const curr = boundaries[i];
             if (!prev || !curr) return false;
-            // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-            if ((prev.row as number) > (curr.row as number)) return false;
+            if (num(prev.row) > num(curr.row)) return false;
           }
 
           return true;

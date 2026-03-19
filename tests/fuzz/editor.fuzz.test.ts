@@ -256,8 +256,7 @@ describe("Editor fuzz: cursor always within valid bounds", () => {
             const lineCount = editor.multiBuffer.lineCount;
 
             // Cursor row must be valid
-            // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-            const cursorRow = cursor.row as number;
+            const cursorRow = num(cursor.row);
             if (cursorRow < 0) return false;
             // Cursor can be at lineCount - 1 (last line) but not beyond
             if (lineCount > 0 && cursorRow >= lineCount) return false;
@@ -304,8 +303,7 @@ describe("Editor fuzz: cursor always within valid bounds", () => {
             editor.dispatch(cmd);
 
             const cursor = editor.cursor;
-            // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-            const cursorRow = cursor.row as number;
+            const cursorRow = num(cursor.row);
             const snap = editor.multiBuffer.snapshot();
             const lines = snap.lines(mbRow(cursorRow), mbRow(cursorRow + 1));
             const lineLen = lines[0]?.length ?? 0;
@@ -345,10 +343,8 @@ describe("Editor fuzz: selection start <= end", () => {
               if (!start || !end) continue;
 
               // Compare positions: start should be <= end
-              // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-              const startRow = start.row as number;
-              // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-              const endRow = end.row as number;
+              const startRow = num(start.row);
+              const endRow = num(end.row);
 
               if (startRow > endRow) return false;
               if (startRow === endRow && start.column > end.column) return false;
@@ -503,8 +499,7 @@ describe("Editor fuzz: empty buffer handling", () => {
 
           // Cursor should still be valid
           const cursor = editor.cursor;
-          // biome-ignore lint/plugin/no-type-assertion: expect: unwrapping branded type for comparison
-          return (cursor.row as number) >= 0 && cursor.column >= 0;
+          return num(cursor.row) >= 0 && cursor.column >= 0;
         },
       ),
       fcParams,

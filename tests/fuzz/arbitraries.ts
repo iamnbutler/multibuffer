@@ -3,7 +3,6 @@
  *
  * Provides generators for:
  * - Edit operations (insert, delete, replace)
- * - Editor commands (cursor movement, text input, undo/redo)
  * - Unicode edge cases (surrogates, ZWJ sequences, CRLF)
  *
  * @see https://github.com/iamnbutler/multibuffer/issues/80
@@ -82,74 +81,6 @@ export function applyToString(s: string, op: EditOp): string {
       return s.slice(0, op.start) + op.text + s.slice(op.end);
   }
 }
-
-// ── Editor Commands ────────────────────────────────────────────────────────────
-
-/** Direction for cursor movement */
-export type Direction = "left" | "right" | "up" | "down";
-
-/** Granularity for cursor movement and deletion */
-export type Granularity = "character" | "word" | "line" | "lineBoundary";
-
-/** Editor command types */
-export type EditorCommandOp =
-  | { type: "insertText"; text: string }
-  | { type: "insertNewline" }
-  | { type: "deleteBackward"; granularity: Granularity }
-  | { type: "deleteForward"; granularity: Granularity }
-  | { type: "moveCursor"; direction: Direction; granularity: Granularity }
-  | { type: "undo" }
-  | { type: "redo" }
-  | { type: "selectAll" };
-
-/** Generate text insertion commands */
-const insertTextArb = fc.record({
-  type: fc.constant("insertText" as const),
-  text: fc.string({ minLength: 1, maxLength: 20 }),
-});
-
-/** Generate newline insertion */
-const insertNewlineArb = fc.constant({ type: "insertNewline" as const });
-
-/** Generate backward delete commands */
-const deleteBackwardArb = fc.record({
-  type: fc.constant("deleteBackward" as const),
-  granularity: fc.constantFrom<Granularity>("character", "word", "line"),
-});
-
-/** Generate forward delete commands */
-const deleteForwardArb = fc.record({
-  type: fc.constant("deleteForward" as const),
-  granularity: fc.constantFrom<Granularity>("character", "word", "line"),
-});
-
-/** Generate cursor movement commands */
-const moveCursorArb = fc.record({
-  type: fc.constant("moveCursor" as const),
-  direction: fc.constantFrom<Direction>("left", "right", "up", "down"),
-  granularity: fc.constantFrom<Granularity>("character", "word", "line", "lineBoundary"),
-});
-
-/** Generate undo command */
-const undoArb = fc.constant({ type: "undo" as const });
-
-/** Generate redo command */
-const redoArb = fc.constant({ type: "redo" as const });
-
-/** Generate select all command */
-const selectAllArb = fc.constant({ type: "selectAll" as const });
-
-/** Generate any editor command */
-export const editorCommandArb: fc.Arbitrary<EditorCommandOp> = fc.oneof(
-  { weight: 10, arbitrary: insertTextArb },
-  { weight: 3, arbitrary: insertNewlineArb },
-  { weight: 3, arbitrary: deleteBackwardArb },
-  { weight: 3, arbitrary: deleteForwardArb },
-  { weight: 5, arbitrary: moveCursorArb },
-  { weight: 2, arbitrary: undoArb },
-  { weight: 1, arbitrary: redoArb },
-  { weight: 1, arbitrary: selectAllArb },
-);
 
 // ── Unicode Strings ────────────────────────────────────────────────────────────
 
@@ -256,9 +187,7 @@ export const crlfStringArb: fc.Arbitrary<string> = fc
 /** Number of test iterations (fewer in CI for speed) */
 export const NUM_RUNS = process.env.CI ? 100 : 1000;
 
-/** Verbose test parameters for debugging failures */
+/** Shared fast-check parameters */
 export const fcParams = {
   numRuns: NUM_RUNS,
-  // Increase examples shown on failure for better debugging
-  verbose: false,
 };
