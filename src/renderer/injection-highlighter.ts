@@ -15,7 +15,7 @@ import {
   type Token,
   type TreeEdit,
 } from "./highlighter.ts";
-import { markdownQuery } from "./queries/index.ts";
+import type { LanguageQuery } from "./queries/types.ts";
 import { colorForNodeType } from "./theme.ts";
 
 export type { Token };
@@ -54,12 +54,17 @@ export class InjectionHighlighter implements SyntaxHighlighter {
   private _bufferParses = new Map<string, BufferParse>();
   private _primaryLanguage: string | null = null;
   private _ready = false;
+  private _languageQuery: LanguageQuery | undefined;
 
   // Module reference for creating new parsers
   private _parserModule: {
     Parser: new () => ParserType;
     Language: { load: (path: string) => Promise<Language> };
   } | null = null;
+
+  constructor(languageQuery?: LanguageQuery) {
+    this._languageQuery = languageQuery;
+  }
 
   get ready(): boolean {
     return this._ready;
@@ -329,7 +334,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     // Determine if this node should propagate its color to children
     let colorToPropagate = inheritedColor;
-    if (markdownQuery.styledParents?.has(nodeType)) {
+    if (this._languageQuery?.styledParents?.has(nodeType)) {
       colorToPropagate = colorForNodeType(nodeType);
     }
 
@@ -408,7 +413,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     }
 
     // Skip code blocks - their content is handled by injection
-    if (markdownQuery.skipChildren?.has(nodeType)) {
+    if (this._languageQuery?.skipChildren?.has(nodeType)) {
       const startCol =
         node.startPosition.row === targetRow ? node.startPosition.column : 0;
       const endCol =
@@ -427,7 +432,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     // Determine if this node should propagate its color to children
     let colorToPropagate = inheritedColor;
-    if (markdownQuery.styledParents?.has(nodeType)) {
+    if (this._languageQuery?.styledParents?.has(nodeType)) {
       colorToPropagate = colorForNodeType(nodeType);
     }
 

@@ -60,8 +60,8 @@ describe("nodeTypeToCategoryForLanguage — language-specific lookup", () => {
     expect(nodeTypeToCategoryForLanguage("yaml", "string_scalar")).toBe("string");
   });
 
-  test("falls back to combined lookup for unknown language", () => {
-    expect(nodeTypeToCategoryForLanguage("rust", "const")).toBe("keyword");
+  test("returns default for known node type in unknown language", () => {
+    expect(nodeTypeToCategoryForLanguage("rust", "const")).toBe("default");
   });
 
   test("returns default for unknown node in unknown language", () => {

@@ -10,6 +10,7 @@ import {
   buildHighlightedSpans,
   Highlighter,
 } from "../../src/renderer/highlighter.ts";
+import { markdownQuery } from "../../src/renderer/queries/index.ts";
 
 const WASM_DIR = path.join(import.meta.dir, "../../playground/wasm");
 
@@ -209,7 +210,7 @@ describe("Highlighter with Markdown", () => {
   let highlighter: Highlighter;
 
   beforeAll(async () => {
-    highlighter = new Highlighter();
+    highlighter = new Highlighter(markdownQuery);
     await highlighter.init(
       path.join(WASM_DIR, "tree-sitter.wasm"),
       path.join(WASM_DIR, "tree-sitter-markdown.wasm"),

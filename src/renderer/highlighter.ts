@@ -10,7 +10,7 @@ import type {
   Point,
   Tree,
 } from "web-tree-sitter";
-import { markdownQuery } from "./queries/index.ts";
+import type { LanguageQuery } from "./queries/types.ts";
 import { colorForNodeType } from "./theme.ts";
 
 export interface Token {
@@ -57,6 +57,11 @@ export class Highlighter implements SyntaxHighlighter {
   private _parser: ParserType | null = null;
   private _trees = new Map<string, Tree>();
   private _ready = false;
+  private _languageQuery: LanguageQuery | undefined;
+
+  constructor(languageQuery?: LanguageQuery) {
+    this._languageQuery = languageQuery;
+  }
 
   get ready(): boolean {
     return this._ready;
@@ -139,7 +144,7 @@ export class Highlighter implements SyntaxHighlighter {
 
     // Skip highlighting inside code blocks - just use default color for the whole range
     // TODO: Use proper treesitter grammar/package to highlight injections
-    if (markdownQuery.skipChildren?.has(nodeType)) {
+    if (this._languageQuery?.skipChildren?.has(nodeType)) {
       const startCol =
         node.startPosition.row === targetRow ? node.startPosition.column : 0;
       const endCol =
@@ -159,7 +164,7 @@ export class Highlighter implements SyntaxHighlighter {
 
     // Determine if this node should propagate its color to children
     let colorToPropagate = inheritedColor;
-    if (markdownQuery.styledParents?.has(nodeType)) {
+    if (this._languageQuery?.styledParents?.has(nodeType)) {
       colorToPropagate = colorForNodeType(nodeType);
     }
 

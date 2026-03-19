@@ -59,6 +59,10 @@ export function nodeTypeToCategory(nodeType: string): HighlightCategory {
 /**
  * Get the highlight category for a node type within a specific language.
  *
+ * Only returns categories defined by the specified language's query.
+ * Returns "default" for unknown languages or unrecognized node types,
+ * without falling back to other languages' mappings.
+ *
  * @param language - Language identifier (e.g., "typescript", "markdown")
  * @param nodeType - Tree-sitter node type string
  * @returns The highlight category, or "default" if not found
@@ -69,11 +73,9 @@ export function nodeTypeToCategoryForLanguage(
 ): HighlightCategory {
   const query = LANGUAGE_QUERIES.get(language);
   if (query) {
-    const category = query.nodeTypeCategory.get(nodeType);
-    if (category) return category;
+    return query.nodeTypeCategory.get(nodeType) ?? "default";
   }
-  // Fall back to combined lookup
-  return COMBINED_NODE_TYPE_CATEGORY.get(nodeType) ?? "default";
+  return "default";
 }
 
 /**
@@ -93,11 +95,14 @@ export function hasLanguageQuery(language: string): boolean {
   return LANGUAGE_QUERIES.has(language);
 }
 
+/** Cached array of registered language identifiers (built once). */
+const REGISTERED_LANGUAGES: readonly string[] = Array.from(LANGUAGE_QUERIES.keys());
+
 /**
  * Get all registered language identifiers.
  */
 export function getRegisteredLanguages(): readonly string[] {
-  return Array.from(LANGUAGE_QUERIES.keys());
+  return REGISTERED_LANGUAGES;
 }
 
 // Re-export individual queries for direct access
