@@ -20,8 +20,12 @@ export interface HighlightClient extends SyntaxHighlighter {
   /**
    * Initialize the highlighter with tree-sitter WASM URLs.
    * Must be called before any other methods.
+   *
+   * @param languageName - Optional language name for looking up the LanguageQuery
+   *   (e.g., "markdown", "typescript"). When provided, the worker uses the
+   *   language's skipChildren/styledParents sets for accurate highlighting.
    */
-  init(treeSitterWasmUrl: string, languageWasmUrl: string): Promise<void>;
+  init(treeSitterWasmUrl: string, languageWasmUrl: string, languageName?: string): Promise<void>;
 
   /**
    * Parse a buffer's text for syntax highlighting.
@@ -178,6 +182,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
   async function init(
     treeSitterWasmUrl: string,
     languageWasmUrl: string,
+    languageName?: string,
   ): Promise<void> {
     if (!_worker || !_workerAvailable) {
       throw new Error("Worker not available");
@@ -189,6 +194,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
       requestId,
       treeSitterWasmUrl,
       languageWasmUrl,
+      languageName,
     };
 
     return new Promise((resolve, reject) => {

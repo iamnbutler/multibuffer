@@ -18,6 +18,17 @@ export {
   yToRow,
   yToVisualRow,
 } from "./measurement.ts";
+export type { HighlightCategory, LanguageQuery } from "./queries/index.ts";
+export {
+  getLanguageQuery,
+  getRegisteredLanguages,
+  hasLanguageQuery,
+  markdownQuery,
+  nodeTypeToCategory,
+  nodeTypeToCategoryForLanguage,
+  typescriptQuery,
+  yamlQuery,
+} from "./queries/index.ts";
 export {
   colorForNodeType,
   GRUVBOX_DARK_THEME,
