@@ -24,7 +24,6 @@ import type { Buffer, BufferId } from "../buffer/types.ts";
 import type { DiffController, DiffControllerOptions } from "../diff/controller.ts";
 import { createDiffController } from "../diff/controller.ts";
 import type { Editor } from "../editor/editor.ts";
-import type { Theme } from "../editor/editor-view.ts";
 import { mergeDecorations } from "../editor/editor-view.ts";
 import { createMultiBufferEditor } from "../editor/factories.ts";
 import { InputHandler } from "../editor/input-handler.ts";
@@ -32,7 +31,8 @@ import type { Keymap } from "../editor/types.ts";
 import { resolveAnchorRange } from "../multibuffer/anchor.ts";
 import type { MultiBufferRow } from "../multibuffer/types.ts";
 import { createDomRenderer } from "../renderer/dom.ts";
-import type { Decoration, Measurements } from "../renderer/types.ts";
+import { themeToVars } from "../renderer/theme.ts";
+import type { Decoration, Measurements, Theme } from "../renderer/types.ts";
 
 let _diffBufferIdCounter = 0;
 
@@ -54,8 +54,8 @@ export interface UseDiffViewOptions {
   keymap?: Keymap;
   /** Callback for custom commands from keymap. */
   onCustomCommand?: (action: string) => void;
-  /** Theme CSS variables to apply. */
-  theme?: Theme;
+  /** Theme CSS variables to apply. Partial themes merge with defaults. */
+  theme?: Partial<Theme>;
   /** Additional decorations to merge with diff decorations. */
   decorations?: Decoration[];
   /** Diff controller options (context lines, debounce, etc.). */
@@ -78,7 +78,7 @@ export interface UseDiffViewResult {
   /** Update additional decorations imperatively. */
   setDecorations: (key: string, decorations: Decoration[]) => void;
   /** Update theme imperatively. */
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Partial<Theme>) => void;
   /** Force re-diff (normally automatic on prop changes). */
   reDiff: () => void;
 }
@@ -274,8 +274,8 @@ export function useDiffView(options: UseDiffViewOptions): UseDiffViewResult {
 
     // Apply initial theme
     if (opts.theme) {
-      for (const [key, value] of Object.entries(opts.theme)) {
-        container.style.setProperty(key, value);
+      for (const [cssVar, value] of Object.entries(themeToVars(opts.theme))) {
+        container.style.setProperty(cssVar, value);
       }
     }
 
@@ -357,8 +357,8 @@ export function useDiffView(options: UseDiffViewOptions): UseDiffViewResult {
   // Sync theme changes
   useEffect(() => {
     if (containerRef.current && options.theme) {
-      for (const [key, value] of Object.entries(options.theme)) {
-        containerRef.current.style.setProperty(key, value);
+      for (const [cssVar, value] of Object.entries(themeToVars(options.theme))) {
+        containerRef.current.style.setProperty(cssVar, value);
       }
     }
   }, [options.theme]);
@@ -381,10 +381,10 @@ export function useDiffView(options: UseDiffViewOptions): UseDiffViewResult {
     scheduleRender();
   }, [scheduleRender]);
 
-  const setThemeImperative = useCallback((theme: Theme) => {
+  const setThemeImperative = useCallback((theme: Partial<Theme>) => {
     if (containerRef.current) {
-      for (const [key, value] of Object.entries(theme)) {
-        containerRef.current.style.setProperty(key, value);
+      for (const [cssVar, value] of Object.entries(themeToVars(theme))) {
+        containerRef.current.style.setProperty(cssVar, value);
       }
     }
   }, []);
