@@ -193,6 +193,7 @@ export class Editor {
     this._selections = newSel ? [newSel] : [];
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
+      this._emitBracketMatch(snap);
     }
     if (!_selectionsEqual(this._selections, prevSelections)) {
       this._emit("selectionChange", this._selections);
@@ -246,6 +247,7 @@ export class Editor {
     this._cursor = clipped;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
+      this._emitBracketMatch(snap);
     }
     if (!_selectionsEqual(this._selections, prevSelections)) {
       this._emit("selectionChange", this._selections);
@@ -321,6 +323,7 @@ export class Editor {
     this._cursor = endPoint;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
+      this._emitBracketMatch(snap);
     }
     if (!_selectionsEqual(this._selections, prevSelections)) {
       this._emit("selectionChange", this._selections);
@@ -353,6 +356,7 @@ export class Editor {
     this._cursor = endPoint;
     if (!_pointsEqual(this._cursor, prevCursor)) {
       this._emit("cursorChange", this._cursor, prevCursor);
+      this._emitBracketMatch(snap);
     }
     if (!_selectionsEqual(this._selections, prevSelections)) {
       this._emit("selectionChange", this._selections);
@@ -381,6 +385,16 @@ export class Editor {
     // biome-ignore lint/suspicious/noExplicitAny: expect: typed event dispatch requires spreading EditorEventMap[K] tuple
     // biome-ignore lint/plugin/no-type-assertion: expect: typed event dispatch requires cast to spread args
     for (const cb of set) (cb as (...a: any[]) => void)(...(args as any[]));
+  }
+
+  /**
+   * Emit bracketMatch event if bracket matching is enabled.
+   * Called when cursor or text changes since bracket match state may have changed.
+   */
+  private _emitBracketMatch(snap: MultiBufferSnapshot): void {
+    if (!this._bracketMatching) return;
+    const match = findMatchingBracket(snap, this._cursor);
+    this._emit("bracketMatch", match);
   }
 
   /** Set a callback to be notified when a custom command is dispatched. Pass null to remove. */
@@ -570,6 +584,8 @@ export class Editor {
     if (textChanged) this._emit("textChange", newSnap);
     if (cursorChanged) this._emit("cursorChange", this._cursor, prevCursor);
     if (selectionChanged) this._emit("selectionChange", this._selections);
+    // Emit bracketMatch when cursor or text changes (bracket at cursor may have changed)
+    if (textChanged || cursorChanged) this._emitBracketMatch(newSnap);
     if (textChanged || cursorChanged || selectionChanged) {
       this._emit("change", { cursor: this._cursor, selections: this._selections });
     }

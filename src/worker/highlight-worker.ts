@@ -16,6 +16,7 @@
 
 import type { Token } from "../renderer/highlighter.ts";
 import { Highlighter } from "../renderer/highlighter.ts";
+import { getLanguageQuery } from "../renderer/queries/index.ts";
 import type {
   HighlightAckResponse,
   HighlightReadyResponse,
@@ -62,7 +63,10 @@ self.onmessage = async (event: MessageEvent<HighlightWorkerMessage>) => {
   switch (message.type) {
     case "init": {
       try {
-        highlighter = new Highlighter();
+        const languageQuery = message.languageName
+          ? getLanguageQuery(message.languageName)
+          : undefined;
+        highlighter = new Highlighter(languageQuery);
         await highlighter.init(message.treeSitterWasmUrl, message.languageWasmUrl);
         sendReady(message.requestId);
       } catch (err) {

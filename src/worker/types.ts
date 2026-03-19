@@ -40,6 +40,8 @@ export interface HighlightInitRequest {
   readonly requestId: number;
   readonly treeSitterWasmUrl: string;
   readonly languageWasmUrl: string;
+  /** Language name for looking up the LanguageQuery (e.g., "markdown", "typescript"). */
+  readonly languageName?: string;
 }
 
 /** Load an additional language for injection highlighting. */

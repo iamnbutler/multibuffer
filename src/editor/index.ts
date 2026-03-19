@@ -1,3 +1,4 @@
+export type { BracketMatch } from "./bracket-match.ts";
 export { moveCursor } from "./cursor.ts";
 export { Editor } from "./editor.ts";
 export type { EditorView, EditorViewOptions, ThemeVars } from "./editor-view.ts";
