@@ -1,1 +1,1 @@
-{"r":"23294793037","c":["35","68","80","89","101","110","111","119","157","260","282"],"n":"PRs pending: factories-linecount, CI-bun-cache. PR#311 open."}
+{"r":"23310672425","c":["157","260","282","111"],"n":"Open Repo Assist PRs: #311 (wrapLineSegmentCharStarts, clean), #314 (factories lineCount, clean). Issues #260 and #282 still open; PRs #274/#295 closed by maintainer without merging. Issue #315 is a stale fallback (superseded by PR #314)."}
