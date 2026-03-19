@@ -15,9 +15,9 @@
  * Filesystem adapter interface for platform portability.
  *
  * Implement this interface to use ProjectTree with different backends:
- * - Bun/Node: Use the provided `bunFsAdapter` or `nodeFsAdapter`
+ * - Bun/Node: Use the provided `createFsAdapter()`
  * - Browser: Implement using File System Access API or a virtual FS
- * - Testing: Implement a mock adapter with in-memory filesystem
+ * - Testing: Use `createMemoryFsAdapter()` with in-memory filesystem
  */
 export interface FsAdapter {
   /**
@@ -142,25 +142,6 @@ export interface ProjectDirectoryEntry {
 export type ProjectEntry = ProjectFileEntry | ProjectDirectoryEntry;
 
 /**
- * Event emitted when the project tree changes.
- */
-export interface ProjectTreeChangeEvent {
-  /** Type of change */
-  readonly type: "add" | "remove" | "change";
-  /** Path that changed */
-  readonly path: string;
-  /** Entry type that changed */
-  readonly entryType: "file" | "directory";
-}
-
-/**
- * Callback for project tree changes.
- */
-export type ProjectTreeChangeCallback = (
-  event: ProjectTreeChangeEvent,
-) => void;
-
-/**
  * Project tree interface for discovering files in a directory.
  */
 export interface ProjectTree {
@@ -191,16 +172,4 @@ export interface ProjectTree {
    * @param path - Absolute or relative path
    */
   has(path: string): Promise<boolean>;
-
-  /**
-   * Subscribe to changes in the project tree.
-   * Note: Requires platform-specific file watching implementation.
-   * Returns a function to unsubscribe.
-   */
-  onChange?(callback: ProjectTreeChangeCallback): () => void;
-
-  /**
-   * Dispose of resources (file watchers, etc.).
-   */
-  dispose?(): void;
 }

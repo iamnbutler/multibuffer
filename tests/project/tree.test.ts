@@ -474,7 +474,9 @@ describe("createMemoryFsAdapter", () => {
       "/root/file.ts": { type: "file", size: 100, mtime: 1234567890 },
     });
 
-    const stat = await adapter.stat?.("/root/file.ts");
+    expect(adapter.stat).toBeDefined();
+    if (!adapter.stat) throw new Error("stat should be defined");
+    const stat = await adapter.stat("/root/file.ts");
 
     expect(stat.size).toBe(100);
     expect(stat.mtime).toBe(1234567890);

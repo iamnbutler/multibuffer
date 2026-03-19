@@ -120,15 +120,18 @@ class ProjectTreeImpl implements ProjectTree {
             relativePath,
             this.getBasename(absolutePath),
           );
-        } catch {
-          // It's a file
-          return this.createFileEntry(
-            absolutePath,
-            relativePath,
-            this.getBasename(absolutePath),
-            stat.size,
-            stat.mtime,
-          );
+        } catch (error: unknown) {
+          // Only treat ENOTDIR as "this is a file"; re-throw other errors
+          if (getErrorCode(error) === "ENOTDIR") {
+            return this.createFileEntry(
+              absolutePath,
+              relativePath,
+              this.getBasename(absolutePath),
+              stat.size,
+              stat.mtime,
+            );
+          }
+          throw error;
         }
       }
 
@@ -140,16 +143,23 @@ class ProjectTreeImpl implements ProjectTree {
           relativePath,
           this.getBasename(absolutePath),
         );
-      } catch {
-        // Assume it's a file if readdir fails
-        return this.createFileEntry(
-          absolutePath,
-          relativePath,
-          this.getBasename(absolutePath),
-        );
+      } catch (error: unknown) {
+        // Only treat ENOTDIR as "this is a file"; re-throw other errors
+        if (getErrorCode(error) === "ENOTDIR") {
+          return this.createFileEntry(
+            absolutePath,
+            relativePath,
+            this.getBasename(absolutePath),
+          );
+        }
+        throw error;
       }
-    } catch {
-      return undefined;
+    } catch (error: unknown) {
+      // ENOENT means the path doesn't exist — return undefined
+      if (getErrorCode(error) === "ENOENT") {
+        return undefined;
+      }
+      throw error;
     }
   }
 
@@ -214,8 +224,8 @@ class ProjectTreeImpl implements ProjectTree {
       return;
     }
 
-    // Sort entries: directories first, then alphabetically
-    const sortedEntries = [...entries].sort((a, b) => {
+    // Sort entries in place: directories first, then alphabetically
+    const sortedEntries = entries.slice().sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) {
         return a.isDirectory ? -1 : 1;
       }
@@ -309,23 +319,14 @@ class ProjectTreeImpl implements ProjectTree {
     size?: number,
     mtime?: number,
   ): ProjectFileEntry {
-    const entry: ProjectFileEntry = {
+    return {
       type: "file",
       name,
       path,
       relativePath,
+      ...(size !== undefined ? { size } : {}),
+      ...(mtime !== undefined ? { mtime } : {}),
     };
-
-    if (size !== undefined) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: creating file entry with optional size property
-      (entry as { size: number }).size = size;
-    }
-    if (mtime !== undefined) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: creating file entry with optional mtime property
-      (entry as { mtime: number }).mtime = mtime;
-    }
-
-    return entry;
   }
 
   /**
@@ -365,6 +366,7 @@ class ProjectTreeImpl implements ProjectTree {
 
   /**
    * Convert an absolute path to relative (from root).
+   * Throws if the path is outside the project root.
    */
   private toRelativePath(absolutePath: string): string {
     if (absolutePath === this.root) {
@@ -374,7 +376,9 @@ class ProjectTreeImpl implements ProjectTree {
     if (absolutePath.startsWith(prefix)) {
       return absolutePath.slice(prefix.length);
     }
-    return absolutePath;
+    throw new Error(
+      `Path "${absolutePath}" is outside project root "${this.root}"`,
+    );
   }
 
   /**
@@ -399,4 +403,25 @@ class ProjectTreeImpl implements ProjectTree {
     const parts = path.split("/");
     return parts[parts.length - 1] ?? "";
   }
+}
+
+/**
+ * Extract the error code from a Node.js-style errno exception.
+ *
+ * Checks for a string `code` property (real Node fs errors) and
+ * falls back to parsing an "ECODE:" message prefix (memory adapter).
+ * Returns undefined if neither is found.
+ */
+function getErrorCode(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+
+  // Real Node.js errno exceptions carry a string `code` property
+  if ("code" in error) {
+    const code = error.code;
+    if (typeof code === "string") return code;
+  }
+
+  // Memory adapter errors use an "ECODE: ..." message format
+  const match = error.message.match(/^([A-Z]+):/);
+  return match?.[1];
 }

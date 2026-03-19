@@ -15,6 +15,14 @@
 import type { GlobMatcher } from "./types.ts";
 
 /**
+ * Shared default glob matcher instance.
+ *
+ * Avoids creating a new matcher (and its cache) on every call
+ * when no custom matcher is provided.
+ */
+const defaultGlobMatcher: GlobMatcher = createGlobMatcher();
+
+/**
  * Compile a glob pattern to a RegExp.
  *
  * @param pattern - Glob pattern to compile
@@ -180,7 +188,7 @@ export function createGlobMatcher(): GlobMatcher {
 export function matchesAny(
   patterns: readonly string[],
   path: string,
-  matcher: GlobMatcher = createGlobMatcher(),
+  matcher: GlobMatcher = defaultGlobMatcher,
 ): boolean {
   for (const pattern of patterns) {
     if (matcher(pattern, path)) {
@@ -203,7 +211,7 @@ export function shouldInclude(
   path: string,
   include: readonly string[],
   exclude: readonly string[],
-  matcher: GlobMatcher = createGlobMatcher(),
+  matcher: GlobMatcher = defaultGlobMatcher,
 ): boolean {
   // Check exclusions first
   if (exclude.length > 0) {
@@ -250,7 +258,7 @@ export function shouldTraverseDirectory(
   dirPath: string,
   include: readonly string[],
   exclude: readonly string[],
-  matcher: GlobMatcher = createGlobMatcher(),
+  matcher: GlobMatcher = defaultGlobMatcher,
 ): boolean {
   // Check if directory itself is excluded (exact match or directory patterns)
   for (const pattern of exclude) {

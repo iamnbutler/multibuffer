@@ -1,27 +1,27 @@
 /**
  * Filesystem adapter implementations.
  *
- * Provides default adapters for Bun and Node.js runtimes.
+ * Provides default adapters for Node.js/Bun runtimes.
  */
 
+import { readdir, stat } from "node:fs/promises";
 import type { FsAdapter, FsDirEntry, FsStat } from "./types.ts";
 
 /**
- * Create a filesystem adapter for Bun runtime.
+ * Create a filesystem adapter using node:fs/promises.
  *
- * Uses Bun's native file APIs for optimal performance.
+ * Works in both Node.js and Bun runtimes.
  *
  * @example
  * ```ts
  * const tree = createProjectTree('/path/to/project', {
- *   adapter: createBunFsAdapter(),
+ *   adapter: createFsAdapter(),
  * });
  * ```
  */
-export function createBunFsAdapter(): FsAdapter {
+export function createFsAdapter(): FsAdapter {
   return {
     async readdir(path: string): Promise<readonly FsDirEntry[]> {
-      const { readdir } = await import("node:fs/promises");
       const entries = await readdir(path, { withFileTypes: true });
       return entries.map((entry) => ({
         name: entry.name,
@@ -30,7 +30,6 @@ export function createBunFsAdapter(): FsAdapter {
     },
 
     async stat(path: string): Promise<FsStat> {
-      const { stat } = await import("node:fs/promises");
       const stats = await stat(path);
       return {
         size: stats.size,
@@ -38,23 +37,6 @@ export function createBunFsAdapter(): FsAdapter {
       };
     },
   };
-}
-
-/**
- * Create a filesystem adapter for Node.js runtime.
- *
- * Uses Node's fs/promises API.
- *
- * @example
- * ```ts
- * const tree = createProjectTree('/path/to/project', {
- *   adapter: createNodeFsAdapter(),
- * });
- * ```
- */
-export function createNodeFsAdapter(): FsAdapter {
-  // Same implementation as Bun - both support node:fs/promises
-  return createBunFsAdapter();
 }
 
 /**
@@ -161,6 +143,5 @@ function getBasename(path: string): string {
  * Detect runtime and return appropriate default adapter.
  */
 export function getDefaultFsAdapter(): FsAdapter {
-  // Both Bun and Node support node:fs/promises
-  return createBunFsAdapter();
+  return createFsAdapter();
 }

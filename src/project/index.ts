@@ -23,9 +23,8 @@
 // Adapters
 export type { MemoryFsEntry } from "./adapter.ts";
 export {
-  createBunFsAdapter,
+  createFsAdapter,
   createMemoryFsAdapter,
-  createNodeFsAdapter,
   getDefaultFsAdapter,
 } from "./adapter.ts";
 // Glob utilities
@@ -48,7 +47,5 @@ export type {
   ProjectEntry,
   ProjectFileEntry,
   ProjectTree,
-  ProjectTreeChangeCallback,
-  ProjectTreeChangeEvent,
   ProjectTreeOptions,
 } from "./types.ts";
