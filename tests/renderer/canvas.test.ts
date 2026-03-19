@@ -797,3 +797,50 @@ describe("canvas renderer exports", () => {
     expect(typeof CanvasRenderer).toBe("function");
   });
 });
+
+describe("canvas renderer focus and cursor blink", () => {
+  const measurements: Measurements = {
+    lineHeight: 20,
+    charWidth: 8,
+    gutterWidth: 40,
+  };
+
+  test("CanvasRenderer has setFocused method", () => {
+    const { CanvasRenderer } = require("../../src/renderer/index.ts");
+    const renderer = new CanvasRenderer(measurements);
+    expect(typeof renderer.setFocused).toBe("function");
+  });
+
+  test("CanvasRenderer has setBlinkInterval method", () => {
+    const { CanvasRenderer } = require("../../src/renderer/index.ts");
+    const renderer = new CanvasRenderer(measurements);
+    expect(typeof renderer.setBlinkInterval).toBe("function");
+  });
+
+  test("setFocused accepts boolean parameter", () => {
+    const { CanvasRenderer } = require("../../src/renderer/index.ts");
+    const renderer = new CanvasRenderer(measurements);
+    // Should not throw
+    expect(() => renderer.setFocused(true)).not.toThrow();
+    expect(() => renderer.setFocused(false)).not.toThrow();
+  });
+
+  test("setBlinkInterval accepts number or false", () => {
+    const { CanvasRenderer } = require("../../src/renderer/index.ts");
+    const renderer = new CanvasRenderer(measurements);
+    // Should not throw
+    expect(() => renderer.setBlinkInterval(500)).not.toThrow();
+    expect(() => renderer.setBlinkInterval(false)).not.toThrow();
+  });
+
+  test("setFocused is idempotent when called with same value", () => {
+    const { CanvasRenderer } = require("../../src/renderer/index.ts");
+    const renderer = new CanvasRenderer(measurements);
+    // Calling with same value multiple times should not throw
+    renderer.setFocused(true);
+    renderer.setFocused(true);
+    renderer.setFocused(false);
+    renderer.setFocused(false);
+    expect(true).toBe(true); // If we get here, no errors were thrown
+  });
+});
