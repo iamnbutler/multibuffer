@@ -13,6 +13,7 @@ import type {
   MultiBufferSnapshot,
   Selection,
 } from "../multibuffer/types.ts";
+import type { BracketMatch } from "./bracket-match.ts";
 
 /**
  * Event map for the Editor event emitter.
@@ -27,6 +28,12 @@ export type EditorEventMap = {
   selectionChange: [selections: readonly Selection[]];
   /** Fires on any state change. Provides the current cursor and selections. */
   change: [state: { cursor: MultiBufferPoint; selections: readonly Selection[] }];
+  /**
+   * Fires when bracket match changes (cursor moves to/from a bracket).
+   * Only emitted when `bracketMatching: true` option is set.
+   * Returns the matched pair, or null if no match (cursor not on a bracket or unbalanced).
+   */
+  bracketMatch: [match: BracketMatch | null];
 };
 
 /**
