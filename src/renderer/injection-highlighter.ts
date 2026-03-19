@@ -15,6 +15,7 @@ import {
   type Token,
   type TreeEdit,
 } from "./highlighter.ts";
+import { markdownQuery } from "./queries/index.ts";
 import { colorForNodeType } from "./theme.ts";
 
 export type { Token };
@@ -213,24 +214,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     return tokens;
   }
 
-  /** Node types that should not have their children highlighted. */
-  private static readonly SKIP_CHILDREN = new Set([
-    "fenced_code_block",
-    "indented_code_block",
-    "code_span",
-  ]);
-
-  /** Node types that propagate their styling to all children. */
-  private static readonly STYLED_PARENTS = new Set([
-    "atx_heading",
-    "setext_heading",
-    "emphasis",
-    "strong_emphasis",
-    "strikethrough",
-    "link_text",
-    "inline_link",
-    "shortcut_link",
-  ]);
 
   /**
    * Find ranges that should be highlighted with a different language.
@@ -346,7 +329,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     // Determine if this node should propagate its color to children
     let colorToPropagate = inheritedColor;
-    if (InjectionHighlighter.STYLED_PARENTS.has(nodeType)) {
+    if (markdownQuery.styledParents?.has(nodeType)) {
       colorToPropagate = colorForNodeType(nodeType);
     }
 
@@ -425,7 +408,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     }
 
     // Skip code blocks - their content is handled by injection
-    if (InjectionHighlighter.SKIP_CHILDREN.has(nodeType)) {
+    if (markdownQuery.skipChildren?.has(nodeType)) {
       const startCol =
         node.startPosition.row === targetRow ? node.startPosition.column : 0;
       const endCol =
@@ -444,7 +427,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     // Determine if this node should propagate its color to children
     let colorToPropagate = inheritedColor;
-    if (InjectionHighlighter.STYLED_PARENTS.has(nodeType)) {
+    if (markdownQuery.styledParents?.has(nodeType)) {
       colorToPropagate = colorForNodeType(nodeType);
     }
 
