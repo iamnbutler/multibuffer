@@ -22,6 +22,7 @@ export {
   selectionAtPoint,
 } from "./selection.ts";
 export type {
+  BracketMatchResult,
   CursorState,
   Direction,
   EditorCommand,

@@ -15,6 +15,15 @@ import type {
 } from "../multibuffer/types.ts";
 
 /**
+ * A matched bracket pair (open and close positions).
+ * Used in bracketMatch event payload.
+ */
+export interface BracketMatchResult {
+  readonly open: MultiBufferPoint;
+  readonly close: MultiBufferPoint;
+}
+
+/**
  * Event map for the Editor event emitter.
  * Keys are event names; values are tuples of callback argument types.
  */
@@ -27,6 +36,12 @@ export type EditorEventMap = {
   selectionChange: [selections: readonly Selection[]];
   /** Fires on any state change. Provides the current cursor and selections. */
   change: [state: { cursor: MultiBufferPoint; selections: readonly Selection[] }];
+  /**
+   * Fires when bracket match changes (cursor moves to/from a bracket).
+   * Only emitted when `bracketMatching: true` option is set.
+   * Returns the matched pair, or null if no match (cursor not on a bracket or unbalanced).
+   */
+  bracketMatch: [match: BracketMatchResult | null];
 };
 
 /**
