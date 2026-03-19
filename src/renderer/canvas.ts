@@ -1,5 +1,8 @@
 /**
  * Canvas-based renderer for the multibuffer.
+ * Renders visible visual rows into an HTML Canvas element.
+ * Supports native scrolling via a scroll container with spacer element.
+ * Supports soft wrapping via WrapMap.
  *
  * Uses a glyph atlas for high-performance text rendering with syntax highlighting.
  * The compositing approach applies color to grayscale glyphs via canvas operations.
@@ -27,6 +30,12 @@ import type {
   Viewport,
 } from "./types.ts";
 import { charColToVisualCol, visualColToCharCol, WrapMap, wrapLine } from "./wrap-map.ts";
+
+/** Threshold for lazy WrapMap computation (lines). */
+const LAZY_WRAP_THRESHOLD = 5000;
+
+/** Number of rows to compute per animation frame during lazy WrapMap build. */
+const WRAP_CHUNK_SIZE = 500;
 
 /**
  * Glyph atlas for caching pre-rendered character glyphs.
@@ -177,6 +186,7 @@ export interface CanvasRendererOptions {
  * Canvas-based renderer implementation.
  * Implements the Renderer interface with canvas-based text rendering,
  * scroll handling, hit testing, and mouse event handling.
+ * Supports lazy WrapMap computation for large documents.
  */
 export class CanvasRenderer implements Renderer {
   private _container: HTMLElement | null = null;
@@ -190,6 +200,9 @@ export class CanvasRenderer implements Renderer {
   private _snapshot: MultiBufferSnapshot | null = null;
   private _highlighter: SyntaxHighlighter | null = null;
   private _wrapMap: WrapMap | null = null;
+  private _wrapMapSnapshotVersion = -1;
+  private _wrapMapWrapWidth = 0;
+  private _wrapBuildFrame: number | null = null;
   private _glyphAtlas: GlyphAtlas | null = null;
   private _charWidth = 8; // Default, will be measured
   private _computedStyle: CSSStyleDeclaration | null = null;
@@ -300,6 +313,11 @@ export class CanvasRenderer implements Renderer {
   }
 
   unmount(): void {
+    // Cancel any pending animation frames
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
     if (this._pendingRender !== null && typeof cancelAnimationFrame !== "undefined") {
       cancelAnimationFrame(this._pendingRender);
       this._pendingRender = null;
@@ -333,6 +351,10 @@ export class CanvasRenderer implements Renderer {
     this._glyphAtlas = null;
     this._computedStyle = null;
     this._colorCache.clear();
+    this._snapshot = null;
+    this._wrapMap = null;
+    this._wrapMapSnapshotVersion = -1;
+    this._wrapMapWrapWidth = 0;
     this._onScroll = null;
     this._onClick = null;
     this._onMouseMove = null;
@@ -346,10 +368,8 @@ export class CanvasRenderer implements Renderer {
     }
 
     // Rebuild wrap map if snapshot exists
-    if (this._snapshot && measurements.wrapWidth && measurements.wrapWidth > 0) {
-      this._wrapMap = new WrapMap(this._snapshot, measurements.wrapWidth);
-    } else {
-      this._wrapMap = null;
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
     }
 
     // Recreate glyph atlas with new measurements
@@ -373,8 +393,8 @@ export class CanvasRenderer implements Renderer {
     this._glyphAtlas = new GlyphAtlas(font, this._charWidth, this._measurements.lineHeight, this._theme.syntaxDefault);
 
     // Rebuild wrap map
-    if (this._snapshot && this._measurements.wrapWidth && this._measurements.wrapWidth > 0) {
-      this._wrapMap = new WrapMap(this._snapshot, this._measurements.wrapWidth);
+    if (this._snapshot) {
+      this._wrapMap = this._buildWrapMap(this._snapshot);
     }
 
     this._scheduleRender();
@@ -400,11 +420,26 @@ export class CanvasRenderer implements Renderer {
     this._scheduleRender();
   }
 
+  /**
+   * Set the snapshot for content rendering.
+   * Called by the editor to update the content state.
+   * Uses version tracking to avoid unnecessary WrapMap rebuilds.
+   */
   setSnapshot(snapshot: MultiBufferSnapshot | null): void {
     this._snapshot = snapshot;
-    this._wrapMap = null;
-    if (snapshot && this._measurements.wrapWidth && this._measurements.wrapWidth > 0) {
-      this._wrapMap = new WrapMap(snapshot, this._measurements.wrapWidth);
+    if (!snapshot) {
+      this._wrapMap = null;
+      return;
+    }
+
+    // Check if we need to rebuild the wrap map
+    const wrapWidth = this._measurements.wrapWidth;
+    const needsRebuild =
+      snapshot.version !== this._wrapMapSnapshotVersion ||
+      (wrapWidth ?? 0) !== this._wrapMapWrapWidth;
+
+    if (needsRebuild) {
+      this._wrapMap = this._buildWrapMap(snapshot);
     }
   }
 
@@ -433,13 +468,17 @@ export class CanvasRenderer implements Renderer {
       this._spacer.style.height = `${contentHeight}px`;
     }
 
-    // Clear canvas with line background
-    const bgColor = this._resolveColor(this._theme.lineBg === "transparent" ? "#282828" : this._theme.lineBg);
+    // Clear canvas with line background.
+    // When lineBg is "transparent", fall back to headerBg (a darker chrome surface).
+    const bgColor = this._resolveColor(
+      this._theme.lineBg === "transparent" ? this._theme.headerBg : this._theme.lineBg,
+    );
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
 
-    // Draw gutter background
-    ctx.fillStyle = "#282828";
+    // Draw gutter background using the header surface color so it
+    // tracks the active theme instead of being hard-coded.
+    ctx.fillStyle = this._resolveColor(this._theme.headerBg);
     ctx.fillRect(0, 0, gutterWidth, this._canvas.height);
 
     // Build decoration map
@@ -827,6 +866,13 @@ export class CanvasRenderer implements Renderer {
   }
 
   /**
+   * Get the current scroll position from the scroll container.
+   */
+  getScrollTop(): number {
+    return this._scrollContainer?.scrollTop ?? 0;
+  }
+
+  /**
    * Convert pixel coordinates to multibuffer position.
    * Accounts for gutter width, scroll offset, and soft wrapping.
    */
@@ -962,16 +1008,90 @@ export class CanvasRenderer implements Renderer {
     return this._snapshot.lines(row, nextRow)?.[0] ?? "";
   }
 
+  /**
+   * Build or rebuild the WrapMap for soft wrapping.
+   * Uses lazy computation for large documents.
+   */
+  private _buildWrapMap(snapshot: MultiBufferSnapshot): WrapMap | null {
+    const wrapWidth = this._measurements.wrapWidth;
+    if (!wrapWidth || wrapWidth <= 0) {
+      return null;
+    }
+
+    this._wrapMapSnapshotVersion = snapshot.version;
+    this._wrapMapWrapWidth = wrapWidth;
+
+    // Cancel any pending animation frame from a previous build
+    if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
+      cancelAnimationFrame(this._wrapBuildFrame);
+      this._wrapBuildFrame = null;
+    }
+
+    const useLazy =
+      snapshot.lineCount > LAZY_WRAP_THRESHOLD &&
+      typeof requestAnimationFrame !== "undefined";
+
+    if (useLazy) {
+      const wrapMap = new WrapMap(snapshot, wrapWidth, { lazy: true });
+      this._scheduleWrapCompletion(wrapMap);
+      return wrapMap;
+    }
+
+    return new WrapMap(snapshot, wrapWidth);
+  }
+
+  /**
+   * Incrementally compute the WrapMap across animation frames.
+   */
+  private _scheduleWrapCompletion(wrapMap: WrapMap): void {
+    this._wrapBuildFrame = requestAnimationFrame(() => {
+      // If the wrapMap was replaced by a newer snapshot, bail out
+      if (this._wrapMap !== wrapMap) {
+        this._wrapBuildFrame = null;
+        return;
+      }
+
+      const complete = wrapMap.computeChunk(WRAP_CHUNK_SIZE);
+
+      if (complete) {
+        this._wrapBuildFrame = null;
+        // Update spacer height with exact content height
+        if (this._spacer && this._snapshot) {
+          const contentHeight = calculateContentHeight(
+            this._snapshot.lineCount,
+            this._measurements.lineHeight,
+            wrapMap,
+          );
+          this._spacer.style.height = `${contentHeight}px`;
+        }
+      } else {
+        // Schedule next chunk
+        this._scheduleWrapCompletion(wrapMap);
+      }
+    });
+  }
+
   private _resizeCanvas(): void {
     if (!this._canvas || !this._scrollContainer) return;
 
     const width = this._scrollContainer.clientWidth;
     const height = this._scrollContainer.clientHeight;
-
-    // Handle device pixel ratio for sharp rendering
     const dpr = window.devicePixelRatio || 1;
-    this._canvas.width = width * dpr;
-    this._canvas.height = height * dpr;
+
+    // Only resize when dimensions actually change to avoid resetting
+    // the canvas context (browser spec: any assignment to canvas.width
+    // or canvas.height clears all pixels and resets context state).
+    const targetWidth = width * dpr;
+    const targetHeight = height * dpr;
+    if (
+      this._canvas.width === targetWidth &&
+      this._canvas.height === targetHeight
+    ) {
+      return;
+    }
+
+    this._canvas.width = targetWidth;
+    this._canvas.height = targetHeight;
     this._canvas.style.width = `${width}px`;
     this._canvas.style.height = `${height}px`;
 

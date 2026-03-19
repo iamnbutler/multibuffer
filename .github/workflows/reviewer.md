@@ -117,7 +117,7 @@ Suppressions that are almost never legitimate:
 
 ### Step 1: Understand Context
 
-1. Read the repository's `AGENTS.md` and `CLAUDE.md` for project conventions.
+1. Read the repository's `CLAUDE.md` for project conventions.
 2. Check cache memory at `/tmp/gh-aw/cache-memory/` for:
    - Past review patterns (`reviewer-patterns.json`)
    - Known recurring antipatterns (`reviewer-antipatterns.json`)

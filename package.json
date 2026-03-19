@@ -51,7 +51,8 @@
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "test:e2e": "npx playwright test",
+    "test:e2e": "bunx playwright test",
+    "fuzz": "bun test tests/fuzz/",
     "bench": "bun run benchmarks/index.ts",
     "bench:history": "bun run scripts/bench-history.ts",
     "typecheck": "tsc --noEmit",
@@ -67,6 +68,8 @@
     "@types/bun": "latest",
     "@types/react": "^18.2.0",
     "@vscode/tree-sitter-wasm": "^0.3.0",
+    "@webgpu/types": "^0.1.69",
+    "fast-check": "^4.6.0",
     "happy-dom": "^20.8.4",
     "react": "^18.2.0",
     "tree-sitter-wasms": "^0.1.13",

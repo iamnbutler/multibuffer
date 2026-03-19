@@ -1,32 +1,47 @@
 /**
- * EditorView: high-level facade that bundles Editor + DomRenderer + InputHandler.
+ * DiffEditorView: high-level facade for inline (unified) diff editing.
  *
- * Wires up the three components so callers don't need to manage their lifecycles
- * separately. Supports keyed decoration groups and CSS-variable-based theming.
+ * Bundles DiffController + Editor + DomRenderer + InputHandler into a single
+ * component. Supports live re-diff on edit, keyed decoration groups, and
+ * CSS-variable-based theming.
  *
  * @example
  * ```ts
- * const view = createEditorView(container, "hello\nworld");
+ * const view = createDiffEditorView(container, "old text", "new text");
  * view.setDecorations("errors", [{ range: ..., className: "error" }]);
  * view.setTheme({ "--editor-cursor": "#ffffff" });
  * view.destroy();
  * ```
  */
 
+import { createBuffer } from "../buffer/buffer.ts";
+import type { Buffer, BufferId } from "../buffer/types.ts";
+import { Editor } from "../editor/editor.ts";
+import type { ThemeVars } from "../editor/editor-view.ts";
+import { InputHandler } from "../editor/input-handler.ts";
+import type { Keymap } from "../editor/types.ts";
 import { resolveAnchorRange } from "../multibuffer/anchor.ts";
 import type { MultiBufferRow } from "../multibuffer/types.ts";
 import { createDomRenderer } from "../renderer/dom.ts";
 import type { Decoration, Measurements } from "../renderer/types.ts";
-import type { Editor } from "./editor.ts";
-import { createSingleBufferEditor } from "./factories.ts";
-import { InputHandler } from "./input-handler.ts";
-import type { EditorOptions, Keymap } from "./types.ts";
+import type { DiffController, DiffControllerOptions } from "./controller.ts";
+import { createDiffController } from "./controller.ts";
 
-/** CSS variable name → value map for theming the editor chrome and syntax. */
-export type ThemeVars = Record<string, string>;
+/** Unique buffer ID counter for diff editor buffers. */
+let diffBufferIdCounter = 0;
 
-/** Options for createEditorView. */
-export interface EditorViewOptions extends EditorOptions {
+function createDiffBufferId(prefix: string): BufferId {
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for internal buffer ID
+  return `diff-${prefix}-${++diffBufferIdCounter}` as BufferId;
+}
+
+/** Reset the buffer ID counter. For testing only. */
+export function resetDiffEditorViewCounter(): void {
+  diffBufferIdCounter = 0;
+}
+
+/** Options for createDiffEditorView. */
+export interface DiffEditorViewOptions extends DiffControllerOptions {
   /** Custom measurements. Defaults: lineHeight=20, gutterWidth=48. */
   measurements?: Partial<Measurements>;
   /**
@@ -52,8 +67,10 @@ export interface EditorViewOptions extends EditorOptions {
   skipInputHandler?: boolean;
 }
 
-/** The EditorView facade — bundles Editor, DomRenderer, and InputHandler. */
-export interface EditorView {
+/** The DiffEditorView facade — bundles DiffController, Editor, DomRenderer, and InputHandler. */
+export interface DiffEditorView {
+  /** The underlying DiffController for diff state management. */
+  readonly diffController: DiffController;
   /** The underlying Editor instance for advanced use. */
   readonly editor: Editor;
   /** The DOM renderer instance. */
@@ -63,10 +80,13 @@ export interface EditorView {
    * May be undefined if skipInputHandler was true.
    */
   readonly inputHandler: InputHandler | undefined;
+  /** Whether the old and new content are identical. */
+  readonly isEqual: boolean;
 
   /**
    * Update a named group of decorations. Multiple groups are merged before
-   * rendering. Passing an empty array removes the group.
+   * rendering. The "diff" group is reserved for internal diff styling.
+   * Passing an empty array removes the group.
    */
   setDecorations(key: string, decorations: Decoration[]): void;
 
@@ -76,6 +96,13 @@ export interface EditorView {
    * or `THEME_CSS_VARIABLES` as references.
    */
   setTheme(theme: ThemeVars): void;
+
+  /**
+   * Manually trigger a re-diff. Useful when you've edited the underlying
+   * buffers directly and want to update immediately without waiting for
+   * the debounce timer.
+   */
+  reDiff(): void;
 
   /** Unmount the renderer and input handler and release all event listeners. */
   destroy(): void;
@@ -90,7 +117,9 @@ export interface EditorView {
  * - `skipInputHandler` defaults to `readOnly` when not explicitly set.
  * - Explicit values always win over the `readOnly` default.
  */
-export function resolveReadOnlyOptions(options?: Pick<EditorViewOptions, "readOnly" | "hideCursor" | "skipInputHandler">): {
+export function resolveDiffReadOnlyOptions(
+  options?: Pick<DiffEditorViewOptions, "readOnly" | "hideCursor" | "skipInputHandler">,
+): {
   hideCursor: boolean;
   skipInputHandler: boolean;
 } {
@@ -103,9 +132,9 @@ export function resolveReadOnlyOptions(options?: Pick<EditorViewOptions, "readOn
 
 /**
  * Merge all decoration groups from the keyed map into a flat array.
- * Exported for testing; callers should use the EditorView API.
+ * Exported for testing; callers should use the DiffEditorView API.
  */
-export function mergeDecorations(map: Map<string, Decoration[]>): Decoration[] {
+export function mergeDiffDecorations(map: Map<string, readonly Decoration[]>): Decoration[] {
   const result: Decoration[] = [];
   for (const decs of map.values()) {
     for (const d of decs) result.push(d);
@@ -113,17 +142,24 @@ export function mergeDecorations(map: Map<string, Decoration[]>): Decoration[] {
   return result;
 }
 
-class EditorViewImpl implements EditorView {
+class DiffEditorViewImpl implements DiffEditorView {
+  readonly diffController: DiffController;
   readonly editor: Editor;
   readonly renderer: ReturnType<typeof createDomRenderer>;
   readonly inputHandler: InputHandler | undefined;
 
   private _container: HTMLElement;
-  private _decorations = new Map<string, Decoration[]>();
+  private _decorations = new Map<string, readonly Decoration[]>();
   private _rafId: number | null = null;
-  private _onEditorChange = () => this._scheduleRender();
+  private _onEditorChange: () => void;
+  private _unsubscribeDiffUpdate: () => void;
 
-  constructor(container: HTMLElement, text: string, options?: EditorViewOptions) {
+  constructor(
+    container: HTMLElement,
+    oldBuffer: Buffer,
+    newBuffer: Buffer,
+    options?: DiffEditorViewOptions,
+  ) {
     this._container = container;
 
     const measurements: Measurements = {
@@ -134,9 +170,17 @@ class EditorViewImpl implements EditorView {
     };
 
     // Determine cursor visibility and input handler from readOnly/explicit options
-    const { hideCursor, skipInputHandler } = resolveReadOnlyOptions(options);
+    const { hideCursor, skipInputHandler } = resolveDiffReadOnlyOptions(options);
 
-    this.editor = createSingleBufferEditor(text, options);
+    // Create diff controller
+    this.diffController = createDiffController(oldBuffer, newBuffer, options);
+
+    // Create editor wrapping the diff multiBuffer
+    this.editor = new Editor(this.diffController.multiBuffer, {
+      readOnly: options?.readOnly,
+    });
+
+    // Create renderer
     this.renderer = createDomRenderer(measurements);
 
     // Hide cursor in read-only mode
@@ -186,16 +230,39 @@ class EditorViewImpl implements EditorView {
       this.editor.selectLineAt(point);
     });
 
-    // Wire editor state changes → deferred render
+    // Set initial diff decorations
+    this._decorations.set("diff", this.diffController.decorations);
+
+    // Wire editor state changes → deferred render + notify diff controller
     const initialSnap = this.editor.multiBuffer.snapshot();
     this.renderer.setSnapshot(initialSnap);
+
+    this._onEditorChange = () => {
+      this._scheduleRender();
+      // Notify controller for debounced re-diff
+      this.diffController.notifyChange();
+    };
     this.editor.on("change", this._onEditorChange);
+
+    // Subscribe to diff controller updates
+    this._unsubscribeDiffUpdate = this.diffController.onUpdate((decorations) => {
+      this._decorations.set("diff", decorations);
+      this._scheduleRender();
+    });
 
     // Initial render
     this._render();
   }
 
+  get isEqual(): boolean {
+    return this.diffController.isEqual;
+  }
+
   setDecorations(key: string, decorations: Decoration[]): void {
+    if (key === "diff") {
+      // Reserved for internal diff decorations; ignore external attempts
+      return;
+    }
     if (decorations.length === 0) {
       this._decorations.delete(key);
     } else {
@@ -210,12 +277,18 @@ class EditorViewImpl implements EditorView {
     }
   }
 
+  reDiff(): void {
+    this.diffController.reDiff();
+  }
+
   destroy(): void {
     if (this._rafId !== null) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
     this.editor.off("change", this._onEditorChange);
+    this._unsubscribeDiffUpdate();
+    this.diffController.dispose();
     this.inputHandler?.unmount();
     this.renderer.unmount();
   }
@@ -251,23 +324,19 @@ class EditorViewImpl implements EditorView {
     this.renderer.render(
       {
         viewport,
-        selections: this.editor.selections,
-        decorations: mergeDecorations(this._decorations),
+        selections: this.editor.selection ? [this.editor.selection] : [],
+        decorations: mergeDiffDecorations(this._decorations),
         excerptHeaders,
         focused: this.inputHandler?.hasFocus ?? false,
       },
       lines,
     );
 
-    // Render cursor for primary selection
+    // Render cursor and selection overlay separately (DomRenderer API)
     this.renderer.renderCursor(this.editor.cursor);
 
-    // Render all selection overlays
-    // For now, render the primary (last) selection. Multi-selection rendering
-    // will need DomRenderer updates to handle multiple overlays.
-    const primarySelection = this.editor.selection;
-    if (primarySelection) {
-      const resolved = resolveAnchorRange(snap, primarySelection.range);
+    if (this.editor.selection) {
+      const resolved = resolveAnchorRange(snap, this.editor.selection.range);
       this.renderer.renderSelection(resolved?.start, resolved?.end);
     } else {
       this.renderer.renderSelection(undefined, undefined);
@@ -276,17 +345,54 @@ class EditorViewImpl implements EditorView {
 }
 
 /**
- * Create an EditorView that bundles a single-buffer Editor, DomRenderer, and
- * InputHandler, wired together and mounted into `container`.
+ * Create a DiffEditorView from two text strings.
+ *
+ * This is the main entry point for creating an inline diff editor. It creates
+ * the underlying buffers, wires up the DiffController, Editor, DomRenderer,
+ * and InputHandler, and mounts everything into the container.
  *
  * @param container - The DOM element to render into.
- * @param text      - Initial text content.
- * @param options   - Optional configuration (readOnly, measurements).
+ * @param oldText   - The original/old text content.
+ * @param newText   - The modified/new text content.
+ * @param options   - Optional configuration (readOnly, debounceMs, measurements).
+ *
+ * @example
+ * ```ts
+ * const view = createDiffEditorView(
+ *   document.getElementById("editor"),
+ *   "function old() {}",
+ *   "function new() {}",
+ *   { readOnly: true }
+ * );
+ * ```
  */
-export function createEditorView(
+export function createDiffEditorView(
   container: HTMLElement,
-  text: string,
-  options?: EditorViewOptions,
-): EditorView {
-  return new EditorViewImpl(container, text, options);
+  oldText: string,
+  newText: string,
+  options?: DiffEditorViewOptions,
+): DiffEditorView {
+  const oldBuffer = createBuffer(createDiffBufferId("old"), oldText);
+  const newBuffer = createBuffer(createDiffBufferId("new"), newText);
+  return new DiffEditorViewImpl(container, oldBuffer, newBuffer, options);
+}
+
+/**
+ * Create a DiffEditorView from existing Buffer instances.
+ *
+ * Use this when you already have Buffer objects (e.g., from file handles)
+ * and want to create a diff view between them.
+ *
+ * @param container - The DOM element to render into.
+ * @param oldBuffer - The original/old buffer.
+ * @param newBuffer - The modified/new buffer.
+ * @param options   - Optional configuration (readOnly, debounceMs, measurements).
+ */
+export function createDiffEditorViewFromBuffers(
+  container: HTMLElement,
+  oldBuffer: Buffer,
+  newBuffer: Buffer,
+  options?: DiffEditorViewOptions,
+): DiffEditorView {
+  return new DiffEditorViewImpl(container, oldBuffer, newBuffer, options);
 }

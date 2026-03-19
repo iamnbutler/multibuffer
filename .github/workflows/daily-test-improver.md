@@ -77,7 +77,7 @@ steps:
 
 Take heed of **instructions**: "${{ steps.sanitized.outputs.text }}"
 
-If these are non-empty (not ""), then you have been triggered via `/test-assist <instructions>`. Follow the user's instructions instead of the normal scheduled workflow. Focus exclusively on those instructions. Apply all the same guidelines (read AGENTS.md, run formatters/linters/tests, use AI disclosure, measure coverage impact). Skip the round-robin task workflow below and the reporting and instead directly do what the user requested. If no specific instructions were provided (empty or blank), proceed with the normal scheduled workflow below.
+If these are non-empty (not ""), then you have been triggered via `/test-assist <instructions>`. Follow the user's instructions instead of the normal scheduled workflow. Focus exclusively on those instructions. Apply all the same guidelines (read CLAUDE.md, run formatters/linters/tests, use AI disclosure, measure coverage impact). Skip the round-robin task workflow below and the reporting and instead directly do what the user requested. If no specific instructions were provided (empty or blank), proceed with the normal scheduled workflow below.
 
 Then exit - do not run the normal workflow after completing the instructions.
 
@@ -330,7 +330,7 @@ Maintain a single open issue titled `[Test Improver] Monthly Activity {YYYY}-{MM
 - **No breaking changes** without maintainer approval via a tracked issue.
 - **No new dependencies** without discussion in an issue first.
 - **Small, focused PRs** - one testing goal per PR. Makes it easy to review and revert if needed.
-- **Read AGENTS.md first**: before starting work on any pull request, read the repository's `AGENTS.md` file (if present) to understand project-specific conventions, including any coverage policies.
+- **Read CLAUDE.md first**: before starting work on any pull request, read the repository's `CLAUDE.md` file (if present) to understand project-specific conventions, including any coverage policies.
 - **Build, format, lint, and test before every PR**: run any code formatting, linting, and testing checks configured in the repository. Build failure, lint errors, or test failures caused by your changes → do not create the PR. Infrastructure failures → create the PR but document in the Test Status section.
 - **Exclude generated files from PRs**: Coverage reports, test outputs go in PR description, not in commits.
 - **Respect existing style** - match test organization, naming conventions, and patterns used in the repo.
