@@ -1,21 +1,24 @@
 /**
  * CLI client for the editor debug API.
  *
+ * This is a diagnostic WebSocket tool for manual debugging.
+ * For automated browser testing, use the Playwright e2e tests in tests/e2e/.
+ *
  * Usage:
- *   bun run demo/debug-client.ts getState
- *   bun run demo/debug-client.ts getText
- *   bun run demo/debug-client.ts press "Meta+ArrowRight"
- *   bun run demo/debug-client.ts press "ArrowLeft"
- *   bun run demo/debug-client.ts type "hello world"
- *   bun run demo/debug-client.ts click 5 10
- *   bun run demo/debug-client.ts dispatch '{"type":"insertText","text":"hi"}'
+ *   bun run playground/debug-client.ts getState
+ *   bun run playground/debug-client.ts getText
+ *   bun run playground/debug-client.ts press "Meta+ArrowRight"
+ *   bun run playground/debug-client.ts press "ArrowLeft"
+ *   bun run playground/debug-client.ts type "hello world"
+ *   bun run playground/debug-client.ts click 5 10
+ *   bun run playground/debug-client.ts dispatch '{"type":"insertText","text":"hi"}'
  */
 
 const args = process.argv.slice(2);
 const cmd = args[0];
 
 if (!cmd) {
-  console.log("Usage: bun run demo/debug-client.ts <command> [args]");
+  console.log("Usage: bun run playground/debug-client.ts <command> [args]");
   console.log("");
   console.log("Commands:");
   console.log("  getState                  Get cursor, selection, line count");
@@ -90,7 +93,7 @@ ws.onmessage = (event) => {
   ws.close();
 };
 
-ws.onerror = (event) => {
+ws.onerror = (_event) => {
   clearTimeout(timeout);
   console.error("WebSocket error — is the dev server running? (bun run dev)");
   process.exit(1);
