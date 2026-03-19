@@ -2,7 +2,7 @@
 
 **Goal:** A gh-aw workflow that takes scoped GitHub issues and implements them following the project's TDD discipline (Types → Tests → Implementation), creating draft PRs with working code.
 
-**Architecture:** Scheduled + slash-command triggered gh-aw workflow. Single-issue focus per run with escape hatches for complexity (decompose into sub-issues, commit WIP). Reads CLAUDE.md/AGENTS.md dynamically for project constraints while following a baked-in TDD phase structure.
+**Architecture:** Scheduled + slash-command triggered gh-aw workflow. Single-issue focus per run with escape hatches for complexity (decompose into sub-issues, commit WIP). Reads CLAUDE.md dynamically for project constraints while following a baked-in TDD phase structure.
 
 ---
 
@@ -21,7 +21,7 @@
 ## TDD Phases
 
 ### Phase 0: Understand
-- Read CLAUDE.md and AGENTS.md for current project constraints
+- Read CLAUDE.md for current project constraints
 - Read the issue thoroughly
 - Check repo-memory for prior work on this issue
 - Check for existing WIP branches/PRs to resume

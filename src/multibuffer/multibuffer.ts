@@ -26,6 +26,7 @@ import type {
   ExcerptRange,
   ExcerptSpec,
   MultiBuffer,
+  MultiBufferEventMap,
   MultiBufferPoint,
   MultiBufferRow,
   MultiBufferSnapshot,
@@ -574,6 +575,10 @@ class MultiBufferImpl implements MultiBuffer {
   private _version = ++nextMultiBufferVersion;
   /** True when _cachedInfos/_cachedLineCount reflect the current _order and _excerpts state. */
   private _cacheValid = false;
+  /** Event listeners: event name → Set of callbacks. Typed via mapped type — no `any` needed. */
+  private _listeners: {
+    [K in keyof MultiBufferEventMap]?: Set<(...args: MultiBufferEventMap[K]) => void>;
+  } = {};
 
   /** Serialize an ExcerptId to a string key. */
   private static _excKey(id: ExcerptId): string {
@@ -591,6 +596,54 @@ class MultiBufferImpl implements MultiBuffer {
     if (this._cacheValid) return;
     this._rebuildCache();
     this._cacheValid = true;
+  }
+
+  /** Emit an event to all registered listeners. Snapshots the Set to prevent re-entrancy hazards. */
+  private _emit<K extends keyof MultiBufferEventMap>(
+    event: K,
+    ...args: MultiBufferEventMap[K]
+  ): void {
+    const listeners = this._listeners[event];
+    if (!listeners) return;
+    // Snapshot to prevent re-entrancy: listeners added during iteration won't fire in this cycle.
+    for (const cb of [...listeners]) {
+      cb(...args);
+    }
+  }
+
+  /**
+   * Get or create the listener set for a given event.
+   * Centralises the single type assertion needed because TypeScript cannot narrow
+   * a generic K in a mapped-type lookup/assignment.
+   */
+  private _getOrCreateListeners<K extends keyof MultiBufferEventMap>(
+    event: K,
+  ): Set<(...args: MultiBufferEventMap[K]) => void> {
+    // biome-ignore lint/plugin/no-type-assertion: expect: TypeScript cannot narrow generic K in mapped-type lookup; the outer generic ensures type safety
+    let listeners = this._listeners[event] as Set<(...args: MultiBufferEventMap[K]) => void> | undefined;
+    if (!listeners) {
+      listeners = new Set();
+      // biome-ignore lint/plugin/no-type-assertion: expect: same mapped-type narrowing limitation — assignment to this._listeners[event] requires cast
+      (this._listeners as Record<string, Set<(...args: MultiBufferEventMap[K]) => void>>)[event] = listeners;
+    }
+    return listeners;
+  }
+
+  on<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void {
+    this._getOrCreateListeners(event).add(cb);
+  }
+
+  off<K extends keyof MultiBufferEventMap>(
+    event: K,
+    cb: (...args: MultiBufferEventMap[K]) => void,
+  ): void {
+    // biome-ignore lint/plugin/no-type-assertion: expect: TypeScript cannot narrow generic K in mapped-type lookup
+    const listeners = this._listeners[event] as Set<(...args: MultiBufferEventMap[K]) => void> | undefined;
+    if (!listeners) return;
+    listeners.delete(cb);
   }
 
   get lineCount(): number {
@@ -651,6 +704,15 @@ class MultiBufferImpl implements MultiBuffer {
     }
     excSet.set(MultiBufferImpl._excKey(id), id);
     this._markDirty();
+    // Only rebuild cache and emit if there are listeners — avoids destroying the lazy strategy.
+    if (this._listeners.excerptAdded?.size) {
+      this._ensureCache();
+      const key = MultiBufferImpl._excKey(id);
+      const info = this._cachedInfos.find(
+        (i) => MultiBufferImpl._excKey(i.id) === key,
+      );
+      if (info) this._emit("excerptAdded", info);
+    }
     return id;
   }
 
@@ -681,12 +743,25 @@ class MultiBufferImpl implements MultiBuffer {
     }
     // Single version bump + lazy cache rebuild for the entire batch
     this._markDirty();
+    // Only rebuild cache and emit if there are listeners — avoids O(n) rebuild when nobody is listening.
+    if (this._listeners.excerptAdded?.size) {
+      this._ensureCache();
+      // Build O(1) lookup map once instead of O(n) find per id
+      const infoByKey = new Map(
+        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+      );
+      for (const id of ids) {
+        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        if (info) this._emit("excerptAdded", info);
+      }
+    }
     return ids;
   }
 
   removeExcerpt(excerptId: ExcerptId): void {
     // Update reverse index before removing from SlotMap (while bufferId is still accessible)
     const exc = this._excerpts.get(excerptId);
+    const existed = !!exc;
     if (exc) {
       // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
       const bid = exc.bufferId as string;
@@ -701,6 +776,8 @@ class MultiBufferImpl implements MultiBuffer {
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
     );
     this._markDirty();
+    // Only emit if the excerpt actually existed
+    if (existed) this._emit("excerptRemoved", excerptId);
   }
 
   clearExcerpts(): readonly ExcerptId[] {
@@ -711,6 +788,10 @@ class MultiBufferImpl implements MultiBuffer {
     this._order = [];
     this._bufferToExcerpts.clear();
     this._markDirty();
+    // Emit events for each removed excerpt
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
     return oldIds;
   }
 
@@ -721,6 +802,9 @@ class MultiBufferImpl implements MultiBuffer {
       options?: ExcerptAddOptions;
     }>,
   ): readonly ExcerptId[] {
+    // Collect old IDs before removing for event emission
+    const oldIds = [...this._order];
+
     // Remove all existing excerpts without triggering a cache rebuild each time.
     for (const id of this._order) {
       this._excerpts.remove(id);
@@ -756,6 +840,23 @@ class MultiBufferImpl implements MultiBuffer {
 
     // Single rebuild at the end instead of N+1 rebuilds.
     this._markDirty();
+
+    // Emit removal events first (before add events)
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
+    // Only rebuild cache and emit add events if there are listeners
+    if (this._listeners.excerptAdded?.size) {
+      this._ensureCache();
+      // Build O(1) lookup map once instead of O(n) find per id
+      const infoByKey = new Map(
+        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+      );
+      for (const id of newIds) {
+        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        if (info) this._emit("excerptAdded", info);
+      }
+    }
     return newIds;
   }
 
@@ -807,6 +908,23 @@ class MultiBufferImpl implements MultiBuffer {
     }
 
     this._markDirty();
+
+    // Emit removal events first (before add events)
+    for (const id of oldIds) {
+      this._emit("excerptRemoved", id);
+    }
+    // Only rebuild cache and emit add events if there are listeners
+    if (this._listeners.excerptAdded?.size) {
+      this._ensureCache();
+      // Build O(1) lookup map once instead of O(n) find per id
+      const infoByKey = new Map(
+        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+      );
+      for (const id of newIds) {
+        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        if (info) this._emit("excerptAdded", info);
+      }
+    }
     return newIds;
   }
 

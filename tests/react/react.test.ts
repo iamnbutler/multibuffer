@@ -60,7 +60,7 @@ describe("UseEditorViewOptions", () => {
         wrapWidth: 80,
       },
       theme: {
-        "--editor-cursor": "#ffffff",
+        cursor: "#ffffff",
       },
       decorations: [],
     };
@@ -87,7 +87,7 @@ describe("UseDiffViewOptions", () => {
         gutterWidth: 96,
       },
       theme: {
-        "--editor-cursor": "#ffffff",
+        cursor: "#ffffff",
       },
       decorations: [],
       diffOptions: {
@@ -171,10 +171,10 @@ describe("Re-exported types", () => {
   });
 
   test("Theme type is accessible", () => {
-    const t: Theme = {
-      "--editor-bg": "#1d2021",
+    const t: Partial<Theme> = {
+      cursor: "#1d2021",
     };
-    expect(t["--editor-bg"]).toBe("#1d2021");
+    expect(t.cursor).toBe("#1d2021");
   });
 
   test("Keymap type is accessible", () => {
