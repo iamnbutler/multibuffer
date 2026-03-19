@@ -223,6 +223,7 @@ export class CanvasRenderer implements Renderer {
   private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onScrollCallback: (() => void) | null = null;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -359,6 +360,7 @@ export class CanvasRenderer implements Renderer {
     this._onClick = null;
     this._onMouseMove = null;
     this._onMouseUp = null;
+    this._onScrollCallback = null;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -959,6 +961,15 @@ export class CanvasRenderer implements Renderer {
   }
 
   /**
+   * Register callback for scroll events.
+   * Called at the end of each scroll update so the caller can
+   * re-paint cursor/selection that the base render clears.
+   */
+  onScroll(cb: () => void): void {
+    this._onScrollCallback = cb;
+  }
+
+  /**
    * Render the cursor at a given position.
    */
   renderCursor(point: MultiBufferPoint | undefined): void {
@@ -1164,6 +1175,8 @@ export class CanvasRenderer implements Renderer {
       },
       lines,
     );
+
+    this._onScrollCallback?.();
   }
 
   private _drawSelectionRange(

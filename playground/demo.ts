@@ -239,7 +239,8 @@ async function main() {
     // Multi-cursor commands (Cmd/Ctrl+Alt+Arrow)
     "Mod+Alt+ArrowUp": { type: "addCursorAbove" },
     "Mod+Alt+ArrowDown": { type: "addCursorBelow" },
-    // Escape clears extra cursors
+    // Global Escape binding — intentionally not scoped to a specific scenario
+    // so that extra cursors can always be dismissed regardless of active view.
     "Escape": { type: "clearExtraCursors" },
   } as const;
 
@@ -568,7 +569,7 @@ async function main() {
         scrollContainer.style.display = "none";
       }
       if (container) diffUnmount = renderDiffScenario(id, container);
-    } else if (scenario.isSpecialRenderer && id === "canvas-renderer") {
+    } else if (scenario.isSpecialRenderer) {
       // Hide the editor scroll container
       if (scrollContainer instanceof HTMLElement) {
         scrollContainer.style.display = "none";
@@ -591,6 +592,7 @@ async function main() {
       }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
       editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
+      inputHandler.focus();
     }
 
     // Update instructions panel for the new scenario
@@ -959,10 +961,13 @@ async function main() {
       canvasInputHandler.focus();
     });
 
+    canvasRenderer.onScroll(renderCanvas);
+
     renderCanvas();
     canvasInputHandler.focus();
 
     return () => {
+      canvasEditor.off("change", renderCanvas);
       canvasRenderer.unmount();
       canvasInputHandler.unmount();
     };
