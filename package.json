@@ -51,6 +51,7 @@
   "scripts": {
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "test:e2e": "bunx playwright test",
     "fuzz": "bun test tests/fuzz/",
     "bench": "bun run benchmarks/index.ts",
     "bench:history": "bun run scripts/bench-history.ts",
@@ -58,10 +59,12 @@
     "lint": "biome check",
     "lint:fix": "biome check --fix",
     "dev": "bun run playground/serve.ts",
-    "build:playground": "bun run playground/build.ts"
+    "build:playground": "bun run playground/build.ts",
+    "serve:playground": "bun run playground/serve-static.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
+    "@playwright/test": "^1.58.2",
     "@types/bun": "latest",
     "@types/react": "^18.2.0",
     "@vscode/tree-sitter-wasm": "^0.3.0",
