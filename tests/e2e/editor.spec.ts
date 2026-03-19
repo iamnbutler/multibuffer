@@ -67,14 +67,11 @@ test.describe("Editor basics", () => {
     const unicodeButton = picker.locator("button", { hasText: "Unicode" });
     await unicodeButton.click();
 
-    // Wait for content to update - Unicode fixture has specific content
-    // The fixture includes emoji and special characters
-    await page.waitForTimeout(100); // Allow scenario switch to complete
-
-    // Verify the editor still has content
-    const lines = page.locator("#editor .line");
-    const count = await lines.count();
-    expect(count).toBeGreaterThan(0);
+    // Wait for Unicode-specific content to appear in the editor.
+    // The Unicode fixture contains CJK text like "你好世界" that won't
+    // be present in the default "All files" scenario.
+    const unicodeLine = page.locator("#editor .line", { hasText: "你好世界" });
+    await expect(unicodeLine).toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -94,16 +91,25 @@ test.describe("Editor keyboard navigation", () => {
     expect(initialBox).not.toBeNull();
     if (!initialBox) return;
 
-    // Press arrow down
+    // Press arrow down and wait for the cursor to move
     await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(50);
 
-    // Cursor should have moved (top position changed)
+    const initialY = initialBox.y;
+    await page.waitForFunction(
+      (prevY) => {
+        const el = document.querySelector("#editor .cursor");
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.y > prevY;
+      },
+      initialY,
+      { timeout: 5_000 },
+    );
+
+    // Verify final position
     const afterDownBox = await cursor.boundingBox();
     expect(afterDownBox).not.toBeNull();
     if (!afterDownBox) return;
-
-    // Cursor should be lower on screen (larger top value)
     expect(afterDownBox.y).toBeGreaterThan(initialBox.y);
   });
 

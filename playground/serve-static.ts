@@ -7,7 +7,7 @@
  * Usage: bun run playground/serve-static.ts
  */
 
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const rootDir = join(import.meta.dir, "..");
 const siteDir = join(rootDir, "_site");
@@ -19,18 +19,23 @@ const PORT = Number(process.env.PORT) || 3001;
 
 Bun.serve({
   port: PORT,
-  fetch(req) {
+  async fetch(req) {
     const url = new URL(req.url);
     let path = url.pathname;
     if (path === "/") path = "/index.html";
 
-    const filePath = join(siteDir, path);
-    try {
-      const file = Bun.file(filePath);
-      return new Response(file);
-    } catch {
+    const filePath = resolve(join(siteDir, path));
+
+    // Prevent path traversal outside the site directory
+    if (!filePath.startsWith(siteDir)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    const file = Bun.file(filePath);
+    if (!(await file.exists())) {
       return new Response("Not found", { status: 404 });
     }
+    return new Response(file);
   },
 });
 
