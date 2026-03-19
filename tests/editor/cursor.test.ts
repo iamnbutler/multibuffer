@@ -525,12 +525,18 @@ describe("Cursor - Visual Row Movement Across Excerpt Headers (issue #89)", () =
     expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "up", "character", wrapMap), 2, 0);
   });
 
-  test("moveCursorVisual down preserves column across header skip (clamped)", () => {
-    const snap = setupWithHeader().snapshot();
+  test("moveCursorVisual down preserves column across header skip", () => {
+    // Use longer lines so a non-zero column is meaningful
+    const buf1 = createBuffer(createBufferId(), "aaa\nbbb\nccc");
+    const buf2 = createBuffer(createBufferId(), "xxx\nyyy\nzzz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    const snap = mb.snapshot();
     const wrapMap = new WrapMap(snap, 80);
-    // "c" (row 2) has length 1, "x" (row 4) has length 1
-    // Starting at col 0, should land at col 0
-    expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "down", "character", wrapMap), 4, 0);
+    // Row 2 is "ccc" (len 3), row 3 is header, row 4 is "xxx" (len 3).
+    // Starting at col 2, should skip header and land at col 2 on row 4.
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 2), "down", "character", wrapMap), 4, 2);
   });
 
   test("moveCursorVisual within excerpt does not skip non-header rows", () => {
