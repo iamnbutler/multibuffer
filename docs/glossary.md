@@ -176,7 +176,7 @@ The command-dispatcher layer (`src/editor/`) that sits above the multibuffer dat
 
 ### EditorCommand
 
-A discriminated union type representing a user action the editor can execute. Examples: `insertText`, `moveCursor`, `extendSelection`, `deleteLine`, `indentLines`, `dedentLines`, `undo`.
+A discriminated union type representing a user action the editor can execute. Examples: `insertText`, `moveCursor`, `extendSelection`, `deleteLine`, `indentLines`, `dedentLines`, `undo`, `addCursor`, `addCursorAbove`, `addCursorBelow`, `clearExtraCursors`.
 
 ### Excerpt
 
@@ -308,6 +308,14 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 
 An immutable snapshot of the multibuffer's state. Carries a monotonically increasing `version` counter that increments on every mutation (shared globally across all `MultiBuffer` instances). Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns. The `version` field is used by the DOM renderer to skip `WrapMap` reconstruction when neither the snapshot content nor the wrap width has changed since the last render.
 
+### Multi-Cursor
+
+A mode in which the `Editor` maintains multiple simultaneous cursor positions, each backed by a [Selection](#selection). Cursors are added with `addCursor` (at a specific point), `addCursorAbove`, or `addCursorBelow`. Text-mutating operations (insert, delete, etc.) are applied across all selections simultaneously in **bottom-to-top** order so that row offsets for higher excerpts remain valid as lower edits are applied. Cursor movement and selection extension operate on all active selections at once. Overlapping or adjacent selections are automatically merged after each operation (see [Selection Merging](#selection-merging)).
+
+The `clearExtraCursors` command reduces the editor back to a single [primary selection](#primary-selection). The `selections` getter returns all active selections; the `selection` getter returns only the primary one for backward compatibility.
+
+See: `src/editor/editor.ts`, `src/editor/types.ts`
+
 ### Myers' Algorithm
 
 The O(ND) line-level diff algorithm used in `src/diff/diff.ts`, where N is the sum of line counts in both texts and D is the number of differing lines. Finds the shortest edit script by tracking the furthest-reaching path on each diagonal of an edit graph. The implementation stores the trace as active diagonal slices of size `2d+1` at each step `d`, reducing memory from O(max·D) to O(D²) — a significant win for large files with few changes.
@@ -317,6 +325,14 @@ See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 ---
 
 ## P
+
+### Primary Selection
+
+The most recently added [Selection](#selection) — the last element of the internal `_selections` array. Serves as the "authoritative" cursor for operations that only care about a single position (such as scroll-to-cursor). The `selection` getter returns the primary selection for backward compatibility with single-cursor code paths; the `cursor` getter resolves to the head of the primary selection.
+
+When [selection merging](#selection-merging) combines two selections, the merged result inherits the primary slot.
+
+See: `src/editor/editor.ts`
 
 ### Prefix Sum
 
@@ -370,6 +386,12 @@ The text storage structure backing each [buffer](#buffer). Splits text into fixe
 ### Selection
 
 An [AnchorRange](#anchorrange) plus a `head` field (`"start"` or `"end"`) indicating which end of the range the cursor occupies. The head determines the direction of the selection and where the cursor is rendered.
+
+### Selection Merging
+
+The automatic process of combining overlapping or adjacent [selections](#selection) into a single selection. Performed by the `Editor` after every cursor movement, selection extension, and editing operation by calling the private `_mergeSelections()` method. When two selections overlap, they are merged into one spanning the union of both ranges; the [primary selection](#primary-selection) slot is preserved as the last element of the resulting array. Prevents duplicate edits and inconsistent cursor state that would otherwise arise from coincident selections.
+
+See: `src/editor/editor.ts`
 
 ### selectWordAt
 
@@ -453,7 +475,7 @@ See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
 ### Undo Stack
 
-A bounded list of `HistoryEntry` values recording buffer and cursor state before each edit. Limited to `Editor._MAX_HISTORY = 100` entries; when the limit is exceeded, the oldest entry is dropped (shifted off). The complementary **redo stack** is cleared on any new edit and populated when `undo` is dispatched. Both stacks are managed inside `Editor` and are not exposed publicly.
+A bounded list of `HistoryEntry` values recording buffer state, cursor position, and all active [selections](#selection) before each edit. Limited to `Editor._MAX_HISTORY = 100` entries; when the limit is exceeded, the oldest entry is dropped (shifted off). The complementary **redo stack** is cleared on any new edit and populated when `undo` is dispatched. Both stacks are managed inside `Editor` and are not exposed publicly. Restoring a history entry reinstates the full `selectionsBefore` array, preserving [multi-cursor](#multi-cursor) state across undo/redo.
 
 See also: [EditorCommand](#editorcommand)
 
