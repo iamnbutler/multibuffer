@@ -5,6 +5,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { InjectionHighlighter } from "../../src/renderer/injection-highlighter.ts";
+import { markdownQuery } from "../../src/renderer/queries/index.ts";
 
 const WASM_DIR = path.join(import.meta.dir, "../../playground/wasm");
 
@@ -30,7 +31,7 @@ describe("InjectionHighlighter", () => {
   let highlighter: InjectionHighlighter;
 
   beforeAll(async () => {
-    highlighter = new InjectionHighlighter();
+    highlighter = new InjectionHighlighter(markdownQuery);
     await highlighter.init(
       path.join(WASM_DIR, "tree-sitter.wasm"),
       path.join(WASM_DIR, "tree-sitter-markdown.wasm"),

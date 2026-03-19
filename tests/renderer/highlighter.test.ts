@@ -6,7 +6,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import type { TreeEdit } from "../../src/renderer/highlighter.ts";
-import { Highlighter } from "../../src/renderer/highlighter.ts";
+import {
+  buildHighlightedSpans,
+  Highlighter,
+} from "../../src/renderer/highlighter.ts";
+import { markdownQuery } from "../../src/renderer/queries/index.ts";
 
 const WASM_DIR = path.join(import.meta.dir, "../../playground/wasm");
 
@@ -155,5 +159,274 @@ describe("Highlighter", () => {
       const tokensLine2 = highlighter.getLineTokens("test-insert", 2);
       expect(tokensLine2.length).toBeGreaterThan(0);
     });
+  });
+
+  describe("token ordering", () => {
+    it("should return tokens in startColumn order", () => {
+      const code = "const foo = bar + baz;";
+      highlighter.parseBuffer("test-order", code);
+      const tokens = highlighter.getLineTokens("test-order", 0);
+
+      // Verify tokens are sorted by startColumn (weaker than non-overlap)
+      for (let i = 1; i < tokens.length; i++) {
+        expect(tokens[i]?.startColumn).toBeGreaterThanOrEqual(
+          tokens[i - 1]?.startColumn ?? 0,
+        );
+      }
+    });
+
+    it("should have non-overlapping tokens", () => {
+      const code = "function test(a: number): string { return a.toString(); }";
+      highlighter.parseBuffer("test-overlap", code);
+      const tokens = highlighter.getLineTokens("test-overlap", 0);
+
+      // Verify no tokens overlap
+      for (let i = 1; i < tokens.length; i++) {
+        expect(tokens[i]?.startColumn).toBeGreaterThanOrEqual(
+          tokens[i - 1]?.endColumn ?? 0,
+        );
+      }
+    });
+  });
+});
+
+describe("Highlighter uninitialized", () => {
+  it("should not be ready before init", () => {
+    const highlighter = new Highlighter();
+    expect(highlighter.ready).toBe(false);
+  });
+
+  it("should return early from parseBuffer when parser not initialized", () => {
+    const highlighter = new Highlighter();
+    // Should not throw when called before init
+    highlighter.parseBuffer("test", "const x = 1;");
+    // getLineTokens should return empty array for unparsed buffer
+    const tokens = highlighter.getLineTokens("test", 0);
+    expect(tokens).toEqual([]);
+  });
+});
+
+describe("Highlighter with Markdown", () => {
+  let highlighter: Highlighter;
+
+  beforeAll(async () => {
+    highlighter = new Highlighter(markdownQuery);
+    await highlighter.init(
+      path.join(WASM_DIR, "tree-sitter.wasm"),
+      path.join(WASM_DIR, "tree-sitter-markdown.wasm"),
+    );
+  });
+
+  describe("SKIP_CHILDREN nodes (code blocks)", () => {
+    it("should return comment-colored tokens for fenced code block content", () => {
+      const markdown = "# Heading\n\n```typescript\nconst x = 42;\n```\n";
+      highlighter.parseBuffer("test-code-block", markdown);
+
+      // Line 2 is the opening fence "```typescript"
+      const fenceTokens = highlighter.getLineTokens("test-code-block", 2);
+      expect(fenceTokens.length).toBeGreaterThan(0);
+
+      // Line 3 is code content "const x = 42;" - should have comment color
+      // (because SKIP_CHILDREN uses fenced_code_block_delimiter color)
+      const contentTokens = highlighter.getLineTokens("test-code-block", 3);
+      expect(contentTokens.length).toBeGreaterThan(0);
+      expect(contentTokens[0]?.color).toContain("--syntax-comment");
+    });
+
+    it("should return tokens for inline code span", () => {
+      const markdown = "This is `inline code` in text.";
+      highlighter.parseBuffer("test-code-span", markdown);
+      const tokens = highlighter.getLineTokens("test-code-span", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("STYLED_PARENTS nodes (headings, emphasis)", () => {
+    it("should propagate heading color to children", () => {
+      const markdown = "# Hello World\n\nParagraph text.";
+      highlighter.parseBuffer("test-heading", markdown);
+
+      // Line 0 is the heading "# Hello World"
+      const headingTokens = highlighter.getLineTokens("test-heading", 0);
+      expect(headingTokens.length).toBeGreaterThan(0);
+
+      // All tokens in heading should use keyword color (atx_heading maps to keyword)
+      for (const token of headingTokens) {
+        expect(token.color).toContain("--syntax-keyword");
+      }
+    });
+
+    it("should return tokens for emphasis markers", () => {
+      // Note: tree-sitter-markdown (block parser) only tokenizes markers,
+      // not inline text. Full inline parsing requires markdown_inline parser.
+      const markdown = "This is *emphasized text* here.";
+      highlighter.parseBuffer("test-emphasis", markdown);
+      const tokens = highlighter.getLineTokens("test-emphasis", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+
+      // The * markers should be tokenized (typically as operators in markdown)
+      const markerTokens = tokens.filter(
+        (t) => t.startColumn === 8 || t.startColumn === 24,
+      );
+      expect(markerTokens.length).toBe(2);
+    });
+
+    it("should return tokens for strong emphasis markers", () => {
+      // Note: tree-sitter-markdown (block parser) only tokenizes markers.
+      const markdown = "This is **bold text** here.";
+      highlighter.parseBuffer("test-strong", markdown);
+      const tokens = highlighter.getLineTokens("test-strong", 0);
+      expect(tokens.length).toBeGreaterThan(0);
+
+      // The ** delimiters should be tokenized at their expected columns
+      // Opening ** at column 8, closing ** at column 19
+      const openMarkers = tokens.filter((t) => t.startColumn === 8);
+      const closeMarkers = tokens.filter((t) => t.startColumn === 19);
+      expect(openMarkers.length).toBeGreaterThanOrEqual(1);
+      expect(closeMarkers.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("multi-line nodes", () => {
+    it("should handle nodes spanning multiple lines with correct column bounds", () => {
+      const markdown = "```\nline1\nline2\nline3\n```";
+      highlighter.parseBuffer("test-multiline", markdown);
+
+      // Each line inside the code block should have tokens
+      for (let row = 1; row <= 3; row++) {
+        const tokens = highlighter.getLineTokens("test-multiline", row);
+        expect(tokens.length).toBeGreaterThan(0);
+        // First token on each line should start at column 0
+        expect(tokens[0]?.startColumn).toBe(0);
+      }
+    });
+
+    it("should return empty array for row beyond document", () => {
+      const markdown = "# Test\n";
+      highlighter.parseBuffer("test-bounds", markdown);
+      const tokens = highlighter.getLineTokens("test-bounds", 100);
+      expect(tokens).toEqual([]);
+    });
+  });
+});
+
+describe("applyTreeEdit", () => {
+  let highlighter: Highlighter;
+
+  beforeAll(async () => {
+    highlighter = new Highlighter();
+    await highlighter.init(
+      path.join(WASM_DIR, "tree-sitter.wasm"),
+      path.join(WASM_DIR, "tree-sitter-typescript.wasm"),
+    );
+  });
+
+  it("should work correctly when used via parseBuffer with edit", () => {
+    const original = "let x = 1;";
+    highlighter.parseBuffer("test-apply", original);
+
+    // Change "let" to "const" (0..3 -> 0..5)
+    const modified = "const x = 1;";
+    const edit: TreeEdit = {
+      startIndex: 0,
+      oldEndIndex: 3,
+      newEndIndex: 5,
+      startPosition: { row: 0, column: 0 },
+      oldEndPosition: { row: 0, column: 3 },
+      newEndPosition: { row: 0, column: 5 },
+    };
+
+    highlighter.parseBuffer("test-apply", modified, edit);
+    const tokens = highlighter.getLineTokens("test-apply", 0);
+    expect(tokens.length).toBeGreaterThan(0);
+    // First token should now cover "const" (5 chars)
+    expect(tokens[0]?.startColumn).toBe(0);
+    expect(tokens[0]?.endColumn).toBe(5);
+  });
+});
+
+describe("buildHighlightedSpans", () => {
+  // happy-dom provides the DOM environment for span creation tests
+  const { Window } = require("happy-dom");
+  const win = new Window({ url: "https://localhost:8080/" });
+  const doc = win.document;
+
+  // Set up global document so buildHighlightedSpans can call document.createElement
+  // biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+  (globalThis as unknown as Record<string, unknown>).document = doc;
+
+  function makeContainer(): HTMLElement {
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom returns Element which is compatible with HTMLElement at runtime
+    return doc.createElement("div") as unknown as HTMLElement;
+  }
+
+  it("should create a trailing span for empty token array", () => {
+    const container = makeContainer();
+    const text = "hello world";
+    buildHighlightedSpans(container, text, []);
+    // With no tokens, the entire text is trailing and gets one span
+    expect(container.childNodes.length).toBe(1);
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[0] as unknown as HTMLElement).textContent).toBe("hello world");
+  });
+
+  it("should create gap spans between tokens", () => {
+    const container = makeContainer();
+    const text = "hello world";
+    // Token covers "world" (columns 6-11), leaving "hello " (0-6) as a gap
+    const tokens: import("../../src/renderer/highlighter.ts").Token[] = [
+      { startColumn: 6, endColumn: 11, color: "red" },
+    ];
+    buildHighlightedSpans(container, text, tokens);
+    // Expect: gap span ("hello ") + token span ("world")
+    expect(container.childNodes.length).toBe(2);
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[0] as unknown as HTMLElement).textContent).toBe("hello ");
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[1] as unknown as HTMLElement).textContent).toBe("world");
+  });
+
+  it("should clamp token endColumn to text length", () => {
+    const container = makeContainer();
+    const text = "hi";
+    // Token extends well beyond text length (simulating Number.MAX_SAFE_INTEGER)
+    const tokens: import("../../src/renderer/highlighter.ts").Token[] = [
+      { startColumn: 0, endColumn: Number.MAX_SAFE_INTEGER, color: "blue" },
+    ];
+    buildHighlightedSpans(container, text, tokens);
+    // The token should be clamped to text.length (2), so content is "hi"
+    expect(container.childNodes.length).toBe(1);
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[0] as unknown as HTMLElement).textContent).toBe("hi");
+  });
+
+  it("should apply syntax color to token spans", () => {
+    const container = makeContainer();
+    const text = "const";
+    const tokens: import("../../src/renderer/highlighter.ts").Token[] = [
+      { startColumn: 0, endColumn: 5, color: "var(--syntax-keyword)" },
+    ];
+    buildHighlightedSpans(container, text, tokens);
+    expect(container.childNodes.length).toBe(1);
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with style property
+    const span = container.childNodes[0] as unknown as HTMLElement;
+    expect(span.style.color).toBe("var(--syntax-keyword)");
+    expect(span.textContent).toBe("const");
+  });
+
+  it("should not insert gap spans for contiguous tokens", () => {
+    const container = makeContainer();
+    const text = "ab";
+    const tokens: import("../../src/renderer/highlighter.ts").Token[] = [
+      { startColumn: 0, endColumn: 1, color: "red" },
+      { startColumn: 1, endColumn: 2, color: "blue" },
+    ];
+    buildHighlightedSpans(container, text, tokens);
+    // Two contiguous tokens -> exactly 2 spans, no gap
+    expect(container.childNodes.length).toBe(2);
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[0] as unknown as HTMLElement).textContent).toBe("a");
+    // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom childNodes are Elements with textContent
+    expect((container.childNodes[1] as unknown as HTMLElement).textContent).toBe("b");
   });
 });

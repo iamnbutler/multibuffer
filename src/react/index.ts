@@ -24,10 +24,10 @@
 
 export type { DiffController, DiffControllerOptions } from "../diff/controller.ts";
 export type { Editor } from "../editor/editor.ts";
-export type { EditorView, Theme } from "../editor/editor-view.ts";
+export type { EditorView } from "../editor/editor-view.ts";
 export type { EditorCommand, KeyBinding, Keymap } from "../editor/types.ts";
 // Re-export commonly needed types from core
-export type { Decoration, Measurements, Viewport } from "../renderer/types.ts";
+export type { Decoration, Measurements, Theme, Viewport } from "../renderer/types.ts";
 export type { DiffViewHandle, DiffViewProps } from "./diff-view.tsx";
 export { DiffView } from "./diff-view.tsx";
 // Components

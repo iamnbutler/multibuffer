@@ -16,6 +16,7 @@ import type {
   MultiBuffer,
   MultiBufferRow,
 } from "../src/multibuffer/types.ts";
+import { createCanvasRenderer } from "../src/renderer/canvas.ts";
 import { createDomRenderer } from "../src/renderer/dom.ts";
 import { Highlighter } from "../src/renderer/highlighter.ts";
 import { createViewport } from "../src/renderer/measurement.ts";
@@ -32,6 +33,9 @@ type ScenarioId =
   | "long-lines"
   | "empty"
   | "single-line"
+  | "multi-cursor"
+  | "find-replace"
+  | "canvas-renderer"
   | "diff-single"
   | "diff-multi"
   | "diff-editable";
@@ -41,6 +45,10 @@ interface Scenario {
   readonly label: string;
   /** If true, this scenario renders a diff view instead of the editor. */
   readonly isDiff?: boolean;
+  /** If true, this scenario uses a special renderer. */
+  readonly isSpecialRenderer?: boolean;
+  /** Instructions to show in the help panel. */
+  readonly instructions?: string[];
   build(m: MultiBuffer): void;
 }
 
@@ -226,21 +234,33 @@ async function main() {
     editor.selectLineAt(clickPoint);
   });
 
-  // Wire keyboard input
-  const inputHandler = new InputHandler((command) => {
-    if (command.type === "copy") {
-      const text = editor.getSelectedText();
-      if (text) {
-        navigator.clipboard.writeText(text);
+  // Wire keyboard input with multi-cursor keybindings
+  const multiCursorKeymap = {
+    // Multi-cursor commands (Cmd/Ctrl+Alt+Arrow)
+    "Mod+Alt+ArrowUp": { type: "addCursorAbove" },
+    "Mod+Alt+ArrowDown": { type: "addCursorBelow" },
+    // Global Escape binding — intentionally not scoped to a specific scenario
+    // so that extra cursors can always be dismissed regardless of active view.
+    "Escape": { type: "clearExtraCursors" },
+  } as const;
+
+  const inputHandler = new InputHandler(
+    (command) => {
+      if (command.type === "copy") {
+        const text = editor.getSelectedText();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
+      } else if (command.type === "cut") {
+        const text = editor.getCutText();
+        if (text) {
+          navigator.clipboard.writeText(text);
+        }
       }
-    } else if (command.type === "cut") {
-      const text = editor.getCutText();
-      if (text) {
-        navigator.clipboard.writeText(text);
-      }
-    }
-    editor.dispatch(command);
-  });
+      editor.dispatch(command);
+    },
+    { keymap: multiCursorKeymap },
+  );
   inputHandler.mount(container);
 
   // Wire focus state to cursor blink animation
@@ -280,10 +300,29 @@ async function main() {
   }
 
   const scenarios: Scenario[] = [
-    { id: "all", label: "All files", build: buildDefault },
+    {
+      id: "all",
+      label: "All files",
+      instructions: [
+        "Arrow keys: Move cursor",
+        "Shift+Arrow: Select text",
+        "Cmd/Ctrl+A: Select all",
+        "Cmd/Ctrl+Z: Undo",
+        "Double-click: Select word",
+        "Triple-click: Select line",
+      ],
+      build: buildDefault,
+    },
     {
       id: "large-file",
-      label: "Single large buffer",
+      label: "Large buffer (~5K lines)",
+      instructions: [
+        "Cmd/Ctrl+Home: Go to start",
+        "Cmd/Ctrl+End: Go to end",
+        "Page Up/Down: Scroll page",
+        "Type to insert text",
+        "Backspace/Delete: Remove",
+      ],
       build(m) {
         const src = fixtureSrcs.find((s) => s.path.includes("large-file"));
         if (!src) return;
@@ -296,6 +335,12 @@ async function main() {
     {
       id: "many-excerpts",
       label: "Many excerpts",
+      instructions: [
+        "Navigate between excerpts",
+        "Headers show file + line range",
+        "Scroll to explore excerpts",
+        "Edit any editable region",
+      ],
       build(m) {
         for (const src of sources) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
@@ -312,6 +357,12 @@ async function main() {
     {
       id: "unicode",
       label: "Unicode",
+      instructions: [
+        "CJK, Cyrillic, emoji support",
+        "Double-click: Select word",
+        "Correct cursor positioning",
+        "Full Unicode navigation",
+      ],
       build(m) {
         const src = fixtureSrcs.find((s) => s.path.includes("unicode"));
         if (!src) return;
@@ -325,6 +376,12 @@ async function main() {
     {
       id: "long-lines",
       label: "Long lines",
+      instructions: [
+        "Horizontal scroll for overflow",
+        "Cmd/Ctrl+Right: End of line",
+        "Cmd/Ctrl+Left: Start of line",
+        "Opt/Alt+Arrow: Word jump",
+      ],
       build(m) {
         const src = fixtureSrcs.find((s) => s.path.includes("long-lines"));
         if (!src) return;
@@ -338,6 +395,12 @@ async function main() {
     {
       id: "empty",
       label: "Empty & whitespace",
+      instructions: [
+        "Empty lines and whitespace",
+        "Tab: Insert tab/indent",
+        "Shift+Tab: Dedent",
+        "Enter: New line",
+      ],
       build(m) {
         const src = fixtureSrcs.find((s) =>
           s.path.includes("empty-and-whitespace"),
@@ -353,6 +416,12 @@ async function main() {
     {
       id: "single-line",
       label: "Single line",
+      instructions: [
+        "Single-line editing mode",
+        "Arrow Left/Right: Navigate",
+        "Cmd/Ctrl+A: Select all",
+        "Type to replace selection",
+      ],
       build(m) {
         const src = fixtureSrcs.find((s) => s.path.includes("single-line"));
         if (!src) return;
@@ -364,9 +433,76 @@ async function main() {
       },
     },
     {
+      id: "multi-cursor",
+      label: "Multi-cursor",
+      instructions: [
+        "Cmd/Ctrl+Alt+Up: Add cursor above",
+        "Cmd/Ctrl+Alt+Down: Add cursor below",
+        "Escape: Clear extra cursors",
+        "Type to edit all positions",
+        "Select text with Shift+Arrow",
+      ],
+      build(m) {
+        // Use unicode fixture for interesting multi-cursor demo
+        const src = fixtureSrcs.find((s) => s.path.includes("unicode"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        m.addExcerpt(buf, range(0, buf.snapshot().lineCount), {
+          hasTrailingNewline: true,
+        });
+      },
+    },
+    {
+      id: "find-replace",
+      label: "Find/Replace (API demo)",
+      instructions: [
+        "SearchController API available",
+        "find(query): Search text",
+        "next()/prev(): Navigate",
+        "replaceActive(text): Replace",
+        "replaceAll(text): Replace all",
+      ],
+      build(m) {
+        // Use first source file for find/replace demo
+        const src = sources[0];
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        const lineCount = buf.snapshot().lineCount;
+        m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+      },
+    },
+    {
+      id: "canvas-renderer",
+      label: "Canvas Renderer",
+      isSpecialRenderer: true,
+      instructions: [
+        "High-performance canvas rendering",
+        "Glyph atlas for text caching",
+        "Same editing capabilities",
+        "Smooth scrolling",
+      ],
+      build(m) {
+        // Use large file to demonstrate canvas performance
+        const src = fixtureSrcs.find((s) => s.path.includes("large-file"));
+        if (!src) return;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+        const buf = createBuffer(src.path as BufferId, src.content);
+        const lineCount = buf.snapshot().lineCount;
+        m.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+      },
+    },
+    {
       id: "diff-single",
       label: "Unified Diff (single)",
       isDiff: true,
+      instructions: [
+        "Red: Deleted lines",
+        "Green: Added lines",
+        "Gray: Context lines",
+        "Scroll to view changes",
+      ],
       build() {
         // no-op: diff scenarios render via mountDiffView
       },
@@ -375,6 +511,12 @@ async function main() {
       id: "diff-multi",
       label: "Unified Diff (multi)",
       isDiff: true,
+      instructions: [
+        "Multiple file diffs",
+        "File headers separate diffs",
+        "Red/Green: -/+ lines",
+        "Scroll through all files",
+      ],
       build() {
         // no-op: diff scenarios render via mountDiffView
       },
@@ -383,6 +525,12 @@ async function main() {
       id: "diff-editable",
       label: "Editable Diff",
       isDiff: true,
+      instructions: [
+        "Edit the new (right) side",
+        "Live re-diff on changes",
+        "Delete markers are read-only",
+        "Type to modify + lines",
+      ],
       build() {
         // no-op: handled by mountEditableDiff
       },
@@ -391,6 +539,7 @@ async function main() {
 
   let activeScenarioId: ScenarioId = "all";
   let diffUnmount: (() => void) | null = null;
+  let canvasUnmount: (() => void) | null = null;
 
   // Scroll container created by the DomRenderer — we toggle its visibility for diff mode
   const scrollContainer = container.firstElementChild;
@@ -405,6 +554,12 @@ async function main() {
       diffUnmount = null;
     }
 
+    // Clean up previous canvas renderer if any
+    if (canvasUnmount) {
+      canvasUnmount();
+      canvasUnmount = null;
+    }
+
     const scenario = scenarios.find((s) => s.id === id);
     if (!scenario) return;
 
@@ -414,6 +569,12 @@ async function main() {
         scrollContainer.style.display = "none";
       }
       if (container) diffUnmount = renderDiffScenario(id, container);
+    } else if (scenario.isSpecialRenderer) {
+      // Hide the editor scroll container
+      if (scrollContainer instanceof HTMLElement) {
+        scrollContainer.style.display = "none";
+      }
+      if (container) canvasUnmount = mountCanvasRenderer(container);
     } else {
       // Show the editor scroll container
       if (scrollContainer instanceof HTMLElement) {
@@ -431,7 +592,11 @@ async function main() {
       }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
       editor.setCursor({ row: 0 as MultiBufferRow, column: 0 });
+      inputHandler.focus();
     }
+
+    // Update instructions panel for the new scenario
+    updateInstructionsPanel();
   }
 
   function renderDiffScenario(
@@ -696,6 +861,118 @@ async function main() {
     };
   }
 
+  /**
+   * Mount the Canvas renderer for high-performance rendering demo.
+   * Uses the large file to demonstrate canvas performance with glyph atlas.
+   */
+  function mountCanvasRenderer(target: HTMLElement): () => void {
+    const src = fixtureSrcs.find((s) => s.path.includes("large-file"));
+    if (!src) return () => {};
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in demo
+    const buf = createBuffer(src.path as BufferId, src.content);
+    const lineCount = buf.snapshot().lineCount;
+
+    const canvasMb = createMultiBuffer();
+    canvasMb.addExcerpt(buf, range(0, lineCount), { hasTrailingNewline: true });
+
+    const canvasMeasurements: Measurements = {
+      lineHeight: 20,
+      gutterWidth: 48,
+      wrapWidth: 0,
+    };
+
+    const canvasRenderer = createCanvasRenderer(canvasMeasurements);
+    canvasRenderer.mount(target);
+    canvasRenderer.setSnapshot(canvasMb.snapshot());
+
+    const canvasEditor = new Editor(canvasMb);
+
+    function renderCanvas() {
+      const snapshot = canvasMb.snapshot();
+      canvasRenderer.setSnapshot(snapshot);
+
+      const viewport = createViewport(
+        canvasRenderer.getScrollTop(),
+        target.clientHeight,
+        target.clientWidth,
+        canvasMeasurements,
+        snapshot.lineCount,
+      );
+
+      const lines = snapshot.lines(viewport.startRow, viewport.endRow);
+
+      canvasRenderer.render(
+        {
+          viewport,
+          selections: [],
+          decorations: [],
+          excerptHeaders: [],
+          focused: true,
+        },
+        lines,
+      );
+
+      const cursor = canvasEditor.cursor;
+      canvasRenderer.renderCursor(cursor);
+      canvasRenderer.scrollTo({ row: cursor.row, strategy: "nearest" });
+
+      const sel = canvasEditor.selection;
+      if (sel) {
+        const start = snapshot.resolveAnchor(sel.range.start);
+        const end = snapshot.resolveAnchor(sel.range.end);
+        canvasRenderer.renderSelection(start, end);
+      } else {
+        canvasRenderer.renderSelection(undefined, undefined);
+      }
+    }
+
+    canvasEditor.on("change", renderCanvas);
+
+    canvasRenderer.onClickPosition((clickPoint) => {
+      canvasEditor.setCursor(clickPoint);
+    });
+    canvasRenderer.onDrag((dragPoint) => {
+      canvasEditor.extendSelectionTo(dragPoint);
+    });
+    canvasRenderer.onDoubleClick((clickPoint) => {
+      canvasEditor.selectWordAt(clickPoint);
+    });
+    canvasRenderer.onTripleClick((clickPoint) => {
+      canvasEditor.selectLineAt(clickPoint);
+    });
+
+    const canvasInputHandler = new InputHandler((command) => {
+      if (command.type === "copy") {
+        const text = canvasEditor.getSelectedText();
+        if (text) navigator.clipboard.writeText(text);
+      } else if (command.type === "cut") {
+        const text = canvasEditor.getCutText();
+        if (text) navigator.clipboard.writeText(text);
+      }
+      canvasEditor.dispatch(command);
+    });
+    canvasInputHandler.mount(target);
+
+    // Note: CanvasRenderer doesn't have setFocused yet - focus state is managed
+    // internally via the RenderState.focused property passed to render()
+
+    target.addEventListener("mousedown", () => {
+      canvasInputHandler.focus();
+    });
+
+    canvasRenderer.onScroll(renderCanvas);
+
+    renderCanvas();
+    canvasInputHandler.focus();
+
+    return () => {
+      canvasEditor.off("change", renderCanvas);
+      canvasRenderer.unmount();
+      canvasInputHandler.unmount();
+    };
+  }
+
   function createScenarioPicker(): HTMLElement {
     const panel = document.createElement("div");
     panel.style.cssText = [
@@ -715,7 +992,7 @@ async function main() {
     ].join(";");
 
     const heading = document.createElement("div");
-    heading.textContent = "Fixture";
+    heading.textContent = "Demos";
     heading.style.cssText =
       "color:#928374;padding:2px 6px 4px;text-transform:uppercase;letter-spacing:.05em;";
     panel.appendChild(heading);
@@ -766,6 +1043,73 @@ async function main() {
   }
 
   document.body.appendChild(createScenarioPicker());
+
+  // ── Instructions Panel ──────────────────────────────────────────────────────
+
+  let instructionsPanel: HTMLElement | null = null;
+
+  function createInstructionsPanel(instructions: string[]): HTMLElement {
+    const panel = document.createElement("div");
+    panel.style.cssText = [
+      "position:fixed",
+      "bottom:8px",
+      "right:8px",
+      "display:flex",
+      "flex-direction:column",
+      "gap:2px",
+      "background:rgba(60, 56, 54, 0.95)",
+      "border:1px solid #504945",
+      "border-radius:4px",
+      "padding:8px 12px",
+      "z-index:1000",
+      "font-size:11px",
+      "font-family:inherit",
+      "max-width:220px",
+    ].join(";");
+
+    const heading = document.createElement("div");
+    heading.textContent = "Controls";
+    heading.style.cssText =
+      "color:#928374;padding-bottom:4px;text-transform:uppercase;letter-spacing:.05em;font-size:10px;border-bottom:1px solid #504945;margin-bottom:4px;";
+    panel.appendChild(heading);
+
+    for (const instruction of instructions) {
+      const line = document.createElement("div");
+      line.style.cssText = "color:#ebdbb2;line-height:1.4;";
+      // Split on colon to highlight shortcut
+      const colonIdx = instruction.indexOf(":");
+      if (colonIdx !== -1) {
+        const key = document.createElement("span");
+        key.textContent = instruction.slice(0, colonIdx);
+        key.style.cssText = "color:#83a598;font-weight:500;";
+        const desc = document.createElement("span");
+        desc.textContent = instruction.slice(colonIdx);
+        desc.style.cssText = "color:#a89984;";
+        line.appendChild(key);
+        line.appendChild(desc);
+      } else {
+        line.textContent = instruction;
+      }
+      panel.appendChild(line);
+    }
+
+    return panel;
+  }
+
+  function updateInstructionsPanel(): void {
+    if (instructionsPanel) {
+      instructionsPanel.remove();
+      instructionsPanel = null;
+    }
+    const scenario = scenarios.find((s) => s.id === activeScenarioId);
+    if (scenario?.instructions) {
+      instructionsPanel = createInstructionsPanel(scenario.instructions);
+      document.body.appendChild(instructionsPanel);
+    }
+  }
+
+  // Show initial instructions
+  updateInstructionsPanel();
 
   // ── Debug API ───────────────────────────────────────────────────
 

@@ -13,6 +13,7 @@ import type {
   MultiBufferSnapshot,
   Selection,
 } from "../multibuffer/types.ts";
+import type { BracketMatch } from "./bracket-match.ts";
 
 /**
  * Event map for the Editor event emitter.
@@ -23,10 +24,16 @@ export type EditorEventMap = {
   textChange: [snapshot: MultiBufferSnapshot];
   /** Fires when the cursor position changes. Provides new and previous cursor points. */
   cursorChange: [cursor: MultiBufferPoint, prev: MultiBufferPoint];
-  /** Fires when the selection changes. Provides the new selection (or undefined if none). */
-  selectionChange: [selection: Selection | undefined];
-  /** Fires on any state change. Provides the current cursor and selection. */
-  change: [state: { cursor: MultiBufferPoint; selection: Selection | undefined }];
+  /** Fires when the selection changes. Provides the new selections array. */
+  selectionChange: [selections: readonly Selection[]];
+  /** Fires on any state change. Provides the current cursor and selections. */
+  change: [state: { cursor: MultiBufferPoint; selections: readonly Selection[] }];
+  /**
+   * Fires when bracket match changes (cursor moves to/from a bracket).
+   * Only emitted when `bracketMatching: true` option is set.
+   * Returns the matched pair, or null if no match (cursor not on a bracket or unbalanced).
+   */
+  bracketMatch: [match: BracketMatch | null];
 };
 
 /**
@@ -75,6 +82,14 @@ export type EditorCommand =
   | { type: "copy" }
   | { type: "cut" }
   | { type: "paste"; text: string }
+  /** Add a new cursor at a specific point (multi-cursor support). */
+  | { type: "addCursor"; at: MultiBufferPoint }
+  /** Add cursors above each existing cursor (multi-cursor support). */
+  | { type: "addCursorAbove" }
+  /** Add cursors below each existing cursor (multi-cursor support). */
+  | { type: "addCursorBelow" }
+  /** Remove all cursors except the primary one (multi-cursor support). */
+  | { type: "clearExtraCursors" }
   /** A consumer-defined command dispatched when a custom keymap binding fires. */
   | { type: "custom"; action: string };
 

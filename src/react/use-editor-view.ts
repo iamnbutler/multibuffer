@@ -14,10 +14,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EditorView, EditorViewOptions, Theme } from "../editor/editor-view.ts";
+import type { EditorView, EditorViewOptions } from "../editor/editor-view.ts";
 import { createEditorView } from "../editor/editor-view.ts";
 import type { Keymap } from "../editor/types.ts";
-import type { Decoration, Measurements } from "../renderer/types.ts";
+import { themeToVars } from "../renderer/theme.ts";
+import type { Decoration, Measurements, Theme } from "../renderer/types.ts";
 
 export interface UseEditorViewOptions {
   /** Initial text content. Changes after mount are ignored (uncontrolled). */
@@ -32,8 +33,8 @@ export interface UseEditorViewOptions {
   keymap?: Keymap;
   /** Callback for custom commands from keymap. */
   onCustomCommand?: (action: string) => void;
-  /** Theme CSS variables to apply. Can be updated after mount. */
-  theme?: Theme;
+  /** Theme CSS variables to apply. Can be updated after mount. Partial themes merge with defaults. */
+  theme?: Partial<Theme>;
   /** Decorations to render. Can be updated after mount. */
   decorations?: Decoration[];
 }
@@ -46,7 +47,7 @@ export interface UseEditorViewResult {
   /** Update decorations imperatively (alternative to props). */
   setDecorations: (key: string, decorations: Decoration[]) => void;
   /** Update theme imperatively (alternative to props). */
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Partial<Theme>) => void;
 }
 
 /**
@@ -88,7 +89,7 @@ export function useEditorView(options: UseEditorViewOptions): UseEditorViewResul
 
     // Apply initial theme if provided
     if (opts.theme) {
-      editorView.setTheme(opts.theme);
+      editorView.setTheme(themeToVars(opts.theme));
     }
 
     // Apply initial decorations if provided
@@ -118,7 +119,7 @@ export function useEditorView(options: UseEditorViewOptions): UseEditorViewResul
   // Sync theme changes
   useEffect(() => {
     if (viewRef.current && options.theme) {
-      viewRef.current.setTheme(options.theme);
+      viewRef.current.setTheme(themeToVars(options.theme));
     }
   }, [options.theme]);
 
@@ -134,8 +135,8 @@ export function useEditorView(options: UseEditorViewOptions): UseEditorViewResul
     viewRef.current?.setDecorations(key, decorations);
   }, []);
 
-  const setTheme = useCallback((theme: Theme) => {
-    viewRef.current?.setTheme(theme);
+  const setTheme = useCallback((theme: Partial<Theme>) => {
+    viewRef.current?.setTheme(themeToVars(theme));
   }, []);
 
   return {

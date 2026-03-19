@@ -223,6 +223,7 @@ export class CanvasRenderer implements Renderer {
   private _onDragCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onDoubleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
+  private _onScrollCallback: (() => void) | null = null;
 
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
@@ -359,6 +360,7 @@ export class CanvasRenderer implements Renderer {
     this._onClick = null;
     this._onMouseMove = null;
     this._onMouseUp = null;
+    this._onScrollCallback = null;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -468,13 +470,17 @@ export class CanvasRenderer implements Renderer {
       this._spacer.style.height = `${contentHeight}px`;
     }
 
-    // Clear canvas with line background
-    const bgColor = this._resolveColor(this._theme.lineBg === "transparent" ? "#282828" : this._theme.lineBg);
+    // Clear canvas with line background.
+    // When lineBg is "transparent", fall back to headerBg (a darker chrome surface).
+    const bgColor = this._resolveColor(
+      this._theme.lineBg === "transparent" ? this._theme.headerBg : this._theme.lineBg,
+    );
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
 
-    // Draw gutter background
-    ctx.fillStyle = "#282828";
+    // Draw gutter background using the header surface color so it
+    // tracks the active theme instead of being hard-coded.
+    ctx.fillStyle = this._resolveColor(this._theme.headerBg);
     ctx.fillRect(0, 0, gutterWidth, this._canvas.height);
 
     // Build decoration map
@@ -955,6 +961,15 @@ export class CanvasRenderer implements Renderer {
   }
 
   /**
+   * Register callback for scroll events.
+   * Called at the end of each scroll update so the caller can
+   * re-paint cursor/selection that the base render clears.
+   */
+  onScroll(cb: () => void): void {
+    this._onScrollCallback = cb;
+  }
+
+  /**
    * Render the cursor at a given position.
    */
   renderCursor(point: MultiBufferPoint | undefined): void {
@@ -1072,11 +1087,22 @@ export class CanvasRenderer implements Renderer {
 
     const width = this._scrollContainer.clientWidth;
     const height = this._scrollContainer.clientHeight;
-
-    // Handle device pixel ratio for sharp rendering
     const dpr = window.devicePixelRatio || 1;
-    this._canvas.width = width * dpr;
-    this._canvas.height = height * dpr;
+
+    // Only resize when dimensions actually change to avoid resetting
+    // the canvas context (browser spec: any assignment to canvas.width
+    // or canvas.height clears all pixels and resets context state).
+    const targetWidth = width * dpr;
+    const targetHeight = height * dpr;
+    if (
+      this._canvas.width === targetWidth &&
+      this._canvas.height === targetHeight
+    ) {
+      return;
+    }
+
+    this._canvas.width = targetWidth;
+    this._canvas.height = targetHeight;
     this._canvas.style.width = `${width}px`;
     this._canvas.style.height = `${height}px`;
 
@@ -1149,6 +1175,8 @@ export class CanvasRenderer implements Renderer {
       },
       lines,
     );
+
+    this._onScrollCallback?.();
   }
 
   private _drawSelectionRange(

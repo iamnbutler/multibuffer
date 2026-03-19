@@ -2,6 +2,16 @@
 
 A lightweight, high-performance text editor component for TypeScript/Bun.
 
+## Setup
+
+This project uses **Bun** as its runtime and package manager. If you need to install it manually:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+export PATH="$HOME/.bun/bin:$PATH"
+bun install --frozen-lockfile
+```
+
 ## Architecture
 
 ```
@@ -35,6 +45,8 @@ src/
     theme.ts           # Color themes
 ```
 
+Other directories: `demo/`, `tests/` (~590 tests), `benchmarks/`.
+
 ### Subpath exports
 
 ```ts
@@ -58,26 +70,28 @@ import { everything } from "multibuffer"; // kitchen sink
 - Viewport calculation: <1ms
 - Support 100+ excerpts in single multibuffer
 
+Always measure before/after when proposing performance changes.
+
 ## Development
 
 ```bash
-bun test          # Run tests
-bun test --watch  # Watch mode
-bun run bench     # Run benchmarks
-bun run typecheck # Type checking
-bun run lint      # Lint (Biome + GritQL plugins)
+bun test              # Run all tests (must pass before creating PRs)
+bun test --watch      # Watch mode
+bun run bench         # Run benchmarks
+bun run typecheck     # TypeScript type checking (must pass)
+bun run lint          # Biome + GritQL lint (must pass)
+bun run build:demo    # Build demo (generates sources.gen.ts)
 ```
 
-## Type Safety
+## Code Style
 
-`any`, `unknown`, and type assertions (`as`) are banned by default via Biome.
-
-When unavoidable, add a `biome-ignore` comment with an `expect:` explanation (similar to Rust's `// SAFETY:` convention):
-
-```ts
-// biome-ignore lint/suspicious/noExplicitAny: expect: Bun.gc() has no type declaration
-// biome-ignore lint/plugin/no-type-assertion: expect: branded type construction requires cast
-```
+- **No `any`, `unknown`, or `as` type assertions** — banned by Biome. When unavoidable, add a `biome-ignore` comment with an `expect:` explanation (similar to Rust's `// SAFETY:` convention):
+  ```ts
+  // biome-ignore lint/suspicious/noExplicitAny: expect: Bun.gc() has no type declaration
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction requires cast
+  ```
+- **No new dependencies** without discussion in an issue first.
+- Match existing formatting, naming conventions, and PR scope (one concern per PR).
 
 ## Approach
 
