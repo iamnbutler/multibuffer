@@ -9,6 +9,7 @@ import {
   resolveAnchorRange,
 } from "../multibuffer/anchor.ts";
 import type {
+  Anchor,
   ExcerptInfo,
   MultiBuffer,
   MultiBufferPoint,
@@ -151,10 +152,7 @@ export class Editor {
         // For non-collapsed selections, resolve the head anchor to get
         // the accurate cursor position after edits may have moved it
         if (!isCollapsed(snap, primarySelection)) {
-          const head =
-            primarySelection.head === "end"
-              ? primarySelection.range.end
-              : primarySelection.range.start;
+          const head = this._headAnchor(primarySelection);
           const resolved = snap.resolveAnchor(head);
           if (resolved) return resolved;
         }
@@ -674,7 +672,7 @@ export class Editor {
     this._selections = this._mergeSelections(newSelections, currentSnap);
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = this._headAnchor(primarySel);
       const resolvedHead = currentSnap.resolveAnchor(headAnchor);
       if (resolvedHead) this._cursor = resolvedHead;
     }
@@ -711,23 +709,18 @@ export class Editor {
       return;
     }
 
-    // Multi-selection path
-    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> = [];
-    for (let i = 0; i < this._selections.length; i++) {
-      const sel = this._selections[i];
-      if (!sel) continue;
+    // Multi-selection path: collect ranges, sort bottom-to-top, apply
+    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint }> = [];
+    for (const sel of this._selections) {
       if (!isCollapsed(snap, sel)) {
         const range = resolveAnchorRange(snap, sel.range);
-        if (range) {
-          deleteRanges.push({ start: range.start, end: range.end, index: i });
-        }
+        if (range) deleteRanges.push({ start: range.start, end: range.end });
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
-        const cursor = snap.resolveAnchor(headAnchor);
+        const cursor = snap.resolveAnchor(this._headAnchor(sel));
         if (cursor) {
           const target = moveCursor(snap, cursor, "left", granularity);
           if (target.row !== cursor.row || target.column !== cursor.column) {
-            deleteRanges.push({ start: target, end: cursor, index: i });
+            deleteRanges.push({ start: target, end: cursor });
           }
         }
       }
@@ -740,46 +733,7 @@ export class Editor {
       return b.start.column - a.start.column;
     });
 
-    const edits: EditOp[] = [];
-    const newSelections: Selection[] = [];
-    let currentSnap = snap;
-
-    for (const { start, end } of deleteRanges) {
-      const startBuf = currentSnap.toBufferPoint(start);
-      if (startBuf && !startBuf.excerpt.editable) continue;
-
-      const removedText = this._getTextInRange(currentSnap, start, end);
-      edits.push({ editStart: start, removedText, insertedText: "" });
-
-      this.multiBuffer.edit(start, end, "");
-      currentSnap = this.multiBuffer.snapshot();
-
-      const newSel = selectionAtPoint(this.multiBuffer, start);
-      if (newSel) {
-        newSelections.unshift(newSel);
-      }
-    }
-
-    if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
-      this._textVersion++;
-    }
-
-    this._selections = this._mergeSelections(newSelections, currentSnap);
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = currentSnap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
-    }
+    this._applyDeleteRanges(snap, deleteRanges);
   }
 
   private _deleteForward(snap: MultiBufferSnapshot, granularity: Granularity): void {
@@ -812,23 +766,18 @@ export class Editor {
       return;
     }
 
-    // Multi-selection path
-    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint; index: number }> = [];
-    for (let i = 0; i < this._selections.length; i++) {
-      const sel = this._selections[i];
-      if (!sel) continue;
+    // Multi-selection path: collect ranges, sort bottom-to-top, apply
+    const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint }> = [];
+    for (const sel of this._selections) {
       if (!isCollapsed(snap, sel)) {
         const range = resolveAnchorRange(snap, sel.range);
-        if (range) {
-          deleteRanges.push({ start: range.start, end: range.end, index: i });
-        }
+        if (range) deleteRanges.push({ start: range.start, end: range.end });
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
-        const cursor = snap.resolveAnchor(headAnchor);
+        const cursor = snap.resolveAnchor(this._headAnchor(sel));
         if (cursor) {
           const target = moveCursor(snap, cursor, "right", granularity);
           if (target.row !== cursor.row || target.column !== cursor.column) {
-            deleteRanges.push({ start: cursor, end: target, index: i });
+            deleteRanges.push({ start: cursor, end: target });
           }
         }
       }
@@ -841,46 +790,7 @@ export class Editor {
       return b.start.column - a.start.column;
     });
 
-    const edits: EditOp[] = [];
-    const newSelections: Selection[] = [];
-    let currentSnap = snap;
-
-    for (const { start, end } of deleteRanges) {
-      const startBuf = currentSnap.toBufferPoint(start);
-      if (startBuf && !startBuf.excerpt.editable) continue;
-
-      const removedText = this._getTextInRange(currentSnap, start, end);
-      edits.push({ editStart: start, removedText, insertedText: "" });
-
-      this.multiBuffer.edit(start, end, "");
-      currentSnap = this.multiBuffer.snapshot();
-
-      const newSel = selectionAtPoint(this.multiBuffer, start);
-      if (newSel) {
-        newSelections.unshift(newSel);
-      }
-    }
-
-    if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
-      this._textVersion++;
-    }
-
-    this._selections = this._mergeSelections(newSelections, currentSnap);
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = currentSnap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
-    }
+    this._applyDeleteRanges(snap, deleteRanges);
   }
 
   private _moveCursor(
@@ -913,7 +823,7 @@ export class Editor {
         continue;
       }
 
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = this._headAnchor(sel);
       const cursor = snap.resolveAnchor(headAnchor);
       if (!cursor) continue;
 
@@ -947,14 +857,7 @@ export class Editor {
 
     // Merge overlapping selections
     this._selections = this._mergeSelections(newSelections, snap);
-
-    // Update primary cursor
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = snap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
-    }
+    this._updatePrimarySelectionCursor(snap);
   }
 
   private _extendSelection(
@@ -973,7 +876,7 @@ export class Editor {
     }
 
     for (const sel of this._selections) {
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = this._headAnchor(sel);
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) continue;
 
@@ -1018,14 +921,7 @@ export class Editor {
 
     // Merge overlapping selections
     this._selections = this._mergeSelections(newSelections, snap);
-
-    // Update primary cursor
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = snap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
-    }
+    this._updatePrimarySelectionCursor(snap);
   }
 
   private _selectAll(snap: MultiBufferSnapshot): void {
@@ -1034,9 +930,7 @@ export class Editor {
     if (sel) {
       // Select all clears multi-cursor to a single selection
       this._selections = [sel];
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
-      const resolved = snap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
+      this._updatePrimarySelectionCursor(snap);
     }
   }
 
@@ -1111,7 +1005,7 @@ export class Editor {
     this._selections = newSel ? [newSel] : [];
   }
 
-private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+  private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
     const cursor = this.cursor;
     const row = cursor.row;
@@ -1341,7 +1235,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
           maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = this._headAnchor(sel);
         const resolved = snap.resolveAnchor(headAnchor);
         if (resolved) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
@@ -1602,6 +1496,64 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     return { row: newRow, column: lastLine.length };
   }
 
+  /** Returns the head anchor (the moving end) of a selection. */
+  private _headAnchor(sel: Selection): Anchor {
+    return sel.head === "end" ? sel.range.end : sel.range.start;
+  }
+
+  /**
+   * Update `_cursor` from the primary (last) selection's head anchor.
+   * Call after updating `_selections`.
+   */
+  private _updatePrimarySelectionCursor(snap: MultiBufferSnapshot): void {
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const resolved = snap.resolveAnchor(this._headAnchor(primarySel));
+      if (resolved) this._cursor = resolved;
+    }
+  }
+
+  /**
+   * Apply a sorted (bottom-to-top) list of delete ranges, one per selection.
+   * Updates the undo stack, `_textVersion`, `_selections`, and `_cursor`.
+   */
+  private _applyDeleteRanges(
+    snap: MultiBufferSnapshot,
+    deleteRanges: ReadonlyArray<{ start: MultiBufferPoint; end: MultiBufferPoint }>,
+  ): void {
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const { start, end } of deleteRanges) {
+      const startBuf = currentSnap.toBufferPoint(start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, start, end);
+      edits.push({ editStart: start, removedText, insertedText: "" });
+
+      this.multiBuffer.edit(start, end, "");
+      currentSnap = this.multiBuffer.snapshot();
+
+      const newSel = selectionAtPoint(this.multiBuffer, start);
+      if (newSel) newSelections.unshift(newSel);
+    }
+
+    if (edits.length > 0) {
+      this._undoStack.push({
+        edits,
+        cursorBefore: this._cursor,
+        selectionsBefore: this._selections,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) this._undoStack.shift();
+      this._redoStack = [];
+      this._textVersion++;
+    }
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    this._updatePrimarySelectionCursor(currentSnap);
+  }
+
   /**
    * Add a new cursor at a specific point. If the point overlaps with an
    * existing selection, this is a no-op.
@@ -1637,7 +1589,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const newSelections: Selection[] = [...this._selections];
 
     for (const sel of this._selections) {
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = this._headAnchor(sel);
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) continue;
 
@@ -1652,12 +1604,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     }
 
     this._selections = this._mergeSelections(newSelections, snap);
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = snap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
-    }
+    this._updatePrimarySelectionCursor(snap);
   }
 
   /**
@@ -1690,7 +1637,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
           resolved.push({ start: range.start, end: range.end, index: i });
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = this._headAnchor(sel);
         const point = snap.resolveAnchor(headAnchor);
         if (point) {
           resolved.push({ start: point, end: point, index: i });
