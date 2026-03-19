@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/buffer/buffer.ts";
-import { findMatchingBracket } from "../../src/editor/bracket-match.ts";
+import { type BracketMatch, findMatchingBracket } from "../../src/editor/bracket-match.ts";
 import { Editor } from "../../src/editor/editor.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBufferSnapshot } from "../../src/multibuffer/types.ts";
@@ -216,15 +216,18 @@ describe("Editor.bracketMatch", () => {
 describe("bracketMatch event", () => {
   test("does NOT fire when bracketMatching is disabled", () => {
     const editor = makeEditor("(hello)", false);
+    // Move cursor away from bracket first so the subsequent move is a real change
+    editor.setCursor(mbPoint(0, 3));
     let eventCount = 0;
     editor.on("bracketMatch", () => { eventCount++; });
+    // Now move to '(' — this is a genuine cursor change, but the guard should prevent firing
     editor.setCursor(mbPoint(0, 0));
     expect(eventCount).toBe(0);
   });
 
   test("fires when cursor moves to bracket (bracketMatching enabled)", () => {
     const editor = makeEditor("a(bc)d", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null = null;
+    let match: BracketMatch | null | undefined;
     let eventCount = 0;
     editor.on("bracketMatch", (m) => {
       match = m;
@@ -234,15 +237,13 @@ describe("bracketMatch event", () => {
     editor.setCursor(mbPoint(0, 1));
     expect(eventCount).toBe(1);
     expect(match).not.toBeNull();
-    if (match) {
-      expect(match.open).toEqual(mbPoint(0, 1));
-      expect(match.close).toEqual(mbPoint(0, 4));
-    }
+    expect(match?.open).toEqual(mbPoint(0, 1));
+    expect(match?.close).toEqual(mbPoint(0, 4));
   });
 
   test("fires with null when cursor moves away from bracket", () => {
     const editor = makeEditor("(hello)", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined;
+    let match: BracketMatch | null | undefined;
     let eventCount = 0;
     editor.on("bracketMatch", (m) => {
       match = m;
@@ -256,7 +257,7 @@ describe("bracketMatch event", () => {
 
   test("fires on cursor movement via dispatch", () => {
     const editor = makeEditor("(ab)", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined;
+    let match: BracketMatch | null | undefined;
     let eventCount = 0;
     editor.on("bracketMatch", (m) => {
       match = m;
@@ -271,7 +272,7 @@ describe("bracketMatch event", () => {
 
   test("fires on text change that affects bracket at cursor", () => {
     const editor = makeEditor("(ab)", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined;
+    let match: BracketMatch | null | undefined;
     let eventCount = 0;
     // Start at '(' which matches ')'. Insert 'x' -> "x(ab)" with cursor at col 1 (on '(')
     editor.on("bracketMatch", (m) => {
@@ -283,15 +284,13 @@ describe("bracketMatch event", () => {
     expect(eventCount).toBe(1);
     // Cursor is now at col 1 (after 'x'), which is on '(' in "x(ab)"
     expect(match).not.toBeNull();
-    if (match) {
-      expect(match.open).toEqual(mbPoint(0, 1));
-      expect(match.close).toEqual(mbPoint(0, 4));
-    }
+    expect(match?.open).toEqual(mbPoint(0, 1));
+    expect(match?.close).toEqual(mbPoint(0, 4));
   });
 
   test("fires with null when bracket at cursor is deleted", () => {
     const editor = makeEditor("(ab)", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined = { open: mbPoint(0, 0), close: mbPoint(0, 0) };
+    let match: BracketMatch | null | undefined = { open: mbPoint(0, 0), close: mbPoint(0, 0) };
     let eventCount = 0;
     editor.on("bracketMatch", (m) => {
       match = m;
@@ -306,14 +305,12 @@ describe("bracketMatch event", () => {
 
   test("fires on extendSelectionTo", () => {
     const editor = makeEditor("(hello)", true);
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined;
+    let match: BracketMatch | null | undefined;
     editor.setCursor(mbPoint(0, 3)); // in the middle
     editor.on("bracketMatch", (m) => { match = m; });
     editor.extendSelectionTo(mbPoint(0, 6)); // extend to ')'
     expect(match).not.toBeNull();
-    if (match) {
-      expect(match.close).toEqual(mbPoint(0, 6));
-    }
+    expect(match?.close).toEqual(mbPoint(0, 6));
   });
 
   test("fires on selectWordAt", () => {
@@ -328,7 +325,7 @@ describe("bracketMatch event", () => {
   test("fires on selectLineAt", () => {
     const editor = makeEditor("(hello)", true);
     let eventCount = 0;
-    let match: { open: { row: number; column: number }; close: { row: number; column: number } } | null | undefined;
+    let match: BracketMatch | null | undefined;
     editor.on("bracketMatch", (m) => {
       match = m;
       eventCount++;

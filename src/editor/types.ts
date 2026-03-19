@@ -13,15 +13,7 @@ import type {
   MultiBufferSnapshot,
   Selection,
 } from "../multibuffer/types.ts";
-
-/**
- * A matched bracket pair (open and close positions).
- * Used in bracketMatch event payload.
- */
-export interface BracketMatchResult {
-  readonly open: MultiBufferPoint;
-  readonly close: MultiBufferPoint;
-}
+import type { BracketMatch } from "./bracket-match.ts";
 
 /**
  * Event map for the Editor event emitter.
@@ -41,7 +33,7 @@ export type EditorEventMap = {
    * Only emitted when `bracketMatching: true` option is set.
    * Returns the matched pair, or null if no match (cursor not on a bracket or unbalanced).
    */
-  bracketMatch: [match: BracketMatchResult | null];
+  bracketMatch: [match: BracketMatch | null];
 };
 
 /**
