@@ -2,7 +2,7 @@
 description: |
   Implements features from GitHub issues following the project's TDD discipline.
   Triggered on schedule (7am/2pm UTC) or on-demand via '/implement <instructions>'.
-  - Reads CLAUDE.md and AGENTS.md for project constraints
+  - Reads CLAUDE.md for project constraints
   - Follows Types → Tests → Implementation phases
   - Creates draft PRs with working, tested code
   - Can decompose large issues into sub-issues
@@ -79,7 +79,7 @@ steps:
 
 Take heed of **instructions**: "${{ steps.sanitized.outputs.text }}"
 
-If these are non-empty (not ""), then you have been triggered via `/implement <instructions>`. Work on issue #${{ github.event.issue.number }} following the user's instructions. Apply all the same guidelines (read AGENTS.md, TDD phases, run validation, use AI disclosure). Skip the scheduled issue selection and instead directly work on the referenced issue. If no specific instructions were provided (empty or blank), proceed with the normal workflow below.
+If these are non-empty (not ""), then you have been triggered via `/implement <instructions>`. Work on issue #${{ github.event.issue.number }} following the user's instructions. Apply all the same guidelines (read CLAUDE.md, TDD phases, run validation, use AI disclosure). Skip the scheduled issue selection and instead directly work on the referenced issue. If no specific instructions were provided (empty or blank), proceed with the normal workflow below.
 
 Then exit — do not run the normal workflow after completing the instructions.
 
@@ -112,8 +112,7 @@ Read memory at the **start** of every run; update it at the **end**.
 
 ### Step 0: Understand Context
 
-1. Read the repository's `AGENTS.md` file for project conventions and commands.
-2. Read `CLAUDE.md` for architecture constraints, type safety rules, and performance targets.
+1. Read the repository's `CLAUDE.md` file for project conventions, architecture constraints, type safety rules, and performance targets.
 3. Check repo memory for in-progress work. If a WIP branch exists for an issue, check it out and resume from where you left off.
 
 ### Step 1: Select an Issue

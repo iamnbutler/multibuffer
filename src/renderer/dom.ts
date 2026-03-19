@@ -313,6 +313,7 @@ export class DomRenderer implements Renderer {
 
     // Cursor element
     const cursorEl = document.createElement("div");
+    cursorEl.setAttribute("data-cursor", "");
     cursorEl.style.cssText = `position:absolute;width:2px;background:var(--editor-cursor, #ebdbb2);display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
     this._cursorEl = cursorEl;
 
