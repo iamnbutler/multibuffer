@@ -153,6 +153,16 @@ describe("compileGlob", () => {
   });
 });
 
+describe("standalone ** pattern", () => {
+  test("matches any path including empty", () => {
+    const regex = compileGlob("**");
+    expect(regex.test("foo")).toBe(true);
+    expect(regex.test("src/index.ts")).toBe(true);
+    expect(regex.test("a/b/c/d")).toBe(true);
+    expect(regex.test("")).toBe(true);
+  });
+});
+
 describe("createGlobMatcher", () => {
   test("caches compiled patterns", () => {
     const matcher = createGlobMatcher();
@@ -200,6 +210,14 @@ describe("shouldInclude", () => {
   });
 });
 
+describe("shouldInclude with glob exclude", () => {
+  test("glob exclude pattern blocks nested paths", () => {
+    // "tests/**" glob should exclude everything under tests/
+    expect(shouldInclude("tests/unit/foo.ts", ["**/*.ts"], ["tests/**"])).toBe(false);
+    expect(shouldInclude("src/index.ts", ["**/*.ts"], ["tests/**"])).toBe(true);
+  });
+});
+
 describe("shouldTraverseDirectory", () => {
   test("traverse all when no patterns", () => {
     expect(shouldTraverseDirectory("src", [], [])).toBe(true);
@@ -221,6 +239,13 @@ describe("shouldTraverseDirectory", () => {
   test("always traverse when ** pattern is used", () => {
     expect(shouldTraverseDirectory("any", ["**/*.ts"], [])).toBe(true);
     expect(shouldTraverseDirectory("deep/nested", ["**/*.ts"], [])).toBe(true);
+  });
+
+  test("traverses nested directories that could contain include matches", () => {
+    // include: "src/**/*.tsx" — src/components could contain matching files
+    expect(shouldTraverseDirectory("src/components", ["src/**/*.tsx"], [])).toBe(true);
+    // tests/ cannot contain "src/**/*.tsx" matches
+    expect(shouldTraverseDirectory("tests/unit", ["src/**/*.tsx"], [])).toBe(false);
   });
 
   test("excluded directory takes precedence", () => {
