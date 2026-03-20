@@ -206,6 +206,25 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FsAdapter
+
+An interface (`src/project/types.ts`) for platform-portable filesystem access used by [ProjectTree](#projecttree). Implementors provide:
+
+- `readdir(path)` — returns an array of `FsDirEntry` values (filename + `isDirectory` flag).
+- `stat(path)` _(optional)_ — returns `FsStat` (size in bytes and mtime as a Unix ms timestamp) when the tree is created with `includeMetadata: true`.
+
+Three built-in implementations are provided:
+
+- `createFsAdapter()` — native Bun/Node filesystem adapter.
+- `createMemoryFsAdapter(entries)` — in-memory virtual filesystem for testing.
+- `getDefaultFsAdapter()` — returns the Bun adapter when available, otherwise throws.
+
+See: `src/project/adapter.ts`, [ProjectTree](#projecttree)
+
+---
+
 ## G
 
 ### Generational Arena
@@ -229,6 +248,12 @@ The left-hand area of the editor display reserved for line numbers and other mar
 A character rendered between the gutter line-number area and the line content on a decorated row. Specified via `DecorationStyle.gutterSign` (e.g., `"+"` or `"−"`) and colored by `gutterSignColor`. Useful for diff-style annotations that indicate added or removed lines.
 
 See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutter](#gutter)
+
+### GlobMatcher
+
+A function type `(pattern: string, path: string) => boolean` that tests whether a path matches a glob pattern. Injected into [ProjectTree](#projecttree) via `ProjectTreeOptions.globMatcher`; defaults to the built-in minimal matcher. The built-in matcher (`src/project/glob.ts`) supports `**` (any path segments including none), `*` (any non-separator characters), `?` (single non-separator character), `{a,b}` brace expansion, and `[abc]` character classes.
+
+See: `src/project/glob.ts`, [ProjectTree](#projecttree)
 
 ---
 
@@ -331,6 +356,41 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### ProjectDirectoryEntry
+
+A directory variant of [ProjectEntry](#projectentry) with `type: "directory"`. Carries `name`, `path` (absolute), and `relativePath` (relative to project root). Its `children()` method returns an async iterator that reads the directory from the filesystem only when iteration begins, enabling lazy traversal of large repositories.
+
+See: `src/project/types.ts`, [ProjectEntry](#projectentry), [ProjectTree](#projecttree)
+
+### ProjectEntry
+
+A discriminated union type (`ProjectFileEntry | ProjectDirectoryEntry`) representing any node in a [ProjectTree](#projecttree). The `type` field (`"file"` or `"directory"`) narrows the type. Yielded by `ProjectTree.entries()` and `ProjectTree.children()`.
+
+See: `src/project/types.ts`
+
+### ProjectFileEntry
+
+A file variant of [ProjectEntry](#projectentry) with `type: "file"`. Carries `name`, `path` (absolute), and `relativePath` (relative to project root). When the tree is created with `includeMetadata: true` and the [FsAdapter](#fsadapter) implements `stat`, the `size` (bytes) and `mtime` (Unix ms timestamp) fields are also populated.
+
+See: `src/project/types.ts`, [FsAdapter](#fsadapter)
+
+### ProjectTree
+
+A data structure (`src/project/tree.ts`) for discovering files and directories under a root path. Created by `createProjectTree(root, options)`. Directories are walked lazily via async iterators — only read from the filesystem when iterated — making traversal efficient for large repositories.
+
+Key methods:
+
+- `entries()` — async iterable over all [ProjectEntry](#projectentry) values (depth-first, respecting filters).
+- `children(path)` — async iterable over immediate children of a specific directory.
+- `get(path)` — resolves a single entry by path.
+- `has(path)` — checks whether a path exists and passes filters.
+
+`ProjectTreeOptions` controls `include`/`exclude` glob patterns, `maxDepth`, `includeMetadata`, a custom [GlobMatcher](#globmatcher), and the [FsAdapter](#fsadapter) backend.
+
+Available as a subpath export: `import { createProjectTree } from "multibuffer/project"`.
+
+See: `src/project/tree.ts`, `src/project/types.ts`
 
 ---
 
