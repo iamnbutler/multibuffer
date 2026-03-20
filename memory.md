@@ -1,29 +1,30 @@
 # Test Improver Memory
 
 ## Commands
-- bun test/typecheck/lint — CI only; no coverage configured
+- bun test/typecheck/lint — CI only; no coverage
+- bun run fuzz — tests/fuzz/ (fast-check, separate from main suite)
+- bun run test:e2e — Playwright (needs serve:playground)
 - CI: install→build:demo→typecheck→lint→test
 
 ## Framework
-- bun:test; tests/ mirrors src/; helpers.ts + property-helpers.ts (merged #234)
+- bun:test; tests/ mirrors src/; helpers.ts + property-helpers.ts
+- fuzz/arbitraries.ts — fast-check shared arbitraries
 - num() unwraps branded types; biome-ignore for branded casts
 
 ## Open PRs
-- branch test-assist/multi-cursor-undo-redo: 5 multi-cursor undo/redo tests
+- #312: 5 multi-cursor undo/redo tests (clean)
 
-## Backlog
-1. anchor bias-at-boundary — BLOCKED (excerptAt not bias-aware)
-2. singleton optimization — unimplemented feature
+## Backlog (all blocked/done)
+1. anchor bias-at-boundary — BLOCKED
+2. singleton optimization — unimplemented
 3. edit-proxy cross-excerpt — BLOCKED
-4. Playwright e2e (#119)
-5. fast-check fuzz (#80) — UNBLOCKED (#234 merged)
-6. reDiff→edit view consistency test — UNBLOCKED (#244 closed)
+4-6. e2e/fuzz/reDiff — all DONE
 
 ## Round-Robin
-Last: 2026-03-19 run 23290644078; tasks 1,2,3,7. Next: 4,5,6,7.
+Last: 2026-03-20 run 23338889370; tasks 4,5,6,7. Next: 1,2,3,7.
 
 ## Notes
-- #234, #245 merged 2026-03-18; #244 closed by maintainer
-- Multi-cursor #302, find/replace #300, Canvas #294/#297, WebGPU #291, events #301 all merged
-- Pre-existing: 10 canvas/webgpu test failures (browser env); src/react/ typecheck errors
-- Repo Assist active; avoid overlap before new PRs/issues
+- All unblocked items done; 3 todos still blocked on unimplemented APIs
+- 2026-03-19 wave: ProjectTree, Playwright, fuzz, bracketMatch, DiffEditorView, lang queries — all w/ tests
+- Repo Assist active; avoid overlap
+- Pre-existing: canvas/webgpu test failures (browser); src/react/ typecheck errors
