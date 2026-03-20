@@ -233,8 +233,10 @@ export class WrapMap {
     this._lineCount = snapshot.lineCount;
 
     // Allocate prefix sum array and segment char-start offsets.
+    // Pre-allocate _segCharStart to lineCount (one entry per line = no wrapping).
+    // _ensureComputedUpTo grows it with amortized doubling if lines wrap.
     this._prefix = new Uint32Array(this._lineCount + 1);
-    this._segCharStart = new Uint32Array(0);
+    this._segCharStart = new Uint32Array(Math.max(this._lineCount, 1));
     this._prefix[0] = 0;
     this._computedUpTo = 0;
 
@@ -256,8 +258,12 @@ export class WrapMap {
     const endRowBranded = target as MultiBufferRow;
     const lines = this._snapshot.lines(startRow, endRowBranded);
 
-    // Build prefix sums and collect segment char-start offsets for the new rows.
-    const segCharStartArr: number[] = [];
+    // Fill segment char-start offsets directly into the pre-allocated array,
+    // starting at the position after all previously computed segments.
+    // Grow with amortized doubling when wrap causes more segments than the
+    // pre-allocated lineCount estimate — avoids the prior O(n²) pattern
+    // (creating a new Uint32Array + copying all prior data on every chunk call).
+    let fillIdx = this._prefix[this._computedUpTo] ?? 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
@@ -266,20 +272,16 @@ export class WrapMap {
       this._prefix[rowIdx + 1] = (this._prefix[rowIdx] ?? 0) + segments.length;
       let charPos = 0;
       for (const seg of segments) {
-        segCharStartArr.push(charPos);
+        if (fillIdx >= this._segCharStart.length) {
+          // Grow with amortized doubling: O(n) total copies vs O(n²) previously.
+          const newCap = Math.max(fillIdx + 1, this._segCharStart.length * 2);
+          const grown = new Uint32Array(newCap);
+          grown.set(this._segCharStart.subarray(0, fillIdx));
+          this._segCharStart = grown;
+        }
+        this._segCharStart[fillIdx++] = charPos;
         charPos += seg.length;
       }
-    }
-
-    // Append new segment offsets to the existing _segCharStart array.
-    if (segCharStartArr.length > 0) {
-      const prev = this._segCharStart;
-      const merged = new Uint32Array(prev.length + segCharStartArr.length);
-      merged.set(prev);
-      for (let j = 0; j < segCharStartArr.length; j++) {
-        merged[prev.length + j] = segCharStartArr[j] ?? 0;
-      }
-      this._segCharStart = merged;
     }
 
     this._computedUpTo = target;
