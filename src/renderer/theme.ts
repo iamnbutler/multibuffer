@@ -122,7 +122,7 @@ export const GRUVBOX_THEME = {
   // Editor chrome
   "--editor-cursor": "#ebdbb2",
   "--editor-selection": "rgba(214,153,46,0.25)",
-  "--editor-gutter": "#665c54",
+  "--editor-gutter": GRUVBOX.gray,
   "--editor-header-bg": "#3c3836",
   "--editor-header-border": "#504945",
   "--editor-header-text": "#a89984",
@@ -149,7 +149,7 @@ export const GRUVBOX_THEME = {
 export const GRUVBOX_DARK_THEME: Theme = {
   cursor: "#ebdbb2",
   selection: "rgba(214,153,46,0.25)",
-  gutter: "#665c54",
+  gutter: GRUVBOX.gray,
   headerBg: "#3c3836",
   headerBorder: "#504945",
   headerText: "#a89984",
