@@ -13,7 +13,7 @@
  * ```
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { EditorView, EditorViewOptions } from "../editor/editor-view.ts";
 import { createEditorView } from "../editor/editor-view.ts";
 import type { Keymap } from "../editor/types.ts";
@@ -41,7 +41,7 @@ export interface UseEditorViewOptions {
 
 export interface UseEditorViewResult {
   /** Ref to attach to the container element. */
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement>;
   /** The EditorView instance (null during SSR or before mount). */
   view: EditorView | null;
   /** Update decorations imperatively (alternative to props). */
