@@ -6,31 +6,21 @@
 
 ---
 
-## Triggers
+## Triggers & Issue Selection
 
-- **Scheduled:** Twice daily at 7am and 2pm UTC (`0 7,14 * * *`)
+- **Scheduled:** Twice daily (7am/2pm UTC) — picks oldest `agent:implement` issue
 - **Slash command:** `/implement` on any issue, with optional instructions
-- **Manual:** `workflow_dispatch` for ad-hoc runs
+- **Manual:** `workflow_dispatch`
 
-## Issue Selection
-
-- **Scheduled runs:** Picks oldest issue labeled `agent:implement`
-- **Command runs:** Works on the issue where `/implement` was invoked
-- Agent removes `agent:implement` and adds `in-progress` when it starts
+On start, removes `agent:implement` and adds `in-progress`.
 
 ## TDD Phases
 
 ### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
+Read CLAUDE.md, the issue, repo-memory for prior work, and any existing WIP branches/PRs.
 
 ### Phase 1: Plan
-- Identify affected modules (buffer, multibuffer, editor, renderer, diff)
-- Identify types that need to change or be created
-- Comment implementation plan on the issue
-- If too large → decompose into sub-issues labeled `agent:implement`, exit
+Identify affected modules and types, then comment the plan on the issue. If too large → decompose into sub-issues labeled `agent:implement` and exit.
 
 ### Phase 2: Types
 - Create or modify type definitions
@@ -50,9 +40,7 @@
 - Commit: `feat(<module>): implement <feature>`
 
 ### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+Run the complete suite, create a draft PR linking the issue. If timeout approaching → commit WIP and note progress in repo-memory.
 
 ## Safe Outputs
 
@@ -64,11 +52,7 @@
 
 ## Memory
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
+Repo-memory tracks in-progress issues (branch names and phase), failed attempts with reasons (no retry of same approach), and parent→child mappings for decompositions.
 
 ## State Transitions
 
@@ -79,29 +63,16 @@ Repo-memory tracks:
 
 ## PR Maintenance
 
-- Each run checks open `[Implementor]` PRs for CI failures
-- Auto-fixes failures caused by its own changes
-- Can invoke `/pr-fix` on its own PRs for complex CI issues
-- Leaves human review comments untouched
+Each run checks open `[Implementor]` PRs for CI failures and auto-fixes failures caused by its own changes. For complex CI issues, invokes `/pr-fix`. Never modifies human review comments.
 
 ## Guardrails
 
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
+**Must do:** Read CLAUDE.md before every run; use `biome-ignore` with `expect:` convention; run full validation before PRs; identify as `[Implementor]`; respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic).
 
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
+**Must not:** Add dependencies without a discussion issue; modify code outside issue scope; create non-draft PRs; retry a failed approach; skip types-first phase.
 
 **Escape hatches:**
-- Issue too vague → comment asking for clarification
+- Issue too vague → ask for clarification
 - Issue too large → decompose into sub-issues
-- Implementation breaks existing tests → investigate and fix; escalate if stuck after genuine attempt
-- Can't resolve within 2 runs → flag for human attention
+- Tests break → investigate and fix; escalate if stuck
+- Unresolvable in 2 runs → flag for human attention
