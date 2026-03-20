@@ -1,1 +1,1 @@
-{"r":"23310672425","c":["157","260","282","111"],"n":"Open Repo Assist PRs: #311 (wrapLineSegmentCharStarts, clean), #314 (factories lineCount, clean). Issues #260 and #282 still open; PRs #274/#295 closed by maintainer without merging. Issue #315 is a stale fallback (superseded by PR #314)."}
+{"r":"23324169174","c":["157","260","282","111"],"n":"RAPRs:#311,#314,new-build-demo-alias. #315 open(superseded #314). PR#324 by maintainer addresses #282. #169/#110 closed. Bun unavailable in runner."}
