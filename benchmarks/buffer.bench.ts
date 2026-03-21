@@ -23,6 +23,7 @@ function generateText(lines: number): string {
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
 const id = "bench-buffer" as BufferId;
 
+let snapshot1k: BufferSnapshot;
 let snapshot10k: BufferSnapshot;
 let mutableBuf1k: Buffer;
 let mutableBuf10k: Buffer;
@@ -198,6 +199,33 @@ export const bufferBenchmarks: BenchmarkSuite = {
       fn: () => {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         snapshot10k.lines(0 as BufferRow, 10000 as BufferRow);
+      },
+    },
+    {
+      // Measures Rope.text() string assembly cost on a 1K-line rope (~34 chunks, ~35 KB).
+      // text() is called by reDiff() twice per diff: once for oldSnap, once for newSnap.
+      // This baseline quantifies the allocation cost that reDiff()→diffLines() swap eliminates.
+      name: "text() - 1K line rope (~34 chunks)",
+      iterations: 500,
+      targetMs: 1,
+      setup: () => {
+        snapshot1k = createBuffer(id, generateText(1000)).snapshot();
+      },
+      fn: () => {
+        snapshot1k.text();
+      },
+    },
+    {
+      // 10K-line rope (~342 chunks, ~350 KB). reDiff() allocates TWO such strings per call.
+      // Baseline for the reDiff()→diffLines() swap and Rope.text() Array.join() opportunity.
+      name: "text() - 10K line rope (~342 chunks)",
+      iterations: 50,
+      targetMs: 10,
+      setup: () => {
+        snapshot10k = createBuffer(id, generateText(10_000)).snapshot();
+      },
+      fn: () => {
+        snapshot10k.text();
       },
     },
   ],
