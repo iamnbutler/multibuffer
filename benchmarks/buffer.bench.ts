@@ -200,5 +200,16 @@ export const bufferBenchmarks: BenchmarkSuite = {
         snapshot10k.lines(0 as BufferRow, 10000 as BufferRow);
       },
     },
+    {
+      // text() on a multi-chunk rope — exercises the join path.
+      // With 10K lines (~400 chunks), the previous += loop allocated ~78 MB of
+      // intermediate strings; join() allocates the result buffer exactly once.
+      name: "text() - 10K line buffer (multi-chunk rope)",
+      iterations: 100,
+      targetMs: 5,
+      fn: () => {
+        snapshot10k.text();
+      },
+    },
   ],
 };
