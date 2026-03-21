@@ -3,6 +3,14 @@
 
 // Implementation exports
 export { createBuffer } from "../buffer/buffer.ts";
+// FileNavigator: file-path → excerpt mapping
+export {
+  createFileNavigator,
+  type FileNavigator,
+  type FileNavigatorOptions,
+  type OpenedFileInfo,
+  type ReadFileFn,
+} from "./file-navigator.ts";
 // adjustOffset is re-exported from buffer for backward compatibility
 export { adjustOffset } from "../buffer/offset.ts";
 // Anchor utilities
