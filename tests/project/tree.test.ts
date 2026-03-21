@@ -92,6 +92,40 @@ describe("createProjectTree", () => {
     });
   });
 
+  describe("empty directories", () => {
+    test("empty root yields no entries", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+      });
+
+      const tree = createProjectTree("/root", { adapter });
+      const paths = await collectPaths(tree.entries());
+
+      expect(paths).toEqual([]);
+    });
+
+    test("empty subdirectory is included but yields no children", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/empty": { type: "directory" },
+        "/root/file.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", { adapter });
+      const entries = await collectEntries(tree.entries());
+
+      // The empty directory itself appears in entries
+      const emptyDir = entries.find((e) => e.name === "empty");
+      expect(emptyDir?.type).toBe("directory");
+
+      // But iterating its children yields nothing
+      if (emptyDir?.type === "directory") {
+        const children = await collectEntries(emptyDir.children());
+        expect(children).toHaveLength(0);
+      }
+    });
+  });
+
   describe("include patterns", () => {
     test("filters files by extension", async () => {
       const adapter = createMemoryFsAdapter({
@@ -306,6 +340,57 @@ describe("createProjectTree", () => {
 
       expect(await tree.has("exists.ts")).toBe(true);
       expect(await tree.has("missing.ts")).toBe(false);
+    });
+
+    test("get() returns directory entry for a directory path", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", { adapter });
+
+      const entry = await tree.get("src");
+      expect(entry?.type).toBe("directory");
+      expect(entry?.name).toBe("src");
+      expect(entry?.path).toBe("/root/src");
+      expect(entry?.relativePath).toBe("src");
+    });
+
+    test("get() directory entry has working children() method", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+        "/root/src/utils.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", { adapter });
+
+      const dir = await tree.get("src");
+      expect(dir?.type).toBe("directory");
+      if (dir?.type === "directory") {
+        const children = await collectEntries(dir.children());
+        expect(children).toHaveLength(2);
+        expect(children.map((c) => c.name).sort()).toEqual([
+          "index.ts",
+          "utils.ts",
+        ]);
+      }
+    });
+
+    test("has() returns true for existing directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", { adapter });
+
+      expect(await tree.has("src")).toBe(true);
+      expect(await tree.has("missing-dir")).toBe(false);
     });
 
     test("handles trailing slashes in root", async () => {
