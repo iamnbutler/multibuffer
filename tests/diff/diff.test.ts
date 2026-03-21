@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { diff } from "../../src/diff/diff.ts";
+import { diff, diffLines } from "../../src/diff/diff.ts";
 import { formatHunkHeader } from "../../src/diff/helpers.ts";
 
 describe("diff", () => {
@@ -121,6 +121,42 @@ describe("diff", () => {
       (l, i) => l.kind === "equal" && i < hunk.lines.findIndex((x) => x.kind !== "equal"),
     );
     expect(equalBefore.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("diffLines", () => {
+  test("identical arrays produce isEqual:true", () => {
+    const lines = ["a", "b", "c"];
+    const result = diffLines(lines, lines);
+    expect(result.isEqual).toBe(true);
+    expect(result.hunks).toEqual([]);
+  });
+
+  test("length mismatch (insert) produces isEqual:false", () => {
+    // Fast path: oldLines.length !== newLines.length — skips edits.every() scan
+    const result = diffLines(["a", "b"], ["a", "b", "c"]);
+    expect(result.isEqual).toBe(false);
+    expect(result.hunks.length).toBeGreaterThan(0);
+  });
+
+  test("length mismatch (delete) produces isEqual:false", () => {
+    const result = diffLines(["a", "b", "c"], ["a", "b"]);
+    expect(result.isEqual).toBe(false);
+    expect(result.hunks.length).toBeGreaterThan(0);
+  });
+
+  test("same-length arrays with changes produce isEqual:false", () => {
+    const result = diffLines(["a", "b"], ["a", "x"]);
+    expect(result.isEqual).toBe(false);
+    const allLines = result.hunks.flatMap((h) => h.lines);
+    expect(allLines.some((l) => l.kind === "delete" && l.text === "b")).toBe(true);
+    expect(allLines.some((l) => l.kind === "insert" && l.text === "x")).toBe(true);
+  });
+
+  test("both empty arrays produce isEqual:true", () => {
+    const result = diffLines([], []);
+    expect(result.isEqual).toBe(true);
+    expect(result.hunks).toEqual([]);
   });
 });
 
