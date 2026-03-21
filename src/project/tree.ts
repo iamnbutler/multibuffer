@@ -102,19 +102,22 @@ class ProjectTreeImpl implements ProjectTree {
     const absolutePath = this.toAbsolutePath(path);
     const relativePath = this.toRelativePath(absolutePath);
 
-    // Check if path passes filters
-    if (!this.passesFilters(relativePath)) {
-      return undefined;
-    }
-
     try {
-      // Check if it exists by trying to stat or readdir
+      // Check if it exists by trying to stat or readdir, then apply the
+      // appropriate filter based on type: shouldTraverseDirectory for dirs,
+      // passesFilters (shouldInclude) for files.
       if (this.adapter.stat) {
         const stat = await this.adapter.stat(absolutePath);
         // Determine if it's a file or directory by trying to readdir
         try {
           await this.adapter.readdir(absolutePath);
-          // It's a directory
+          // It's a directory — check traversal filter (skip for root "")
+          if (
+            relativePath !== "" &&
+            !shouldTraverseDirectory(relativePath, this.include, this.exclude, this.globMatcher)
+          ) {
+            return undefined;
+          }
           return this.createDirectoryEntry(
             absolutePath,
             relativePath,
@@ -123,6 +126,9 @@ class ProjectTreeImpl implements ProjectTree {
         } catch (error: unknown) {
           // Only treat ENOTDIR as "this is a file"; re-throw other errors
           if (getErrorCode(error) === "ENOTDIR") {
+            if (!this.passesFilters(relativePath)) {
+              return undefined;
+            }
             return this.createFileEntry(
               absolutePath,
               relativePath,
@@ -138,6 +144,13 @@ class ProjectTreeImpl implements ProjectTree {
       // Without stat, try readdir to check if it's a directory
       try {
         await this.adapter.readdir(absolutePath);
+        // It's a directory — check traversal filter (skip for root "")
+        if (
+          relativePath !== "" &&
+          !shouldTraverseDirectory(relativePath, this.include, this.exclude, this.globMatcher)
+        ) {
+          return undefined;
+        }
         return this.createDirectoryEntry(
           absolutePath,
           relativePath,
@@ -146,6 +159,9 @@ class ProjectTreeImpl implements ProjectTree {
       } catch (error: unknown) {
         // Only treat ENOTDIR as "this is a file"; re-throw other errors
         if (getErrorCode(error) === "ENOTDIR") {
+          if (!this.passesFilters(relativePath)) {
+            return undefined;
+          }
           return this.createFileEntry(
             absolutePath,
             relativePath,
