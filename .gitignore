@@ -37,3 +37,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 playground/sources.gen.ts
 playground/dist/
 _site/
+
+# Plans (local-only)
+docs/plans/
+
+# Claude Code worktrees
+.claude/worktrees/

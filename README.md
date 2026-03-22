@@ -2,12 +2,6 @@
 
 A multibuffer text editor component in TypeScript. Inspired by [Zed](https://zed.dev)'s multibuffer — presents multiple file excerpts as a single scrollable, editable document.
 
-**Status**: Active development. Core data model complete, editing functional, DOM renderer working. Not production-ready.
-
-## What it does
-
-A multibuffer composites excerpts from multiple source files into a single scrollable, editable document. Each excerpt is a range of lines from a buffer. The editor supports cursor movement (character/word/line/page/buffer), text editing (insert, delete, newline, tab), selection (keyboard and mouse), soft wrap, macOS keybindings, and syntax highlighting via tree-sitter.
-
 ```
 ┌──────────────────────────────┐
 │ src/buffer.ts  L1–20         │  ← excerpt header
@@ -24,78 +18,44 @@ A multibuffer composites excerpts from multiple source files into a single scrol
 
 ```
 src/
-  multibuffer/              Data model (rendering-agnostic)
-    rope.ts                   Chunked text with prefix sums (O(log n) edits)
-    buffer.ts                 Single file's text, backed by Rope
-    excerpt.ts                Range within a buffer
-    multibuffer.ts            Collection of excerpts, edit proxy, anchor system
-    anchor.ts                 Stable positions that survive edits
-    slot_map.ts               Generational arena for excerpt IDs
-    types.ts                  Branded types (BufferRow, MultiBufferRow, etc.)
-
-  editor/                   Command dispatcher
-    editor.ts                 State machine: commands → cursor/selection/buffer updates
-    cursor.ts                 Pure cursor movement functions
-    selection.ts              Selection creation, extension, collapse
-    input-handler.ts          Hidden textarea for keyboard input + key→command mapping
-    types.ts                  EditorCommand union type, Direction, Granularity
-
-  renderer/     DOM renderer
-    dom.ts                    Line pooling, viewport rendering, cursor/selection display
-    wrap-map.ts               Soft wrap via prefix sum (buffer row ↔ visual row)
-    highlighter.ts            Tree-sitter WASM syntax highlighting
-    theme.ts                  Gruvbox dark color mapping
-    measurement.ts            Fixed-height line calculations, viewport creation
-    types.ts                  Renderer interface, Viewport, Measurements
+  buffer/         Single-file text storage (rope-backed)
+  multibuffer/    Multi-excerpt view over buffers, anchors, selections
+  editor/         Editor state machine, cursor, selection, input handling
+  renderer/       DOM, Canvas, and WebGPU renderers, syntax highlighting, soft wrap
+  diff/           Diff computation, unified/multi-file diff views
+  react/          React bindings (EditorView, DiffView hooks)
+  worker/         Web Worker clients for highlighting and diffing
+  project/        Project tree, file discovery, glob matching
 ```
 
-## Key design decisions
+### Subpath exports
 
-- **Branded types** — `BufferRow`, `MultiBufferRow`, `BufferOffset` etc. prevent mixing coordinate systems at compile time
-- **Rope storage** — Chunked text with prefix sums for O(log n) line↔offset conversion
-- **Edit log on Buffer** — Anchors track positions across edits by replaying the edit log with bias semantics
-- **Snapshot pattern** — Immutable snapshots for concurrent reads; Rope is structurally shared
+```ts
+import { createBuffer } from "multibuffer/buffer";
+import { createMultiBuffer } from "multibuffer/multibuffer";
+import { Editor } from "multibuffer/editor";
+import { createDomRenderer } from "multibuffer/renderer";
+import { createDiffView } from "multibuffer/diff";
+import { EditorView } from "multibuffer/react";
+```
+
+## Design
+
+- **Branded types** — `BufferRow`, `MultiBufferRow`, `BufferOffset` prevent mixing coordinate systems at compile time
+- **Rope storage** — Chunked text with prefix sums for O(log n) line/offset conversion
+- **Anchors** — Stable positions that survive edits via edit log replay with bias semantics
 - **Fixed-height lines** — O(1) position calculations, no layout reflow
 - **Rendering-agnostic core** — Data model has zero DOM dependencies
 
 ## Development
 
-```bash
-bun test              # 386 tests (~70ms)
-bun test --watch      # Watch mode
-bun run bench         # Benchmarks (23 cases)
-bun run typecheck     # tsc --noEmit
-bun run lint          # Biome + GritQL (no `any`, no `as`, no `unknown`)
-```
-
-## Demo
+Requires [Bun](https://bun.sh).
 
 ```bash
-bun run dev           # http://localhost:3000
+bun install
+bun test
+bun run bench
+bun run typecheck
+bun run lint
+bun run dev             # Playground at localhost:3000
 ```
-
-Live editor with syntax highlighting, cursor, selection, and keyboard editing. Loads source files from `src/multibuffer/` as excerpts.
-
-### Debug API
-
-The demo exposes a WebSocket debug API for interacting with the editor from the CLI:
-
-```bash
-bun run demo/debug-client.ts getState              # cursor position, selection, line count
-bun run demo/debug-client.ts getText                # full buffer text
-bun run demo/debug-client.ts press "ArrowRight"     # simulate keypress
-bun run demo/debug-client.ts press "Meta+ArrowLeft" # Cmd+Left (line start)
-bun run demo/debug-client.ts press "Alt+ArrowRight" # Opt+Right (word right)
-bun run demo/debug-client.ts type "hello"           # simulate typing
-bun run demo/debug-client.ts click 5 10             # set cursor to row 5, col 10
-```
-
-Also available as `window.__editor` in the browser console.
-
-## What's next
-
-Open tasks by priority:
-
-- **p0**: Cursor clipping past end of line
-- **p1**: Auto-scroll to follow cursor, paste support, re-parse after edit for highlighting, browser integration tests
-- **p2**: Undo/redo, clipboard operations, cursor blink, decoration mapping
