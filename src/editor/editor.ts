@@ -795,12 +795,14 @@ export class Editor {
       this._textVersion++;
     }
 
-    this._selections = this._mergeSelections(newSelections, currentSnap);
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = currentSnap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
+    if (edits.length > 0) {
+      this._selections = this._mergeSelections(newSelections, currentSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = currentSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
     }
   }
 
@@ -1092,51 +1094,109 @@ export class Editor {
 
   private _deleteLine(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
-    const lineCount = snap.lineCount;
 
-    let deleteStart: MultiBufferPoint;
-    let deleteEnd: MultiBufferPoint;
-    let newCursorRow: MultiBufferRow;
-
-    if (lineCount <= 1) {
-      // Only line — delete everything
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const lastRow = Math.max(0, lineCount - 1) as MultiBufferRow;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const lastLineText = snap.lines(lastRow, lineCount as MultiBufferRow);
-      const lastCol = lastLineText[0]?.length ?? 0;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      deleteStart = { row: 0 as MultiBufferRow, column: 0 };
-      deleteEnd = { row: lastRow, column: lastCol };
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      newCursorRow = 0 as MultiBufferRow;
-    } else if (row + 1 < lineCount) {
-      // Not the last line — delete from start of this line to start of next
-      deleteStart = { row, column: 0 };
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      deleteEnd = { row: (row + 1) as MultiBufferRow, column: 0 };
-      newCursorRow = row;
-    } else {
-      // Last line — delete from end of previous line (the newline) to end of this line
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const prevRow = (row - 1) as MultiBufferRow;
-      const prevLineText = snap.lines(prevRow, row);
-      const prevLen = prevLineText[0]?.length ?? 0;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const thisLineText = snap.lines(row, lineCount as MultiBufferRow);
-      const thisLen = thisLineText[0]?.length ?? 0;
-      deleteStart = { row: prevRow, column: prevLen };
-      deleteEnd = { row, column: thisLen };
-      newCursorRow = prevRow;
+    // Collect unique rows from all selections
+    const rowSet = new Set<number>();
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const point = snap.resolveAnchor(headAnchor);
+      if (point) rowSet.add(point.row);
     }
 
-    if (!this._edit(snap, deleteStart, deleteEnd, "")) return;
-    const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
-    this._cursor = newCursor;
-    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-    this._selections = newSel ? [newSel] : [];
+    // Fallback: use primary cursor if no selections resolved
+    if (rowSet.size === 0) {
+      rowSet.add(this.cursor.row);
+    }
+
+    // Sort rows descending and delete bottom-to-top
+    const rows = [...rowSet].sort((a, b) => b - a);
+
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const rawRow of rows) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const row = rawRow as MultiBufferRow;
+      const lineCount = currentSnap.lineCount;
+
+      let deleteStart: MultiBufferPoint;
+      let deleteEnd: MultiBufferPoint;
+      let newCursorRow: MultiBufferRow;
+
+      if (lineCount <= 1) {
+        // Only line — delete everything
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        const lastRow = Math.max(0, lineCount - 1) as MultiBufferRow;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const lastLineText = currentSnap.lines(lastRow, lineCount as MultiBufferRow);
+        const lastCol = lastLineText[0]?.length ?? 0;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        deleteStart = { row: 0 as MultiBufferRow, column: 0 };
+        deleteEnd = { row: lastRow, column: lastCol };
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+        newCursorRow = 0 as MultiBufferRow;
+      } else if (row + 1 < lineCount) {
+        // Not the last line — delete from start of this line to start of next
+        deleteStart = { row, column: 0 };
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        deleteEnd = { row: (row + 1) as MultiBufferRow, column: 0 };
+        newCursorRow = row;
+      } else {
+        // Last line — delete from end of previous line (the newline) to end of this line
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const prevRow = (row - 1) as MultiBufferRow;
+        const prevLineText = currentSnap.lines(prevRow, row);
+        const prevLen = prevLineText[0]?.length ?? 0;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const thisLineText = currentSnap.lines(row, lineCount as MultiBufferRow);
+        const thisLen = thisLineText[0]?.length ?? 0;
+        deleteStart = { row: prevRow, column: prevLen };
+        deleteEnd = { row, column: thisLen };
+        newCursorRow = prevRow;
+      }
+
+      // Check editability of both endpoints (range may span excerpt boundary)
+      const startBuf = currentSnap.toBufferPoint(deleteStart);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+      const endBuf = currentSnap.toBufferPoint(deleteEnd);
+      if (endBuf && !endBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, deleteStart, deleteEnd);
+      edits.push({ editStart: deleteStart, removedText, insertedText: "" });
+
+      this.multiBuffer.edit(deleteStart, deleteEnd, "");
+      currentSnap = this.multiBuffer.snapshot();
+
+      const newCursor: MultiBufferPoint = { row: newCursorRow, column: 0 };
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      if (newSel) {
+        newSelections.unshift(newSel);
+      }
+    }
+
+    if (edits.length > 0) {
+      this._undoStack.push({
+        edits,
+        cursorBefore: this._cursor,
+        selectionsBefore: this._selections,
+      });
+      if (this._undoStack.length > Editor._MAX_HISTORY) {
+        this._undoStack.shift();
+      }
+      this._redoStack = [];
+      this._textVersion++;
+    }
+
+    if (edits.length > 0) {
+      this._selections = this._mergeSelections(newSelections, currentSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = currentSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
+    }
   }
 
 private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
