@@ -289,6 +289,74 @@ function moveWord(
   return moveCharacter(snapshot, current, direction);
 }
 
+/**
+ * Move to the next word boundary by skipping one contiguous class of characters.
+ *
+ * Unlike `moveWord` (which skips two classes to reach the next word start),
+ * this stops at the first class transition. Used for word-granularity deletion
+ * so that e.g. deleting forward from the end of a word removes only the
+ * whitespace, not the whitespace AND the following word.
+ */
+export function moveWordBoundary(
+  snapshot: MultiBufferSnapshot,
+  current: MultiBufferPoint,
+  direction: Direction,
+): MultiBufferPoint {
+  if (direction === "right" || direction === "left") {
+    const lineText = snapshot.lines(current.row, nextRow(current.row, snapshot.lineCount));
+    const text = lineText[0] ?? "";
+    const col = current.column;
+
+    if (direction === "right") {
+      if (col >= text.length) {
+        // At end of line — cross to start of next line
+        if (current.row + 1 < snapshot.lineCount) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+          return { row: (current.row + 1) as MultiBufferRow, column: 0 };
+        }
+        return current;
+      }
+      // Determine the class of the first character, then skip that class
+      const firstCp = text.codePointAt(col) ?? 0;
+      const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+      let pos = col;
+      while (pos < text.length) {
+        const cp = text.codePointAt(pos) ?? 0;
+        if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+        pos += cp > 0xffff ? 2 : 1;
+      }
+      return { row: current.row, column: pos };
+    }
+
+    // left: determine the class of the character immediately before the cursor
+    if (col <= 0) {
+      // At start of line — cross to end of previous line
+      if (current.row > 0) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const prevRow = (current.row - 1) as MultiBufferRow;
+        const prevLineText = snapshot.lines(prevRow, current.row);
+        const prevLen = prevLineText[0]?.length ?? 0;
+        return { row: prevRow, column: prevLen };
+      }
+      return current;
+    }
+    const prevStart = prevCpStart(text, col);
+    const firstCp = text.codePointAt(prevStart) ?? 0;
+    const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+    let pos = col;
+    while (pos > 0) {
+      const prev = prevCpStart(text, pos);
+      const cp = text.codePointAt(prev) ?? 0;
+      if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+      pos = prev;
+    }
+    return { row: current.row, column: pos };
+  }
+
+  // For up/down with word granularity, just do character movement
+  return moveCharacter(snapshot, current, direction);
+}
+
 function moveLine(
   snapshot: MultiBufferSnapshot,
   current: MultiBufferPoint,
