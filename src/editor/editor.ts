@@ -19,7 +19,7 @@ import type {
 import { Bias } from "../multibuffer/types.ts";
 import { WrapMap } from "../renderer/wrap-map.ts";
 import { type BracketMatch, findMatchingBracket } from "./bracket-match.ts";
-import { isWordChar, moveCursor, moveCursorVisual } from "./cursor.ts";
+import { isWordChar, moveCursor, moveCursorVisual, moveWordBoundary } from "./cursor.ts";
 import {
   collapseSelection,
   isCollapsed,
@@ -717,7 +717,8 @@ export class Editor {
       }
 
       const cursor = this.cursor;
-      const target = moveCursor(snap, cursor, "left", granularity);
+      const moveFn = granularity === "word" ? moveWordBoundary : moveCursor;
+      const target = moveFn(snap, cursor, "left", granularity);
       if (target.row !== cursor.row || target.column !== cursor.column) {
         if (!this._edit(snap, target, cursor, "")) return;
         this._cursor = target;
@@ -741,7 +742,8 @@ export class Editor {
         const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
         const cursor = snap.resolveAnchor(headAnchor);
         if (cursor) {
-          const target = moveCursor(snap, cursor, "left", granularity);
+          const moveFn = granularity === "word" ? moveWordBoundary : moveCursor;
+          const target = moveFn(snap, cursor, "left", granularity);
           if (target.row !== cursor.row || target.column !== cursor.column) {
             deleteRanges.push({ start: target, end: cursor, index: i });
           }
@@ -819,7 +821,8 @@ export class Editor {
       }
 
       const cursor = this.cursor;
-      const target = moveCursor(snap, cursor, "right", granularity);
+      const moveFn = granularity === "word" ? moveWordBoundary : moveCursor;
+      const target = moveFn(snap, cursor, "right", granularity);
       if (target.row !== cursor.row || target.column !== cursor.column) {
         if (!this._edit(snap, cursor, target, "")) return;
         const newSel = selectionAtPoint(this.multiBuffer, cursor);
@@ -842,7 +845,8 @@ export class Editor {
         const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
         const cursor = snap.resolveAnchor(headAnchor);
         if (cursor) {
-          const target = moveCursor(snap, cursor, "right", granularity);
+          const moveFn = granularity === "word" ? moveWordBoundary : moveCursor;
+          const target = moveFn(snap, cursor, "right", granularity);
           if (target.row !== cursor.row || target.column !== cursor.column) {
             deleteRanges.push({ start: cursor, end: target, index: i });
           }
