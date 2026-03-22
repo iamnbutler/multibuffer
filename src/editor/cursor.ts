@@ -242,6 +242,44 @@ function moveCharacter(
   return current;
 }
 
+/**
+ * Scan forward from `pos` within `text`, skipping word chars then non-word chars.
+ * Returns the new position (start of the next word, or text.length).
+ */
+function scanWordForward(text: string, pos: number): number {
+  while (pos < text.length) {
+    const cp = text.codePointAt(pos) ?? 0;
+    if (!isWordChar(String.fromCodePoint(cp))) break;
+    pos += cp > 0xffff ? 2 : 1;
+  }
+  while (pos < text.length) {
+    const cp = text.codePointAt(pos) ?? 0;
+    if (isWordChar(String.fromCodePoint(cp))) break;
+    pos += cp > 0xffff ? 2 : 1;
+  }
+  return pos;
+}
+
+/**
+ * Scan backward from `pos` within `text`, skipping non-word chars then word chars.
+ * Returns the new position (start of the current/previous word, or 0).
+ */
+function scanWordBackward(text: string, pos: number): number {
+  while (pos > 0) {
+    const prev = prevCpStart(text, pos);
+    const cp = text.codePointAt(prev) ?? 0;
+    if (isWordChar(String.fromCodePoint(cp))) break;
+    pos = prev;
+  }
+  while (pos > 0) {
+    const prev = prevCpStart(text, pos);
+    const cp = text.codePointAt(prev) ?? 0;
+    if (!isWordChar(String.fromCodePoint(cp))) break;
+    pos = prev;
+  }
+  return pos;
+}
+
 function moveWord(
   snapshot: MultiBufferSnapshot,
   current: MultiBufferPoint,
@@ -253,75 +291,28 @@ function moveWord(
     const col = current.column;
 
     if (direction === "right") {
-      // Skip current word chars, then skip non-word chars
-      let pos = col;
-      while (pos < text.length) {
-        const cp = text.codePointAt(pos) ?? 0;
-        if (!isWordChar(String.fromCodePoint(cp))) break;
-        pos += cp > 0xffff ? 2 : 1;
-      }
-      while (pos < text.length) {
-        const cp = text.codePointAt(pos) ?? 0;
-        if (isWordChar(String.fromCodePoint(cp))) break;
-        pos += cp > 0xffff ? 2 : 1;
-      }
+      const pos = scanWordForward(text, col);
       // Cross line boundary: at end of line, continue word movement on next line
       if (pos === text.length && current.row + 1 < snapshot.lineCount) {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const nextRowIdx = (current.row + 1) as MultiBufferRow;
         const nextLineText = snapshot.lines(nextRowIdx, nextRow(nextRowIdx, snapshot.lineCount));
         const nextText = nextLineText[0] ?? "";
-        // Perform a full word-forward movement on the next line from position 0
-        let nextPos = 0;
-        while (nextPos < nextText.length) {
-          const cp = nextText.codePointAt(nextPos) ?? 0;
-          if (!isWordChar(String.fromCodePoint(cp))) break;
-          nextPos += cp > 0xffff ? 2 : 1;
-        }
-        while (nextPos < nextText.length) {
-          const cp = nextText.codePointAt(nextPos) ?? 0;
-          if (isWordChar(String.fromCodePoint(cp))) break;
-          nextPos += cp > 0xffff ? 2 : 1;
-        }
+        const nextPos = scanWordForward(nextText, 0);
         return { row: nextRowIdx, column: nextPos };
       }
       return { row: current.row, column: pos };
     }
 
     // left: skip non-word chars, then skip word chars
-    let pos = col;
-    while (pos > 0) {
-      const prev = prevCpStart(text, pos);
-      const cp = text.codePointAt(prev) ?? 0;
-      if (isWordChar(String.fromCodePoint(cp))) break;
-      pos = prev;
-    }
-    while (pos > 0) {
-      const prev = prevCpStart(text, pos);
-      const cp = text.codePointAt(prev) ?? 0;
-      if (!isWordChar(String.fromCodePoint(cp))) break;
-      pos = prev;
-    }
+    const pos = scanWordBackward(text, col);
     // Cross line boundary: at column 0, continue word movement on previous line
     if (pos === 0 && col === 0 && current.row > 0) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const prevRowIdx = (current.row - 1) as MultiBufferRow;
       const prevLineText = snapshot.lines(prevRowIdx, current.row);
       const prevText = prevLineText[0] ?? "";
-      // Perform a full word-backward movement on the previous line from its end
-      let prevPos = prevText.length;
-      while (prevPos > 0) {
-        const prev = prevCpStart(prevText, prevPos);
-        const cp = prevText.codePointAt(prev) ?? 0;
-        if (isWordChar(String.fromCodePoint(cp))) break;
-        prevPos = prev;
-      }
-      while (prevPos > 0) {
-        const prev = prevCpStart(prevText, prevPos);
-        const cp = prevText.codePointAt(prev) ?? 0;
-        if (!isWordChar(String.fromCodePoint(cp))) break;
-        prevPos = prev;
-      }
+      const prevPos = scanWordBackward(prevText, prevText.length);
       return { row: prevRowIdx, column: prevPos };
     }
     return { row: current.row, column: pos };
