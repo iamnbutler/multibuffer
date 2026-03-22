@@ -5,13 +5,16 @@
  * paths are not tested here.  Only the exported `keyEventToCommand` function
  * is exercised because it is pure logic with no side-effects.
  *
- * isMac is evaluated at module load time from navigator.platform.  In the Bun
- * test environment navigator.platform is not "Mac…", so mod === ctrlKey for
- * all tests below.
+ * isMac is evaluated at module load time from navigator.platform.  Bun exposes
+ * navigator.platform (e.g. "MacIntel" on macOS), so _isMac is true on Mac.
+ * The `mod()` helper below maps the platform modifier correctly.
  */
 
 import { describe, expect, test } from "bun:test";
 import { keyEventToCommand } from "../../src/editor/input-handler.ts";
+
+const _isMac =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac");
 
 /**
  * Minimal keyboard-event-shaped object.
@@ -36,6 +39,23 @@ function keyEvent(
   } as unknown as KeyboardEvent;
 }
 
+/**
+ * Platform-aware modifier helper. Returns the correct modifier flags for the
+ * "Mod" key (Cmd on Mac, Ctrl elsewhere), matching what keyEventToCommand checks.
+ */
+function mod(extra: { shiftKey?: boolean; altKey?: boolean } = {}): {
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+} {
+  return {
+    ...extra,
+    metaKey: _isMac,
+    ctrlKey: !_isMac,
+  };
+}
+
 
 describe("keyEventToCommand — ArrowLeft", () => {
   test("no modifier → moveCursor character left", () => {
@@ -44,8 +64,8 @@ describe("keyEventToCommand — ArrowLeft", () => {
     });
   });
 
-  test("Ctrl → moveCursor line left", () => {
-    expect(keyEventToCommand(keyEvent("ArrowLeft", { ctrlKey: true }))).toEqual({
+  test("Mod → moveCursor line left", () => {
+    expect(keyEventToCommand(keyEvent("ArrowLeft", mod()))).toEqual({
       type: "moveCursor", direction: "left", granularity: "line",
     });
   });
@@ -62,8 +82,8 @@ describe("keyEventToCommand — ArrowLeft", () => {
     });
   });
 
-  test("Ctrl+Shift → extendSelection line left", () => {
-    expect(keyEventToCommand(keyEvent("ArrowLeft", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift → extendSelection line left", () => {
+    expect(keyEventToCommand(keyEvent("ArrowLeft", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "left", granularity: "line",
     });
   });
@@ -83,8 +103,8 @@ describe("keyEventToCommand — ArrowRight", () => {
     });
   });
 
-  test("Ctrl → moveCursor line right", () => {
-    expect(keyEventToCommand(keyEvent("ArrowRight", { ctrlKey: true }))).toEqual({
+  test("Mod → moveCursor line right", () => {
+    expect(keyEventToCommand(keyEvent("ArrowRight", mod()))).toEqual({
       type: "moveCursor", direction: "right", granularity: "line",
     });
   });
@@ -101,8 +121,8 @@ describe("keyEventToCommand — ArrowRight", () => {
     });
   });
 
-  test("Ctrl+Shift → extendSelection line right", () => {
-    expect(keyEventToCommand(keyEvent("ArrowRight", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift → extendSelection line right", () => {
+    expect(keyEventToCommand(keyEvent("ArrowRight", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "right", granularity: "line",
     });
   });
@@ -122,8 +142,8 @@ describe("keyEventToCommand — ArrowUp", () => {
     });
   });
 
-  test("Ctrl → moveCursor buffer up", () => {
-    expect(keyEventToCommand(keyEvent("ArrowUp", { ctrlKey: true }))).toEqual({
+  test("Mod → moveCursor buffer up", () => {
+    expect(keyEventToCommand(keyEvent("ArrowUp", mod()))).toEqual({
       type: "moveCursor", direction: "up", granularity: "buffer",
     });
   });
@@ -134,8 +154,8 @@ describe("keyEventToCommand — ArrowUp", () => {
     });
   });
 
-  test("Ctrl+Shift → extendSelection buffer up", () => {
-    expect(keyEventToCommand(keyEvent("ArrowUp", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift → extendSelection buffer up", () => {
+    expect(keyEventToCommand(keyEvent("ArrowUp", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "up", granularity: "buffer",
     });
   });
@@ -161,8 +181,8 @@ describe("keyEventToCommand — ArrowDown", () => {
     });
   });
 
-  test("Ctrl → moveCursor buffer down", () => {
-    expect(keyEventToCommand(keyEvent("ArrowDown", { ctrlKey: true }))).toEqual({
+  test("Mod → moveCursor buffer down", () => {
+    expect(keyEventToCommand(keyEvent("ArrowDown", mod()))).toEqual({
       type: "moveCursor", direction: "down", granularity: "buffer",
     });
   });
@@ -185,8 +205,8 @@ describe("keyEventToCommand — ArrowDown", () => {
     });
   });
 
-  test("Ctrl+Shift → extendSelection buffer down", () => {
-    expect(keyEventToCommand(keyEvent("ArrowDown", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift → extendSelection buffer down", () => {
+    expect(keyEventToCommand(keyEvent("ArrowDown", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "down", granularity: "buffer",
     });
   });
@@ -200,8 +220,8 @@ describe("keyEventToCommand — Home / End", () => {
     });
   });
 
-  test("Home + Ctrl → moveCursor buffer left", () => {
-    expect(keyEventToCommand(keyEvent("Home", { ctrlKey: true }))).toEqual({
+  test("Home + Mod → moveCursor buffer left", () => {
+    expect(keyEventToCommand(keyEvent("Home", mod()))).toEqual({
       type: "moveCursor", direction: "left", granularity: "buffer",
     });
   });
@@ -212,8 +232,8 @@ describe("keyEventToCommand — Home / End", () => {
     });
   });
 
-  test("Home + Ctrl + Shift → extendSelection buffer left", () => {
-    expect(keyEventToCommand(keyEvent("Home", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Home + Mod + Shift → extendSelection buffer left", () => {
+    expect(keyEventToCommand(keyEvent("Home", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "left", granularity: "buffer",
     });
   });
@@ -224,8 +244,8 @@ describe("keyEventToCommand — Home / End", () => {
     });
   });
 
-  test("End + Ctrl → moveCursor buffer right", () => {
-    expect(keyEventToCommand(keyEvent("End", { ctrlKey: true }))).toEqual({
+  test("End + Mod → moveCursor buffer right", () => {
+    expect(keyEventToCommand(keyEvent("End", mod()))).toEqual({
       type: "moveCursor", direction: "right", granularity: "buffer",
     });
   });
@@ -236,8 +256,8 @@ describe("keyEventToCommand — Home / End", () => {
     });
   });
 
-  test("End + Ctrl + Shift → extendSelection buffer right", () => {
-    expect(keyEventToCommand(keyEvent("End", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("End + Mod + Shift → extendSelection buffer right", () => {
+    expect(keyEventToCommand(keyEvent("End", mod({ shiftKey: true })))).toEqual({
       type: "extendSelection", direction: "right", granularity: "buffer",
     });
   });
@@ -278,8 +298,8 @@ describe("keyEventToCommand — Backspace / Delete", () => {
     });
   });
 
-  test("Backspace + Ctrl → deleteBackward line", () => {
-    expect(keyEventToCommand(keyEvent("Backspace", { ctrlKey: true }))).toEqual({
+  test("Backspace + Mod → deleteBackward line", () => {
+    expect(keyEventToCommand(keyEvent("Backspace", mod()))).toEqual({
       type: "deleteBackward", granularity: "line",
     });
   });
@@ -309,14 +329,14 @@ describe("keyEventToCommand — Enter / Tab", () => {
     expect(keyEventToCommand(keyEvent("Enter"))).toEqual({ type: "insertNewline" });
   });
 
-  test("Ctrl+Enter → insertLineBelow", () => {
-    expect(keyEventToCommand(keyEvent("Enter", { ctrlKey: true }))).toEqual({
+  test("Mod+Enter → insertLineBelow", () => {
+    expect(keyEventToCommand(keyEvent("Enter", mod()))).toEqual({
       type: "insertLineBelow",
     });
   });
 
-  test("Ctrl+Shift+Enter → insertLineAbove", () => {
-    expect(keyEventToCommand(keyEvent("Enter", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift+Enter → insertLineAbove", () => {
+    expect(keyEventToCommand(keyEvent("Enter", mod({ shiftKey: true })))).toEqual({
       type: "insertLineAbove",
     });
   });
@@ -334,46 +354,46 @@ describe("keyEventToCommand — Enter / Tab", () => {
 
 
 describe("keyEventToCommand — Shortcuts", () => {
-  test("Ctrl+A → selectAll", () => {
-    expect(keyEventToCommand(keyEvent("a", { ctrlKey: true }))).toEqual({ type: "selectAll" });
+  test("Mod+A → selectAll", () => {
+    expect(keyEventToCommand(keyEvent("a", mod()))).toEqual({ type: "selectAll" });
   });
 
-  test("Ctrl+Z → undo", () => {
-    expect(keyEventToCommand(keyEvent("z", { ctrlKey: true }))).toEqual({ type: "undo" });
+  test("Mod+Z → undo", () => {
+    expect(keyEventToCommand(keyEvent("z", mod()))).toEqual({ type: "undo" });
   });
 
-  test("Ctrl+Shift+Z → redo", () => {
-    expect(keyEventToCommand(keyEvent("z", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift+Z → redo", () => {
+    expect(keyEventToCommand(keyEvent("z", mod({ shiftKey: true })))).toEqual({
       type: "redo",
     });
   });
 
-  test("Ctrl+Y → redo", () => {
-    expect(keyEventToCommand(keyEvent("y", { ctrlKey: true }))).toEqual({ type: "redo" });
+  test("Mod+Y → redo", () => {
+    expect(keyEventToCommand(keyEvent("y", mod()))).toEqual({ type: "redo" });
   });
 
-  test("Ctrl+C → copy", () => {
-    expect(keyEventToCommand(keyEvent("c", { ctrlKey: true }))).toEqual({ type: "copy" });
+  test("Mod+C → copy", () => {
+    expect(keyEventToCommand(keyEvent("c", mod()))).toEqual({ type: "copy" });
   });
 
-  test("Ctrl+X → cut", () => {
-    expect(keyEventToCommand(keyEvent("x", { ctrlKey: true }))).toEqual({ type: "cut" });
+  test("Mod+X → cut", () => {
+    expect(keyEventToCommand(keyEvent("x", mod()))).toEqual({ type: "cut" });
   });
 
-  test("Ctrl+V → undefined (paste is handled via the paste event)", () => {
-    expect(keyEventToCommand(keyEvent("v", { ctrlKey: true }))).toBeUndefined();
+  test("Mod+V → undefined (paste is handled via the paste event)", () => {
+    expect(keyEventToCommand(keyEvent("v", mod()))).toBeUndefined();
   });
 
-  test("Ctrl+] → indentLines", () => {
-    expect(keyEventToCommand(keyEvent("]", { ctrlKey: true }))).toEqual({ type: "indentLines" });
+  test("Mod+] → indentLines", () => {
+    expect(keyEventToCommand(keyEvent("]", mod()))).toEqual({ type: "indentLines" });
   });
 
-  test("Ctrl+[ → dedentLines", () => {
-    expect(keyEventToCommand(keyEvent("[", { ctrlKey: true }))).toEqual({ type: "dedentLines" });
+  test("Mod+[ → dedentLines", () => {
+    expect(keyEventToCommand(keyEvent("[", mod()))).toEqual({ type: "dedentLines" });
   });
 
-  test("Ctrl+Shift+K → deleteLine", () => {
-    expect(keyEventToCommand(keyEvent("k", { ctrlKey: true, shiftKey: true }))).toEqual({
+  test("Mod+Shift+K → deleteLine", () => {
+    expect(keyEventToCommand(keyEvent("k", mod({ shiftKey: true })))).toEqual({
       type: "deleteLine",
     });
   });
@@ -389,8 +409,8 @@ describe("keyEventToCommand — Returns undefined for unbound keys", () => {
     expect(keyEventToCommand(keyEvent("f"))).toBeUndefined();
   });
 
-  test("Ctrl+K (no shift) → undefined", () => {
-    expect(keyEventToCommand(keyEvent("k", { ctrlKey: true }))).toBeUndefined();
+  test("Mod+K (no shift) → undefined", () => {
+    expect(keyEventToCommand(keyEvent("k", mod()))).toBeUndefined();
   });
 
   test("Ctrl+Meta+A → undefined (system shortcut guard)", () => {
