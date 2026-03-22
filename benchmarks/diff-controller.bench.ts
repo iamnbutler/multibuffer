@@ -1,17 +1,17 @@
 /**
  * DiffController benchmarks.
  *
- * Measures the hot path exercised by live diff (re-diff on edit):
- * - `reDiff()` after a buffer edit: snapshot + diff + clearExcerpts + N×addExcerpt
- * - Convergence path: reDiff() when old and new texts are equal
+ * Measures two distinct hot paths:
+ * 1. reDiff() after a buffer edit — snapshot + diff + setExcerpts (the uncached path)
+ * 2. reDiff() on unchanged buffers — version-cache fast path (O(1))
  *
  * Key measurements:
- * - How much does `reDiff()` cost with varying file sizes and change counts?
- * - Is the clearExcerpts + N×addExcerpt step a bottleneck vs. the Myers diff?
+ * - How much does reDiff() cost after a real edit (varying file sizes and change counts)?
+ * - How fast is the version-cache fast path for repeated reDiff() on stable diffs?
  */
 
 import { createBuffer } from "../src/buffer/buffer.ts";
-import type { BufferId } from "../src/buffer/types.ts";
+import type { BufferId, BufferOffset } from "../src/buffer/types.ts";
 import { createDiffController } from "../src/diff/controller.ts";
 import type { BenchmarkSuite } from "./harness.ts";
 
@@ -42,17 +42,28 @@ const large10kFewChanges = modifyEveryNth(large10k, 2000); // ~5 hunks ≈ 15 ex
 export const diffControllerBenchmarks: BenchmarkSuite = {
   name: "DiffController",
   benchmarks: [
-    // --- reDiff() on unchanged buffers ---
-    // Measures steady-state cost: snapshot + diff + clearExcerpts + N×addExcerpt.
-    // Buffers do not change between iterations; diff result is stable.
-    // This is the minimum cost of the convergence-detection path.
+    // --- After-edit path (uncached) ---
+    // Each iteration inserts a single character into newBuffer, bumping its
+    // version and forcing a full diff + setExcerpts on the next reDiff() call.
+    // This is the true hot path: what the user experiences on each keystroke.
     (() => {
       const oldBuf = createBuffer(oldId, medium1k);
       const newBuf = createBuffer(newId, medium1kScattered);
       const controller = createDiffController(oldBuf, newBuf);
+      let toggle = false;
       return {
-        name: "DiffController.reDiff() - 1K lines, scattered edits (~20 hunks)",
+        name: "DiffController.reDiff() - 1K lines, after edit (~20 hunks)",
         fn() {
+          // Alternate insert/delete of a single space to keep version changing
+          // without drifting the diff result significantly.
+          if (toggle) {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.insert(0 as BufferOffset, " ");
+          } else {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.replace(0 as BufferOffset, 1 as BufferOffset, "");
+          }
+          toggle = !toggle;
           controller.reDiff();
         },
         iterations: 100,
@@ -64,9 +75,18 @@ export const diffControllerBenchmarks: BenchmarkSuite = {
       const oldBuf = createBuffer(oldId, large10k);
       const newBuf = createBuffer(newId, large10kFewChanges);
       const controller = createDiffController(oldBuf, newBuf);
+      let toggle = false;
       return {
-        name: "DiffController.reDiff() - 10K lines, few changes (~5 hunks)",
+        name: "DiffController.reDiff() - 10K lines, after edit (~5 hunks)",
         fn() {
+          if (toggle) {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.insert(0 as BufferOffset, " ");
+          } else {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.replace(0 as BufferOffset, 1 as BufferOffset, "");
+          }
+          toggle = !toggle;
           controller.reDiff();
         },
         iterations: 20,
@@ -74,18 +94,45 @@ export const diffControllerBenchmarks: BenchmarkSuite = {
       };
     })(),
 
-    // --- Convergence path ---
-    // When old and new texts are identical, reDiff() hits the isEqual fast path:
-    // clearExcerpts + 1 addExcerpt (the full-file equal excerpt). This isolates
-    // the cost of snapshot + diff (identical-text fast path) + excerpt reset.
+    // --- Version-cache fast path (no edit) ---
+    // Buffers do not change between iterations; reDiff() hits the version-cache
+    // and returns immediately. Measures the overhead of the O(1) fast path.
+    (() => {
+      const oldBuf = createBuffer(oldId, medium1k);
+      const newBuf = createBuffer(newId, medium1kScattered);
+      const controller = createDiffController(oldBuf, newBuf);
+      // Prime the cache with one real reDiff first.
+      controller.reDiff();
+      return {
+        name: "DiffController.reDiff() - 1K lines, version-cache hit (no edit)",
+        fn() {
+          controller.reDiff();
+        },
+        iterations: 500,
+        targetMs: 1,
+      };
+    })(),
+
+    // --- Convergence path after edit ---
+    // Identical buffers: each iteration inserts then deletes a space so the diff
+    // still resolves to isEqual, but the version cache is always invalidated.
     (() => {
       const text = medium1k;
       const oldBuf = createBuffer(oldId, text);
       const newBuf = createBuffer(newId, text);
       const controller = createDiffController(oldBuf, newBuf);
+      let toggle = false;
       return {
-        name: "DiffController.reDiff() - 1K lines, identical (convergence path)",
+        name: "DiffController.reDiff() - 1K lines, identical after edit (convergence)",
         fn() {
+          if (toggle) {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.insert(0 as BufferOffset, " ");
+          } else {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+            newBuf.replace(0 as BufferOffset, 1 as BufferOffset, "");
+          }
+          toggle = !toggle;
           controller.reDiff();
         },
         iterations: 200,

@@ -55,7 +55,11 @@ export function diffLines(
   const ctx = options?.context ?? 3;
   const edits = myersDiff(oldLines, newLines);
 
-  if (edits.every((e) => e.kind === "equal")) {
+  // Skip the O(n) every() scan when lengths differ — result cannot be isEqual.
+  if (
+    oldLines.length === newLines.length &&
+    edits.every((e) => e.kind === "equal")
+  ) {
     return { hunks: [], isEqual: true };
   }
 
