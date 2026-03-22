@@ -380,6 +380,99 @@ describe("MultiFileDiff collapse/expand", () => {
 
     multiDiff.dispose();
   });
+
+  test("collapseAll fires onFileToggle for each collapsed file", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const files: FileDiffEntry[] = [
+      { filename: "a.ts", oldContent: "a\n", newContent: "b\n" },
+      { filename: "b.ts", oldContent: "c\n", newContent: "d\n" },
+      { filename: "c.ts", oldContent: "e\n", newContent: "f\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({
+      files,
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    multiDiff.collapseAll();
+
+    expect(toggleEvents).toHaveLength(3);
+    expect(toggleEvents).toContainEqual({ filename: "a.ts", collapsed: true });
+    expect(toggleEvents).toContainEqual({ filename: "b.ts", collapsed: true });
+    expect(toggleEvents).toContainEqual({ filename: "c.ts", collapsed: true });
+
+    multiDiff.dispose();
+  });
+
+  test("expandAll fires onFileToggle for each expanded file", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const files: FileDiffEntry[] = [
+      { filename: "a.ts", oldContent: "a\n", newContent: "b\n" },
+      { filename: "b.ts", oldContent: "c\n", newContent: "d\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({
+      files,
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    // Collapse all first so expandAll has files to expand
+    multiDiff.collapseAll();
+    toggleEvents.length = 0;
+
+    multiDiff.expandAll();
+
+    expect(toggleEvents).toHaveLength(2);
+    expect(toggleEvents).toContainEqual({ filename: "a.ts", collapsed: false });
+    expect(toggleEvents).toContainEqual({ filename: "b.ts", collapsed: false });
+
+    multiDiff.dispose();
+  });
+
+  test("collapseAll fires no callbacks when onFileToggle is not provided", () => {
+    const container = createMockContainer();
+    const files: FileDiffEntry[] = [
+      { filename: "file1.ts", oldContent: "a\n", newContent: "b\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({ files, container });
+
+    // Should not throw even without onFileToggle
+    expect(() => multiDiff.collapseAll()).not.toThrow();
+    expect(() => multiDiff.expandAll()).not.toThrow();
+
+    multiDiff.dispose();
+  });
+
+  test("collapseAll on empty file list fires no callbacks", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const multiDiff = createMultiFileDiff({
+      files: [],
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    multiDiff.collapseAll();
+    multiDiff.expandAll();
+
+    expect(toggleEvents).toHaveLength(0);
+
+    multiDiff.dispose();
+  });
 });
 
 describe("MultiFileDiff scrollToFile", () => {
