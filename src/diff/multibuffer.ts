@@ -10,12 +10,12 @@
  */
 
 import { createBuffer } from "../buffer/buffer.ts";
-import type { Buffer, BufferId } from "../buffer/types.ts";
+import type { Buffer, BufferId, BufferRow } from "../buffer/types.ts";
 import { createMultiBuffer } from "../multibuffer/multibuffer.ts";
 import type { MultiBuffer } from "../multibuffer/types.ts";
 import type { Decoration, DecorationStyle } from "../renderer/types.ts";
 import type { DiffOptions, IntralineDiffOptions } from "./diff.ts";
-import { computeIntralineDiff, diff, pairDeleteInsertLines } from "./diff.ts";
+import { computeIntralineDiff, diffLines, pairDeleteInsertLines } from "./diff.ts";
 import {
   DELETE_STYLE,
   INSERT_STYLE,
@@ -94,7 +94,14 @@ export function createUnifiedDiffMultiBuffer(
   const showHunkSeparators = options?.showHunkSeparators ?? true;
   const oldSnap = oldBuffer.snapshot();
   const newSnap = newBuffer.snapshot();
-  const result = diff(oldSnap.text(), newSnap.text(), options);
+  // Use snapshot.lines() to avoid building full text strings + split("\n").
+  // Empty buffers (chars === 0) must be treated as 0 lines to match diff() semantics
+  // (an empty rope has lineCount=1 but no actual content lines).
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type bounds for line range
+  const oldLines = oldSnap.textSummary.chars === 0 ? [] : oldSnap.lines(0 as BufferRow, oldSnap.lineCount as BufferRow);
+  // biome-ignore lint/plugin/no-type-assertion: expect: branded type bounds for line range
+  const newLines = newSnap.textSummary.chars === 0 ? [] : newSnap.lines(0 as BufferRow, newSnap.lineCount as BufferRow);
+  const result = diffLines(oldLines, newLines, options);
   const mb = createMultiBuffer();
 
   if (result.isEqual) {
