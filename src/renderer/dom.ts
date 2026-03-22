@@ -1011,16 +1011,16 @@ export class DomRenderer implements Renderer {
       // Standard gutter (used in standard mode, hidden in diff mode)
       const gutter = document.createElement("span");
       gutter.style.cssText =
-        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;`;
+        `display:inline-block;width:${gw}px;text-align:right;padding-right:8px;color:var(--editor-gutter, #928374);user-select:none;flex-shrink:0;`;
 
       // Diff mode gutters
       const oldGutter = document.createElement("span");
       oldGutter.style.cssText =
-        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;";
+        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #928374);user-select:none;flex-shrink:0;";
 
       const newGutter = document.createElement("span");
       newGutter.style.cssText =
-        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #665c54);user-select:none;flex-shrink:0;";
+        "display:none;width:40px;text-align:right;padding-right:4px;color:var(--editor-gutter, #928374);user-select:none;flex-shrink:0;";
 
       const sign = document.createElement("span");
       sign.style.cssText =
