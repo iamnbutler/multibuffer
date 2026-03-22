@@ -3,7 +3,7 @@
  * incremental parsing via tree.edit().
  */
 
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import type { TreeEdit } from "../../src/renderer/highlighter.ts";
 import {
@@ -351,9 +351,18 @@ describe("buildHighlightedSpans", () => {
   const win = new Window({ url: "https://localhost:8080/" });
   const doc = win.document;
 
+  // Save and restore global document so it doesn't leak into other test files
+  const originalDocument = globalThis.document;
+
   // Set up global document so buildHighlightedSpans can call document.createElement
   // biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
   (globalThis as unknown as Record<string, unknown>).document = doc;
+
+  afterAll(() => {
+    // biome-ignore lint/plugin/no-type-assertion: expect: globalThis extension for DOM APIs requires type assertion
+    (globalThis as unknown as Record<string, unknown>).document = originalDocument;
+    win.close();
+  });
 
   function makeContainer(): HTMLElement {
     // biome-ignore lint/plugin/no-type-assertion: expect: happy-dom returns Element which is compatible with HTMLElement at runtime
