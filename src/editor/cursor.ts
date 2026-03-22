@@ -292,8 +292,8 @@ function moveWord(
 
     if (direction === "right") {
       const pos = scanWordForward(text, col);
-      // Cross line boundary: at end of line, continue word movement on next line
-      if (pos === text.length && current.row + 1 < snapshot.lineCount) {
+      // Cross line boundary: cursor started at end of line, continue on next line
+      if (col === text.length && current.row + 1 < snapshot.lineCount) {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const nextRowIdx = (current.row + 1) as MultiBufferRow;
         const nextLineText = snapshot.lines(nextRowIdx, nextRow(nextRowIdx, snapshot.lineCount));

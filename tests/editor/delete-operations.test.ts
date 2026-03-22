@@ -192,6 +192,15 @@ describe("Delete to word boundary", () => {
     expectPoint(editor.cursor, 0, 5);
   });
 
+  test("word delete forward from mid-word does not cross line", () => {
+    const { editor, mb } = setup("Cargo\nWorld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "deleteForward", granularity: "word" });
+    // From mid-word "Ca|rgo" → deletes "rgo" (rest of word), stays on same line
+    expect(getText(mb)).toBe("Ca\nWorld");
+    expectPoint(editor.cursor, 0, 2);
+  });
+
   test("word delete forward crosses to empty next line", () => {
     const { editor, mb } = setup("Hello\n\nWorld");
     editor.setCursor(mbPoint(0, 5));
