@@ -16,17 +16,6 @@ src/
   project/        Project tree, file discovery, glob matching
 ```
 
-### Subpath exports
-
-```ts
-import { createBuffer } from "multibuffer/buffer";
-import { createMultiBuffer } from "multibuffer/multibuffer";
-import { Editor } from "multibuffer/editor";
-import { createDomRenderer } from "multibuffer/renderer";
-import { createDiffView } from "multibuffer/diff";
-import { EditorView } from "multibuffer/react";
-```
-
 ## Development
 
 Requires [Bun](https://bun.sh).
@@ -35,6 +24,7 @@ Requires [Bun](https://bun.sh).
 bun install
 bun test
 bun run bench
+bun run bench:history   # Historical run overview
 bun run typecheck
 bun run lint
 bun run dev             # Playground at localhost:3000
