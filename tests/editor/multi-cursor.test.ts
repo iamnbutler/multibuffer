@@ -248,6 +248,80 @@ describe("Multi-cursor - clearing", () => {
   });
 });
 
+// ─── Undo/redo with multi-cursor ──────────────────────────────────
+
+describe("Multi-cursor - undo/redo", () => {
+  test("undo after multi-cursor insertText reverts all inserts atomically", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 1) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+
+    editor.dispatch({ type: "insertText", text: "X" });
+    expect(getText(editor)).toBe("aXaa\nbXbb\ncXcc");
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(editor)).toBe("aaa\nbbb\nccc");
+  });
+
+  test("undo after multi-cursor insertText restores all cursors", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 1) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    expect(editor.selections.length).toBe(3);
+
+    editor.dispatch({ type: "insertText", text: "X" });
+    editor.dispatch({ type: "undo" });
+
+    // All three selections should be restored
+    expect(editor.selections.length).toBe(3);
+  });
+
+  test("undo after multi-cursor deleteBackward reverts all deletes atomically", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 2) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 2) });
+
+    editor.dispatch({ type: "deleteBackward", granularity: "character" });
+    expect(getText(editor)).toBe("aa\nbb\ncc");
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(editor)).toBe("aaa\nbbb\nccc");
+  });
+
+  test("redo re-applies multi-cursor insertText after undo", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 1) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+
+    editor.dispatch({ type: "insertText", text: "X" });
+    expect(getText(editor)).toBe("aXaa\nbXbb\ncXcc");
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(editor)).toBe("aaa\nbbb\nccc");
+
+    editor.dispatch({ type: "redo" });
+    expect(getText(editor)).toBe("aXaa\nbXbb\ncXcc");
+  });
+
+  test("new edit after undo clears redo for multi-cursor", () => {
+    const editor = setup("aaa\nbbb");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 1) });
+
+    editor.dispatch({ type: "insertText", text: "X" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(editor)).toBe("aaa\nbbb");
+
+    editor.dispatch({ type: "insertText", text: "Y" });
+    editor.dispatch({ type: "redo" }); // should be a no-op
+    expect(getText(editor)).toBe("aYaa\nbYbb");
+  });
+});
+
 // ─── Selection accessor backward compatibility ─────────────────────
 
 describe("Multi-cursor - backward compatibility", () => {
