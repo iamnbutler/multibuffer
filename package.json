@@ -53,8 +53,8 @@
   },
   "type": "module",
   "scripts": {
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "test": "bun test tests/buffer tests/diff tests/editor tests/fuzz tests/multibuffer tests/project tests/react tests/renderer tests/worker",
+    "test:watch": "bun test --watch tests/buffer tests/diff tests/editor tests/fuzz tests/multibuffer tests/project tests/react tests/renderer tests/worker",
     "test:e2e": "bunx playwright test",
     "fuzz": "bun test tests/fuzz/",
     "bench": "bun run benchmarks/index.ts",
