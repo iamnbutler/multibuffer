@@ -225,6 +225,14 @@ export class CanvasRenderer implements Renderer {
   private _onTripleClickCallback: ((point: MultiBufferPoint) => void) | null = null;
   private _onScrollCallback: (() => void) | null = null;
 
+  // Cursor blinking state
+  private _focused = false;
+  private _cursorVisible = true;
+  private _blinkIntervalId: ReturnType<typeof setInterval> | null = null;
+  private _blinkIntervalMs: number | false = 600; // Default 600ms, false to disable
+  private _lastRenderState: RenderState | null = null;
+  private _lastLines: readonly string[] | null = null;
+
   /** Diff mode gutter widths */
   private static readonly DIFF_OLD_GUTTER_WIDTH = 40;
   private static readonly DIFF_NEW_GUTTER_WIDTH = 40;
@@ -314,6 +322,12 @@ export class CanvasRenderer implements Renderer {
   }
 
   unmount(): void {
+    // Cancel cursor blink interval
+    if (this._blinkIntervalId !== null) {
+      clearInterval(this._blinkIntervalId);
+      this._blinkIntervalId = null;
+    }
+
     // Cancel any pending animation frames
     if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
       cancelAnimationFrame(this._wrapBuildFrame);
@@ -361,6 +375,10 @@ export class CanvasRenderer implements Renderer {
     this._onMouseMove = null;
     this._onMouseUp = null;
     this._onScrollCallback = null;
+    this._lastRenderState = null;
+    this._lastLines = null;
+    this._focused = false;
+    this._cursorVisible = true;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -447,6 +465,54 @@ export class CanvasRenderer implements Renderer {
 
   setHighlighter(highlighter: SyntaxHighlighter | null): void {
     this._highlighter = highlighter;
+  }
+
+  /**
+   * Update focus state - call when the editor gains or loses keyboard focus.
+   * When focused, the cursor blinks at the configured interval.
+   * When unfocused, the cursor is solid (always visible).
+   */
+  setFocused(focused: boolean): void {
+    if (this._focused === focused) return;
+
+    this._focused = focused;
+    this._cursorVisible = true; // Reset to visible on focus change
+
+    // Clear existing interval
+    if (this._blinkIntervalId !== null) {
+      clearInterval(this._blinkIntervalId);
+      this._blinkIntervalId = null;
+    }
+
+    // Start blinking if focused and blinking is enabled
+    if (focused && this._blinkIntervalMs !== false) {
+      this._blinkIntervalId = setInterval(() => {
+        this._cursorVisible = !this._cursorVisible;
+        // Re-render to update cursor visibility
+        if (this._lastRenderState && this._lastLines) {
+          this.render(this._lastRenderState, this._lastLines);
+        }
+      }, this._blinkIntervalMs);
+    }
+
+    // Re-render to update cursor state
+    if (this._lastRenderState && this._lastLines) {
+      this.render(this._lastRenderState, this._lastLines);
+    }
+  }
+
+  /**
+   * Set the cursor blink interval in milliseconds.
+   * Pass false to disable blinking entirely.
+   * Default is 600ms.
+   */
+  setBlinkInterval(ms: number | false): void {
+    this._blinkIntervalMs = ms;
+
+    // Restart blinking with new interval if focused
+    if (this._focused) {
+      this.setFocused(true);
+    }
   }
 
   render(state: RenderState, lines: readonly string[]): void {
@@ -557,8 +623,12 @@ export class CanvasRenderer implements Renderer {
     // Render selections
     this._renderSelections(ctx, state);
 
-    // Render cursor if focused
-    if (state.focused && state.selections.length > 0) {
+    // Save state for re-renders during cursor blink
+    this._lastRenderState = state;
+    this._lastLines = lines;
+
+    // Render cursor if focused and visible (for blink toggle)
+    if (state.focused && state.selections.length > 0 && this._cursorVisible) {
       this._renderCursor(ctx, state);
     }
   }
