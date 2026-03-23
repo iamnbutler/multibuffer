@@ -212,6 +212,18 @@ The specification for creating an excerpt. Contains:
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
 
+### GlyphAtlas
+
+A texture atlas for GPU-based text rendering (`src/renderer/glyph-atlas.ts`). Rasterizes character glyphs to an offscreen canvas using fixed-size cells (`charWidth × lineHeight`) and provides pixel data for upload to WebGPU. Uses a row-based packing strategy — cells fill left-to-right, top-to-bottom — and expands the canvas by doubling dimensions when full (up to a configurable `maxSize`). Printable ASCII is pre-populated on construction; all other glyphs are lazily rasterized on first use.
+
+Key methods:
+- `getGlyph(char)` — returns the atlas position (`GlyphInfo`) for a character, adding it if absent.
+- `ensureGlyphs(text)` — batch-ensures all characters in a string are present.
+- `getAlphaData()` — extracts a single-channel alpha texture for GPU upload.
+- `reset()` — clears and rebuilds the atlas (e.g., on font change).
+
+See: `src/renderer/glyph-atlas.ts`
+
 ### Goal Column
 
 A remembered column position stored by the `Editor` for vertical cursor navigation (`moveUp`, `moveDown`). When moving vertically through lines of unequal length, the cursor targets the goal column rather than the actual column of the current line. The goal column is cleared by horizontal movement or any edit, and reset at the start of each new vertical movement. This allows the cursor to return to its original column after passing through shorter intermediate lines.
@@ -275,6 +287,12 @@ A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent`
 ---
 
 ## L
+
+### Language Injection
+
+A syntax-highlighting feature (`src/renderer/injection-highlighter.ts`) that parses and highlights embedded languages within a host document — for example, YAML frontmatter inside a Markdown file. The `InjectionHighlighter` runs a primary tree-sitter parse for the host language, identifies injection ranges (regions that should be tokenized with a different grammar), then parses each range separately and merges the resulting tokens back into host-document coordinates.
+
+See: `src/renderer/injection-highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
 ### Line Pooling
 
@@ -431,6 +449,18 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 ### TextSummary
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
+
+### Tile
+
+A fixed-height chunk of rows used by the [TileManager](#tilemanager) to partition the viewport for dirty-region tracking. Each tile spans a contiguous range `[startRow, endRow)` and carries a `dirty` flag indicating whether it needs to be redrawn.
+
+See: `src/renderer/tile-map.ts`
+
+### TileManager
+
+A renderer optimization (`src/renderer/tile-map.ts`) that divides the viewport into fixed-height [tiles](#tile) and tracks which tiles are dirty. On each frame, only dirty tiles are redrawn — significantly reducing render cost for large files with localized edits. Tiles are invalidated by edits, selection changes, scrolling, theme switches, and resizes; multiple invalidations within a single frame are automatically coalesced. An `InvalidationReason` tag is attached to each mark for debugging.
+
+See: `src/renderer/tile-map.ts`
 
 ### Trailing Newline (synthetic)
 
