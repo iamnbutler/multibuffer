@@ -25,12 +25,13 @@ test.describe("Editor basics", () => {
   });
 
   test("lines render in the viewport", async ({ page }) => {
-    // Lines are rendered as div[data-row] elements inside the scroll container
-    const rows = page.locator("#editor [data-row]");
-    await expect(rows.first()).toBeVisible();
+    // Lines are rendered as div[data-row] elements inside the scroll container.
+    // Filter to visible rows only — the pool keeps hidden rows in the DOM.
+    const visibleRows = page.locator("#editor [data-row]").filter({ visible: true });
+    await expect(visibleRows.first()).toBeVisible();
 
-    // Should have multiple rows rendered
-    const count = await rows.count();
+    // Should have multiple visible rows rendered
+    const count = await visibleRows.count();
     expect(count).toBeGreaterThan(0);
   });
 
