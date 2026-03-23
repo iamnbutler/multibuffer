@@ -314,6 +314,7 @@ export class DomRenderer implements Renderer {
     // Cursor element
     const cursorEl = document.createElement("div");
     cursorEl.setAttribute("data-cursor", "");
+    cursorEl.setAttribute("data-testid", "cursor");
     cursorEl.style.cssText = `position:absolute;width:2px;background:var(--editor-cursor, #ebdbb2);display:none;height:${this._measurements.lineHeight}px;z-index:10;`;
     this._cursorEl = cursorEl;
 
@@ -1005,6 +1006,7 @@ export class DomRenderer implements Renderer {
 
     while (this._rowPool.length < count) {
       const root = document.createElement("div");
+      root.setAttribute("data-row", "");
       root.style.cssText =
         `display:none;height:${lh}px;line-height:${lh}px;white-space:pre;`;
 
