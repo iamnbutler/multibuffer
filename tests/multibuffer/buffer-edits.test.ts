@@ -306,9 +306,12 @@ describe("editsSince version tracking", () => {
     buffer.insert(offset(5), " world");
     const edits = buffer.editsSince(v0);
     expect(edits.length).toBe(1);
-    expect(num(edits[0].offset)).toBe(5);
-    expect(edits[0].deletedLength).toBe(0);
-    expect(edits[0].insertedLength).toBe(6);
+    const e0 = edits[0];
+    expect(e0).toBeDefined();
+    if (!e0) return;
+    expect(num(e0.offset)).toBe(5);
+    expect(e0.deletedLength).toBe(0);
+    expect(e0.insertedLength).toBe(6);
   });
 
   test("multiple edits tracked in order", () => {
@@ -322,20 +325,26 @@ describe("editsSince version tracking", () => {
     const edits = buffer.editsSince(v0);
     expect(edits.length).toBe(3);
 
+    const [e0, e1, e2] = edits;
+    expect(e0).toBeDefined();
+    expect(e1).toBeDefined();
+    expect(e2).toBeDefined();
+    if (!e0 || !e1 || !e2) return;
+
     // First edit: insert "d" at offset 3
-    expect(num(edits[0].offset)).toBe(3);
-    expect(edits[0].insertedLength).toBe(1);
-    expect(edits[0].deletedLength).toBe(0);
+    expect(num(e0.offset)).toBe(3);
+    expect(e0.insertedLength).toBe(1);
+    expect(e0.deletedLength).toBe(0);
 
     // Second edit: insert "z" at offset 0
-    expect(num(edits[1].offset)).toBe(0);
-    expect(edits[1].insertedLength).toBe(1);
-    expect(edits[1].deletedLength).toBe(0);
+    expect(num(e1.offset)).toBe(0);
+    expect(e1.insertedLength).toBe(1);
+    expect(e1.deletedLength).toBe(0);
 
     // Third edit: delete 1 char at offset 2
-    expect(num(edits[2].offset)).toBe(2);
-    expect(edits[2].deletedLength).toBe(1);
-    expect(edits[2].insertedLength).toBe(0);
+    expect(num(e2.offset)).toBe(2);
+    expect(e2.deletedLength).toBe(1);
+    expect(e2.insertedLength).toBe(0);
   });
 
   test("version increments on each edit", () => {
@@ -363,8 +372,12 @@ describe("editsSince version tracking", () => {
 
     const editsSinceV1 = buffer.editsSince(v1);
     expect(editsSinceV1.length).toBe(2);
-    expect(num(editsSinceV1[0].offset)).toBe(4);
-    expect(num(editsSinceV1[1].offset)).toBe(5);
+    const [s0, s1] = editsSinceV1;
+    expect(s0).toBeDefined();
+    expect(s1).toBeDefined();
+    if (!s0 || !s1) return;
+    expect(num(s0.offset)).toBe(4);
+    expect(num(s1.offset)).toBe(5);
   });
 
   test("snapshot version matches buffer version at time of snapshot", () => {

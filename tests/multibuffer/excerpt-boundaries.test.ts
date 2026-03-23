@@ -53,8 +53,13 @@ describe("excerptBoundaries", () => {
 
     // Should have boundary at row 0 (first excerpt start) and row 10 (second excerpt start)
     expect(boundaries.length).toBe(2);
-    expect(num(boundaries[0]?.row)).toBe(0);
-    expect(num(boundaries[1]?.row)).toBe(10);
+    const b0 = boundaries[0];
+    const b1 = boundaries[1];
+    expect(b0).toBeDefined();
+    expect(b1).toBeDefined();
+    if (!b0 || !b1) return;
+    expect(num(b0.row)).toBe(0);
+    expect(num(b1.row)).toBe(10);
   });
 
   test("boundary includes previous and next excerpt info", () => {
@@ -71,11 +76,15 @@ describe("excerptBoundaries", () => {
 
     // First boundary: start of first excerpt, no prev
     const first = boundaries[0];
+    expect(first).toBeDefined();
+    if (!first) return;
     expect(first.prev).toBeUndefined();
     expect(first.next.id).toEqual(idA);
 
     // Second boundary: start of second excerpt, prev is first excerpt
     const second = boundaries[1];
+    expect(second).toBeDefined();
+    if (!second) return;
     expect(second.prev).toBeDefined();
     expect(second.prev?.id).toEqual(idA);
     expect(second.next.id).toEqual(idB);
@@ -93,7 +102,10 @@ describe("excerptBoundaries", () => {
     // Query only the middle range — should only see boundary at row 10
     const boundaries = snap.excerptBoundaries(mbRow(5), mbRow(15));
     expect(boundaries.length).toBe(1);
-    expect(num(boundaries[0]?.row)).toBe(10);
+    const b0 = boundaries[0];
+    expect(b0).toBeDefined();
+    if (!b0) return;
+    expect(num(b0.row)).toBe(10);
   });
 
   test("returns all boundaries when range covers entire multibuffer", () => {
@@ -107,9 +119,14 @@ describe("excerptBoundaries", () => {
     const boundaries = snap.excerptBoundaries(mbRow(0), mbRow(30));
 
     expect(boundaries.length).toBe(3);
-    expect(num(boundaries[0]?.row)).toBe(0);
-    expect(num(boundaries[1]?.row)).toBe(10);
-    expect(num(boundaries[2]?.row)).toBe(20);
+    const [c0, c1, c2] = boundaries;
+    expect(c0).toBeDefined();
+    expect(c1).toBeDefined();
+    expect(c2).toBeDefined();
+    if (!c0 || !c1 || !c2) return;
+    expect(num(c0.row)).toBe(0);
+    expect(num(c1.row)).toBe(10);
+    expect(num(c2.row)).toBe(20);
   });
 
   test("after removing an excerpt, boundaries update", () => {
@@ -130,8 +147,12 @@ describe("excerptBoundaries", () => {
     snap = mb.snapshot();
     const boundaries = snap.excerptBoundaries(mbRow(0), mbRow(20));
     expect(boundaries.length).toBe(2);
-    expect(num(boundaries[0]?.row)).toBe(0);
-    expect(num(boundaries[1]?.row)).toBe(10);
+    const [d0, d1] = boundaries;
+    expect(d0).toBeDefined();
+    expect(d1).toBeDefined();
+    if (!d0 || !d1) return;
+    expect(num(d0.row)).toBe(0);
+    expect(num(d1.row)).toBe(10);
   });
 });
 
@@ -218,8 +239,10 @@ describe("Excerpt boundary consistency after edits", () => {
 
     // Verify the second excerpt content is uncorrupted
     const secondBoundary = boundaries[1];
-    expect(secondBoundary?.next).toBeDefined();
-    expect(num(secondBoundary?.next.startRow)).toBe(3);
+    expect(secondBoundary).toBeDefined();
+    if (!secondBoundary) return;
+    expect(secondBoundary.next).toBeDefined();
+    expect(num(secondBoundary.next.startRow)).toBe(3);
   });
 
   test("adding excerpt updates boundary list", () => {
@@ -237,7 +260,10 @@ describe("Excerpt boundary consistency after edits", () => {
     snap = mb.snapshot();
     boundaries = snap.excerptBoundaries(mbRow(0), mbRow(20));
     expect(boundaries.length).toBe(2);
-    expect(num(boundaries[1]?.row)).toBe(10);
+    const bAdd = boundaries[1];
+    expect(bAdd).toBeDefined();
+    if (!bAdd) return;
+    expect(num(bAdd.row)).toBe(10);
   });
 
   test("removing excerpt updates boundary list", () => {
@@ -258,7 +284,9 @@ describe("Excerpt boundary consistency after edits", () => {
 
     // After removal, the third excerpt's prev should now be the first excerpt
     const secondBoundary = boundaries[1];
-    expect(secondBoundary?.prev).toBeDefined();
-    expect(num(secondBoundary?.row)).toBe(10);
+    expect(secondBoundary).toBeDefined();
+    if (!secondBoundary) return;
+    expect(secondBoundary.prev).toBeDefined();
+    expect(num(secondBoundary.row)).toBe(10);
   });
 });
