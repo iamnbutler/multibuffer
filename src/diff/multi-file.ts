@@ -52,6 +52,12 @@ interface InternalFileState {
   element: HTMLElement | null;
   headerElement: HTMLElement | null;
   contentElement: HTMLElement | null;
+  /** Direct reference to the collapse icon — avoids querySelector on happy-dom. */
+  collapseIconElement: HTMLElement | null;
+  /** Direct reference to the stats additions span. */
+  statsAdditionsElement: HTMLElement | null;
+  /** Direct reference to the stats deletions span. */
+  statsDeletionsElement: HTMLElement | null;
 }
 
 /**
@@ -157,6 +163,11 @@ function createFileDiffElement(
   root.appendChild(header);
   root.appendChild(content);
 
+  // Store direct references to avoid querySelector (which fails on happy-dom)
+  state.collapseIconElement = collapseIcon;
+  state.statsAdditionsElement = additionsSpan;
+  state.statsDeletionsElement = deletionsSpan;
+
   return { root, header, content };
 }
 
@@ -166,17 +177,15 @@ function createFileDiffElement(
 function updateHeaderUI(state: InternalFileState): void {
   if (!state.headerElement) return;
 
-  const collapseIcon = state.headerElement.querySelector(".multi-file-diff-collapse-icon");
-  if (collapseIcon) {
-    collapseIcon.textContent = state.collapsed ? "+" : "−";
+  if (state.collapseIconElement) {
+    state.collapseIconElement.textContent = state.collapsed ? "+" : "−";
   }
 
-  // Update stats
-  const statsEl = state.headerElement.querySelector(".multi-file-diff-stats");
-  if (statsEl) {
-    const spans = statsEl.querySelectorAll("span");
-    if (spans[0]) spans[0].textContent = `+${state.stats.additions}`;
-    if (spans[1]) spans[1].textContent = `−${state.stats.deletions}`;
+  if (state.statsAdditionsElement) {
+    state.statsAdditionsElement.textContent = `+${state.stats.additions}`;
+  }
+  if (state.statsDeletionsElement) {
+    state.statsDeletionsElement.textContent = `−${state.stats.deletions}`;
   }
 }
 
@@ -304,6 +313,9 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
       element: null,
       headerElement: null,
       contentElement: null,
+      collapseIconElement: null,
+      statsAdditionsElement: null,
+      statsDeletionsElement: null,
     };
     fileStates.push(state);
     fileStatesByName.set(entry.filename, state);

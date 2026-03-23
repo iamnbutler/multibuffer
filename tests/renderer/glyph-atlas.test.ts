@@ -7,11 +7,24 @@
 
 import { describe, expect, it } from "bun:test";
 
-// Check if we're in a browser-like environment
-const hasBrowserApis =
-  typeof OffscreenCanvas !== "undefined" || typeof document !== "undefined";
+// Check if we're in a browser-like environment with working canvas
+const hasCanvasSupport = (() => {
+  try {
+    if (typeof OffscreenCanvas !== "undefined") {
+      const c = new OffscreenCanvas(1, 1);
+      return c.getContext("2d") !== null;
+    }
+    if (typeof document !== "undefined") {
+      const c = document.createElement("canvas");
+      return c.getContext("2d") !== null;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+})();
 
-describe.skipIf(!hasBrowserApis)("GlyphAtlas (browser environment)", () => {
+describe.skipIf(!hasCanvasSupport)("GlyphAtlas (browser environment)", () => {
   it("creates atlas with specified dimensions", async () => {
     const { createGlyphAtlas } = await import("../../src/renderer/glyph-atlas.ts");
     const atlas = createGlyphAtlas(8, 16);
