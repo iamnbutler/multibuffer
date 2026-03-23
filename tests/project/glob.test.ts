@@ -228,4 +228,15 @@ describe("shouldTraverseDirectory", () => {
       shouldTraverseDirectory("node_modules", ["**/*.ts"], ["node_modules"]),
     ).toBe(false);
   });
+
+  test("no false positive when dirPath is a non-boundary prefix of pattern", () => {
+    // "lib" must not be traversed when include only targets "library/**"
+    expect(shouldTraverseDirectory("lib", ["library/**"], [])).toBe(false);
+    // "src" must not be traversed when include only targets "src-gen/**"
+    expect(shouldTraverseDirectory("src", ["src-gen/**/*.ts"], [])).toBe(false);
+    // Exact match should still traverse
+    expect(shouldTraverseDirectory("library", ["library/**"], [])).toBe(true);
+    // Slash-bounded prefix should still traverse
+    expect(shouldTraverseDirectory("src", ["src/index.ts"], [])).toBe(true);
+  });
 });

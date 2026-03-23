@@ -288,8 +288,12 @@ export function shouldTraverseDirectory(
       return true;
     }
 
-    // Check if pattern starts with the directory path
-    if (pattern.startsWith(`${dirPath}/`) || pattern.startsWith(dirPath)) {
+    // Check if pattern starts with the directory path.
+    // Use exact match (pattern === dirPath) or slash-bounded prefix
+    // (pattern.startsWith(`${dirPath}/`)) to avoid false positives where
+    // dirPath is a non-path-boundary prefix of another directory name
+    // (e.g. dirPath="lib" matching pattern="library/**").
+    if (pattern.startsWith(`${dirPath}/`) || pattern === dirPath) {
       return true;
     }
 
