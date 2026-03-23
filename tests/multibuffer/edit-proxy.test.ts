@@ -296,6 +296,70 @@ describe("MultiBuffer Edit Proxy - Excerpt boundary edits (mm3lh0xz-0duv)", () =
     expect(snap.lines(mbRow(3), mbRow(4))).toEqual([">>>Z"]);
   });
 
+  test("inserting a newline in first excerpt shifts second excerpt range", () => {
+    // Regression: _refreshExcerptsForBuffer only adjusted endRow for the excerpt
+    // containing the edit, but never shifted startRow/endRow of subsequent excerpts
+    // when lineDelta != 0. This caused a later excerpt to display wrong buffer rows.
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf, excerptRange(2, 4));
+
+    // Insert a newline at row 0, col 0 → splits "Line 0" into ["", "Line 0"]
+    // lineDelta = +1; rows 2-3 of the original buffer are now at rows 3-4.
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "\n");
+
+    const snap = mb.snapshot();
+    // First excerpt: 3 lines (was 2+trailing); shows ["", "Line 0", "Line 1"]
+    expect(snap.lines(mbRow(0), mbRow(3))).toEqual(["", "Line 0", "Line 1"]);
+    // Second excerpt: must still show the ORIGINAL rows 2-3 ("Line 2", "Line 3"),
+    // now at buffer rows 3-4. Without the fix this showed ["Line 1", "Line 2"].
+    expect(snap.lines(mbRow(4), mbRow(6))).toEqual(["Line 2", "Line 3"]);
+  });
+
+  test("deleting a line in first excerpt shifts second excerpt range", () => {
+    // Mirror of the insert regression: deletion with lineDelta = -1.
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf, excerptRange(2, 4));
+
+    // Delete "Line 1\n" — row 1 col 0 through row 2 col 0 — lineDelta = -1.
+    mb.edit(mbPoint(1, 0), mbPoint(2, 0), "");
+
+    const snap = mb.snapshot();
+    // First excerpt: 1 line remaining; shows ["Line 0"]
+    expect(snap.lines(mbRow(0), mbRow(1))).toEqual(["Line 0"]);
+    // Second excerpt: was at buffer rows 2-4 → now at rows 1-3.
+    // Must still show ["Line 2", "Line 3"]. Without the fix rows 2-3 of the
+    // shrunken buffer (which now contains just ["Line 0", "Line 2", "Line 3"])
+    // would be shown instead.
+    expect(snap.lines(mbRow(2), mbRow(4))).toEqual(["Line 2", "Line 3"]);
+  });
+
+  test("anchor in second excerpt survives newline insert in first excerpt", () => {
+    // Verify that anchor resolution correctly tracks a position in the second
+    // excerpt after the excerpt's range is shifted by a newline insertion.
+    const buf = createBuffer(createBufferId(), "Alpha\nBeta\nGamma\nDelta");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf, excerptRange(2, 4));
+
+    // Anchor at start of "Gamma" (mb row 3, col 0)
+    const a = mb.createAnchor(mbPoint(3, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    // Insert a newline at the start of the first excerpt → lineDelta = +1
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "\n");
+
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    // "Gamma" is now at mb row 4 (first excerpt grows by 1; trailing separator at row 3)
+    expectPoint(resolved, 4, 0);
+  });
+
   test.todo("edit spanning start of first excerpt through end of last excerpt deletes middle entirely", () => {
     // Complex case: three excerpts from the same buffer.
     // Edit from end of first excerpt to start of third excerpt.
