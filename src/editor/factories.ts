@@ -41,7 +41,7 @@ export function createSingleBufferEditor(
 ): Editor {
   const buffer = createBuffer(_nextBufferId(), text);
   const mb = createMultiBuffer();
-  const lineCount = text.split("\n").length;
+  const lineCount = buffer.snapshot().lineCount;
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
   const startRow = 0 as BufferRow;
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
