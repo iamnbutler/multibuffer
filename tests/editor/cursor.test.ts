@@ -139,6 +139,39 @@ describe("Cursor - Word Movement (ASCII)", () => {
   });
 });
 
+describe("Cursor - Word Movement (Cross-Line)", () => {
+  test("move right from end of line crosses to end of first word on next line", () => {
+    const snap = setup("hello\nworld").snapshot();
+    // At col 5 = end of "hello"; cross to row 1 → scanWordForward("world", 0) = 5
+    expectPoint(moveCursor(snap, mbPoint(0, 5), "right", "word"), 1, 5);
+  });
+
+  test("move right from end of line skips leading whitespace on next line", () => {
+    const snap = setup("hello\n  world").snapshot();
+    // At col 5 = end of "hello"; cross to row 1 → scanWordForward("  world", 0)
+    // first phase: " " not word char → break at 0; second phase: skip "  " → 2
+    expectPoint(moveCursor(snap, mbPoint(0, 5), "right", "word"), 1, 2);
+  });
+
+  test("move right at end of last line stays put", () => {
+    const snap = setup("foo\nbar").snapshot();
+    // Row 1 is last line (lineCount=2); col 3 = end; no next row → stays at (1, 3)
+    expectPoint(moveCursor(snap, mbPoint(1, 3), "right", "word"), 1, 3);
+  });
+
+  test("move left from col 0 crosses to start of last word on previous line", () => {
+    const snap = setup("foo bar\nworld").snapshot();
+    // Row 1, col 0; cross to row 0 → scanWordBackward("foo bar", 7) = 4 (start of "bar")
+    expectPoint(moveCursor(snap, mbPoint(1, 0), "left", "word"), 0, 4);
+  });
+
+  test("move left from col 0 stops at empty previous line", () => {
+    const snap = setup("hello\n\nworld").snapshot();
+    // Row 2, col 0; cross to row 1 → scanWordBackward("", 0) = 0
+    expectPoint(moveCursor(snap, mbPoint(2, 0), "left", "word"), 1, 0);
+  });
+});
+
 describe("Cursor - Word Movement (Unicode)", () => {
   test("isWordChar recognises ASCII letters", () => {
     expect(isWordChar("a")).toBe(true);
