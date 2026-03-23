@@ -113,11 +113,11 @@ export class Rope {
   /** Get the full text. O(n) — use sparingly. */
   text(): string {
     if (this._chunks.length === 1) return this._chunks[0]?.text ?? "";
-    let result = "";
-    for (const c of this._chunks) {
-      result += c.text;
-    }
-    return result;
+    // Collect chunk texts into an array first, then join in a single pass.
+    // Repeated `result += chunk.text` would allocate a new string at each step
+    // (O(n²) total bytes copied for n chunks); Array.join pre-sizes the result
+    // buffer and copies each chunk exactly once — O(n) total.
+    return this._chunks.map((c) => c.text).join("");
   }
 
   /**
@@ -435,7 +435,9 @@ export class Rope {
   slice(start: number, end: number): string {
     if (start >= end || start >= this._length) return "";
 
-    let result = "";
+    // Collect parts first, then join — avoids O(n²) string copying when the
+    // slice spans many chunks (same reasoning as text()).
+    const parts: string[] = [];
     let offset = 0;
     for (const chunk of this._chunks) {
       const chunkEnd = offset + chunk.text.length;
@@ -447,10 +449,10 @@ export class Rope {
 
       const sliceStart = Math.max(0, start - offset);
       const sliceEnd = Math.min(chunk.text.length, end - offset);
-      result += chunk.text.slice(sliceStart, sliceEnd);
+      parts.push(chunk.text.slice(sliceStart, sliceEnd));
       offset = chunkEnd;
     }
-    return result;
+    return parts.join("");
   }
 
   /**
