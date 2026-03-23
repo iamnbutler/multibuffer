@@ -308,6 +308,56 @@ describe("createProjectTree", () => {
       expect(await tree.has("missing.ts")).toBe(false);
     });
 
+    test("get() returns directory entry even when include patterns are set", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+      });
+
+      // With include: ['**/*.ts'], get('src') should return the directory entry
+      // because the directory is traversable and contains matching files.
+      const tree = createProjectTree("/root", {
+        adapter,
+        include: ["**/*.ts"],
+      });
+
+      const entry = await tree.get("src");
+      expect(entry?.type).toBe("directory");
+      expect(entry?.name).toBe("src");
+    });
+
+    test("get() returns undefined for excluded directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/node_modules": { type: "directory" },
+        "/root/node_modules/pkg": { type: "directory" },
+        "/root/node_modules/pkg/index.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        exclude: ["node_modules"],
+      });
+
+      expect(await tree.get("node_modules")).toBeUndefined();
+    });
+
+    test("has() returns true for directory with include patterns", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        include: ["**/*.ts"],
+      });
+
+      expect(await tree.has("src")).toBe(true);
+    });
+
     test("handles trailing slashes in root", async () => {
       const adapter = createMemoryFsAdapter({
         "/root": { type: "directory" },
