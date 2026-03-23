@@ -1,1 +1,1 @@
-{"r":"23424819710","c":["157","260","111","282"],"prs":"311,314,326,327,330,331,333,336,337,340,341,342,345","notes":"2026-03-23 T9+T2: new test PR branch repo-assist/test-difflines-hunktorheader-2026-03-23 (diffLines+hunkToHeader 8+4 tests, overlaps #337). Issue #315 to close. Monthly #31 updated. All user issues commented."}
+{"r":"23437396606","c":["157","260","111","282"],"prs":"311,314,326,327,330,331,333,336,337,340,341,342,345","notes":"T2+T3 no new activity. PR#342 covers _refreshExcerptsForBuffer bug. Issue#356 failed PR test/diff. Issue#315 close."}
