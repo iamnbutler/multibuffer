@@ -5,6 +5,11 @@ import { expect, test } from "@playwright/test";
  *
  * These tests verify the full pipeline:
  * Editor → MultiBuffer → DomRenderer → DOM
+ *
+ * The renderer uses data-attributes (not CSS classes) for DOM elements:
+ * - [data-row] for line/header rows
+ * - [data-cursor] for the cursor element
+ * - textarea for the hidden input handler
  */
 
 test.describe("Editor basics", () => {
@@ -20,12 +25,13 @@ test.describe("Editor basics", () => {
   });
 
   test("lines render in the viewport", async ({ page }) => {
-    // Lines are rendered as .line elements inside the scroll container
-    const lines = page.locator("#editor .line");
-    await expect(lines.first()).toBeVisible();
+    // Lines are rendered as div[data-row] elements inside the scroll container.
+    // Filter to visible rows only — the pool keeps hidden rows in the DOM.
+    const visibleRows = page.locator("#editor [data-row]").filter({ visible: true });
+    await expect(visibleRows.first()).toBeVisible();
 
-    // Should have multiple lines (sources are loaded by default)
-    const count = await lines.count();
+    // Should have multiple visible rows rendered
+    const count = await visibleRows.count();
     expect(count).toBeGreaterThan(0);
   });
 
@@ -36,11 +42,11 @@ test.describe("Editor basics", () => {
     expect(box).not.toBeNull();
     if (!box) return;
 
-    // Click at a position within the editor (below gutter area)
+    // Click at a position within the editor
     await page.mouse.click(box.x + 100, box.y + 50);
 
     // The cursor element should exist and be visible
-    const cursor = page.locator("#editor .cursor");
+    const cursor = page.locator("#editor [data-cursor]");
     await expect(cursor).toBeVisible();
   });
 
@@ -53,14 +59,14 @@ test.describe("Editor basics", () => {
     const testText = "hello e2e";
     await page.keyboard.type(testText);
 
-    // Verify the text appears in the rendered lines
-    const lineWithText = page.locator("#editor .line", { hasText: testText });
-    await expect(lineWithText).toBeVisible();
+    // Verify the text appears in the rendered rows
+    const rowWithText = page.locator("#editor [data-row]", { hasText: testText });
+    await expect(rowWithText).toBeVisible();
   });
 
   test("scenario picker switches content", async ({ page }) => {
-    // Find the scenario picker panel
-    const picker = page.locator("text=Fixture").locator("..");
+    // Find the scenario picker panel (heading says "Demos")
+    const picker = page.locator("text=Demos").locator("..");
     await expect(picker).toBeVisible();
 
     // Click on "Unicode" scenario
@@ -70,7 +76,7 @@ test.describe("Editor basics", () => {
     // Wait for Unicode-specific content to appear in the editor.
     // The Unicode fixture contains CJK text like "你好世界" that won't
     // be present in the default "All files" scenario.
-    const unicodeLine = page.locator("#editor .line", { hasText: "你好世界" });
+    const unicodeLine = page.locator("#editor [data-row]", { hasText: "你好世界" });
     await expect(unicodeLine).toBeVisible({ timeout: 5_000 });
   });
 });
@@ -85,7 +91,7 @@ test.describe("Editor keyboard navigation", () => {
 
   test("arrow keys move cursor", async ({ page }) => {
     // Get initial cursor position
-    const cursor = page.locator("#editor .cursor");
+    const cursor = page.locator("#editor [data-cursor]");
     await expect(cursor).toBeVisible();
     const initialBox = await cursor.boundingBox();
     expect(initialBox).not.toBeNull();
@@ -97,7 +103,7 @@ test.describe("Editor keyboard navigation", () => {
     const initialY = initialBox.y;
     await page.waitForFunction(
       (prevY) => {
-        const el = document.querySelector("#editor .cursor");
+        const el = document.querySelector("#editor [data-cursor]");
         if (!el) return false;
         const rect = el.getBoundingClientRect();
         return rect.y > prevY;
@@ -118,14 +124,14 @@ test.describe("Editor keyboard navigation", () => {
     await page.keyboard.type("abc");
 
     // Verify text appears
-    const lineWithAbc = page.locator("#editor .line", { hasText: "abc" });
-    await expect(lineWithAbc).toBeVisible();
+    const rowWithAbc = page.locator("#editor [data-row]", { hasText: "abc" });
+    await expect(rowWithAbc).toBeVisible();
 
     // Press backspace to delete 'c'
     await page.keyboard.press("Backspace");
 
     // Text should now be "ab"
-    const lineWithAb = page.locator("#editor .line", { hasText: /ab[^c]|ab$/ });
-    await expect(lineWithAb).toBeVisible();
+    const rowWithAb = page.locator("#editor [data-row]", { hasText: /ab[^c]|ab$/ });
+    await expect(rowWithAb).toBeVisible();
   });
 });

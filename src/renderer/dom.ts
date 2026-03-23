@@ -1005,6 +1005,7 @@ export class DomRenderer implements Renderer {
 
     while (this._rowPool.length < count) {
       const root = document.createElement("div");
+      root.setAttribute("data-row", "");
       root.style.cssText =
         `display:none;height:${lh}px;line-height:${lh}px;white-space:pre;`;
 
