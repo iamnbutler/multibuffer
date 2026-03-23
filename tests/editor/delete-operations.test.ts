@@ -61,6 +61,14 @@ describe("Delete to beginning of line", () => {
     expectPoint(editor.cursor, 0, 5);
   });
 
+  test("at start of first line, does nothing", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "deleteBackward", granularity: "line" });
+    expect(getText(mb)).toBe("Hello\nWorld");
+    expectPoint(editor.cursor, 0, 0);
+  });
+
   test("with multi-cursor, deletes to beginning at each cursor", () => {
     const { editor, mb } = setup("Hello World\nFoo Bar");
     editor.setCursor(mbPoint(0, 7));
@@ -75,6 +83,24 @@ describe("Delete to beginning of line", () => {
     editor.dispatch({ type: "deleteBackward", granularity: "line" });
     expect(getText(mb)).toBe("three four");
     expectPoint(editor.cursor, 0, 0);
+  });
+
+  test("with multi-cursor at column 0, joins lines", () => {
+    const { editor, mb } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "deleteBackward", granularity: "line" });
+    expect(getText(mb)).toBe("aaabbbccc");
+  });
+
+  test("with multi-cursor, mixed column 0 and mid-line", () => {
+    const { editor, mb } = setup("Hello World\nFoo\nBar Baz");
+    // cursor 1: mid-line (deletes to line start)
+    editor.setCursor(mbPoint(0, 7));
+    // cursor 2: column 0 (joins with previous line)
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "deleteBackward", granularity: "line" });
+    expect(getText(mb)).toBe("orld\nFooBar Baz");
   });
 });
 
@@ -114,19 +140,19 @@ describe("Delete to word boundary", () => {
   });
 
   test("word delete at line start crosses to previous line", () => {
-    const { editor, mb } = setup("Hello\nWorld");
+    const { editor, mb } = setup("Hello World\nFoo");
     editor.setCursor(mbPoint(1, 0));
     editor.dispatch({ type: "deleteBackward", granularity: "word" });
-    // Should delete the newline (crossing line boundary)
-    expect(getText(mb)).toBe("HelloWorld");
-    expectPoint(editor.cursor, 0, 5);
+    // moveWordBoundary crosses line boundary to end of previous line (deletes newline)
+    expect(getText(mb)).toBe("Hello WorldFoo");
+    expectPoint(editor.cursor, 0, 11);
   });
 
   test("word delete at line end crosses to next line", () => {
     const { editor, mb } = setup("Hello\nWorld");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "deleteForward", granularity: "word" });
-    // Should delete the newline (crossing line boundary)
+    // moveWordBoundary crosses line boundary to start of next line (deletes newline)
     expect(getText(mb)).toBe("HelloWorld");
     expectPoint(editor.cursor, 0, 5);
   });
@@ -137,6 +163,51 @@ describe("Delete to word boundary", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(1, 10) }); // end of "four"
     editor.dispatch({ type: "deleteBackward", granularity: "word" });
     expect(getText(mb)).toBe("one \nthree ");
+  });
+
+  test("word delete backward crosses to empty previous line", () => {
+    const { editor, mb } = setup("Hello\n\nWorld");
+    editor.setCursor(mbPoint(2, 0));
+    editor.dispatch({ type: "deleteBackward", granularity: "word" });
+    // From row 2 col 0 → crosses to row 1 (empty) → lands at col 0 of empty line
+    expect(getText(mb)).toBe("Hello\nWorld");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  test("word delete backward crosses to line of only non-word characters", () => {
+    const { editor, mb } = setup("...\nWorld");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "deleteBackward", granularity: "word" });
+    // moveWordBoundary crosses to end of previous line (deletes newline only)
+    expect(getText(mb)).toBe("...World");
+    expectPoint(editor.cursor, 0, 3);
+  });
+
+  test("word delete forward crosses from end of line to next line", () => {
+    const { editor, mb } = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "deleteForward", granularity: "word" });
+    // moveWordBoundary crosses to start of next line (deletes newline only)
+    expect(getText(mb)).toBe("HelloWorld");
+    expectPoint(editor.cursor, 0, 5);
+  });
+
+  test("word delete forward from mid-word does not cross line", () => {
+    const { editor, mb } = setup("Cargo\nWorld");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "deleteForward", granularity: "word" });
+    // From mid-word "Ca|rgo" → deletes "rgo" (rest of word), stays on same line
+    expect(getText(mb)).toBe("Ca\nWorld");
+    expectPoint(editor.cursor, 0, 2);
+  });
+
+  test("word delete forward crosses to empty next line", () => {
+    const { editor, mb } = setup("Hello\n\nWorld");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "deleteForward", granularity: "word" });
+    // From end of "Hello" → crosses to empty line → lands at start of empty line
+    expect(getText(mb)).toBe("Hello\nWorld");
+    expectPoint(editor.cursor, 0, 5);
   });
 });
 

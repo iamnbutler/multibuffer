@@ -717,6 +717,17 @@ export class Editor {
       }
 
       const cursor = this.cursor;
+      // Special case: deleteBackward("line") at column 0 should join with previous line
+      if (granularity === "line" && cursor.column === 0 && cursor.row > 0) {
+        const target = moveCursor(snap, cursor, "left", "character");
+        if (target.row !== cursor.row || target.column !== cursor.column) {
+          if (!this._edit(snap, target, cursor, "")) return;
+          this._cursor = target;
+          const newSel = selectionAtPoint(this.multiBuffer, target);
+          this._selections = newSel ? [newSel] : [];
+        }
+        return;
+      }
       const target =
         granularity === "word"
           ? moveWordBoundary(snap, cursor, "left")
@@ -744,12 +755,20 @@ export class Editor {
         const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
         const cursor = snap.resolveAnchor(headAnchor);
         if (cursor) {
-          const target =
-            granularity === "word"
-              ? moveWordBoundary(snap, cursor, "left")
-              : moveCursor(snap, cursor, "left", granularity);
-          if (target.row !== cursor.row || target.column !== cursor.column) {
-            deleteRanges.push({ start: target, end: cursor, index: i });
+          // Line-join: deleteBackward("line") at column 0 should join with previous line
+          if (granularity === "line" && cursor.column === 0 && cursor.row > 0) {
+            const target = moveCursor(snap, cursor, "left", "character");
+            if (target.row !== cursor.row || target.column !== cursor.column) {
+              deleteRanges.push({ start: target, end: cursor, index: i });
+            }
+          } else {
+            const target =
+              granularity === "word"
+                ? moveWordBoundary(snap, cursor, "left")
+                : moveCursor(snap, cursor, "left", granularity);
+            if (target.row !== cursor.row || target.column !== cursor.column) {
+              deleteRanges.push({ start: target, end: cursor, index: i });
+            }
           }
         }
       }
