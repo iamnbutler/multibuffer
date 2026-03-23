@@ -280,6 +280,42 @@ function scanWordBackward(text: string, pos: number): number {
   return pos;
 }
 
+/**
+ * Scan forward from `pos` within `text`, skipping one contiguous class of characters.
+ * Returns the new position at the first class transition, or text.length.
+ * Precondition: pos < text.length.
+ */
+function scanBoundaryForward(text: string, pos: number): number {
+  const firstCp = text.codePointAt(pos) ?? 0;
+  const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+  let p = pos;
+  while (p < text.length) {
+    const cp = text.codePointAt(p) ?? 0;
+    if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+    p += cp > 0xffff ? 2 : 1;
+  }
+  return p;
+}
+
+/**
+ * Scan backward from `pos` within `text`, skipping one contiguous class of characters.
+ * Returns the new position at the first class transition backward, or 0.
+ * Precondition: pos > 0.
+ */
+function scanBoundaryBackward(text: string, pos: number): number {
+  const prevStart = prevCpStart(text, pos);
+  const firstCp = text.codePointAt(prevStart) ?? 0;
+  const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+  let p = pos;
+  while (p > 0) {
+    const prev = prevCpStart(text, p);
+    const cp = text.codePointAt(prev) ?? 0;
+    if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+    p = prev;
+  }
+  return p;
+}
+
 function moveWord(
   snapshot: MultiBufferSnapshot,
   current: MultiBufferPoint,
@@ -349,19 +385,10 @@ export function moveWordBoundary(
         }
         return current;
       }
-      // Determine the class of the first character, then skip that class
-      const firstCp = text.codePointAt(col) ?? 0;
-      const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
-      let pos = col;
-      while (pos < text.length) {
-        const cp = text.codePointAt(pos) ?? 0;
-        if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
-        pos += cp > 0xffff ? 2 : 1;
-      }
-      return { row: current.row, column: pos };
+      return { row: current.row, column: scanBoundaryForward(text, col) };
     }
 
-    // left: determine the class of the character immediately before the cursor
+    // left: skip one contiguous class of characters backward
     if (col <= 0) {
       // At start of line — cross to end of previous line
       if (current.row > 0) {
@@ -373,17 +400,7 @@ export function moveWordBoundary(
       }
       return current;
     }
-    const prevStart = prevCpStart(text, col);
-    const firstCp = text.codePointAt(prevStart) ?? 0;
-    const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
-    let pos = col;
-    while (pos > 0) {
-      const prev = prevCpStart(text, pos);
-      const cp = text.codePointAt(prev) ?? 0;
-      if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
-      pos = prev;
-    }
-    return { row: current.row, column: pos };
+    return { row: current.row, column: scanBoundaryBackward(text, col) };
   }
 
   // For up/down with word granularity, just do character movement
