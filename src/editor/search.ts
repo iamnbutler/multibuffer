@@ -283,32 +283,22 @@ export class SearchController {
     this._unsubscribeFromTextChanges();
 
     const snap = this._editor.multiBuffer.snapshot();
-    const mb = this._editor.multiBuffer;
 
     // Resolve all anchor ranges to current positions
-    const resolved: Array<{
+    const edits: Array<{
       start: MultiBufferPoint;
       end: MultiBufferPoint;
+      newText: string;
     }> = [];
     for (const result of this._results) {
       const range = resolveAnchorRange(snap, result.range);
       if (range) {
-        resolved.push(range);
+        edits.push({ start: range.start, end: range.end, newText: replacement });
       }
     }
 
-    // Sort bottom-to-top so edits don't shift later positions
-    resolved.sort((a, b) => {
-      if (a.start.row !== b.start.row) return b.start.row - a.start.row;
-      return b.start.column - a.start.column;
-    });
-
-    // Apply each replacement
-    for (const range of resolved) {
-      mb.edit(range.start, range.end, replacement);
-    }
-
-    const count = resolved.length;
+    // Apply as a single undoable batch (sorting and history are handled internally)
+    const count = this._editor.applyBatchEdits(edits);
 
     // Re-run search to update results
     this._performSearch();
