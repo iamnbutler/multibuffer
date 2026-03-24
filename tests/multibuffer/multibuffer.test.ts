@@ -1542,3 +1542,138 @@ describe("moveExcerpt", () => {
     expect(mb.lineCount).toBe(totalBefore);
   });
 });
+
+
+describe("MultiBuffer - editBatch", () => {
+  test("empty batch is a no-op", () => {
+    const buf = createBuffer(createBufferId(), "hello\nworld");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    const v0 = mb.snapshot().version;
+
+    mb.editBatch([]);
+
+    expect(mb.snapshot().version).toBe(v0);
+    expect(mb.snapshot().lines(mbRow(0), mbRow(2))).toEqual(["hello", "world"]);
+  });
+
+  test("single edit in batch behaves like edit()", () => {
+    const buf = createBuffer(createBufferId(), "hello\nworld");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+
+    mb.editBatch([{ start: mbPoint(0, 0), end: mbPoint(0, 5), text: "goodbye" }]);
+
+    expect(mb.snapshot().lines(mbRow(0), mbRow(2))).toEqual(["goodbye", "world"]);
+  });
+
+  test("two edits to different lines in the same buffer apply both", () => {
+    const buf = createBuffer(createBufferId(), "aaa\nbbb\nccc");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+
+    mb.editBatch([
+      { start: mbPoint(0, 0), end: mbPoint(0, 3), text: "AAA" },
+      { start: mbPoint(2, 0), end: mbPoint(2, 3), text: "CCC" },
+    ]);
+
+    const lines = mb.snapshot().lines(mbRow(0), mbRow(3));
+    expect(lines[0]).toBe("AAA");
+    expect(lines[1]).toBe("bbb");
+    expect(lines[2]).toBe("CCC");
+  });
+
+  test("two edits to separate excerpts of the same buffer apply both", () => {
+    // Buffer: 6 lines. Two excerpts: rows 0-2 and rows 3-6.
+    const buf = createBuffer(createBufferId(), "a\nb\nc\nd\ne\nf");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3)); // MB rows 0-2
+    mb.addExcerpt(buf, excerptRange(3, 6)); // MB rows 3-5
+
+    mb.editBatch([
+      { start: mbPoint(0, 0), end: mbPoint(0, 1), text: "X" },
+      { start: mbPoint(3, 0), end: mbPoint(3, 1), text: "Y" },
+    ]);
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(1))[0]).toBe("X");
+    expect(snap.lines(mbRow(3), mbRow(4))[0]).toBe("Y");
+  });
+
+  test("edits to two different buffers both apply", () => {
+    const buf1 = createBuffer(createBufferId(), "hello");
+    const buf2 = createBuffer(createBufferId(), "world");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 1)); // MB row 0
+    mb.addExcerpt(buf2, excerptRange(0, 1)); // MB row 1
+
+    mb.editBatch([
+      { start: mbPoint(0, 0), end: mbPoint(0, 5), text: "HELLO" },
+      { start: mbPoint(1, 0), end: mbPoint(1, 5), text: "WORLD" },
+    ]);
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(1))[0]).toBe("HELLO");
+    expect(snap.lines(mbRow(1), mbRow(2))[0]).toBe("WORLD");
+  });
+
+  test("overlapping offsets within same buffer applied in reverse order", () => {
+    // "abcde" — delete "bc" (1-3) and delete "de" (3-5); reverse order prevents shift errors.
+    const buf = createBuffer(createBufferId(), "abcde");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+
+    mb.editBatch([
+      { start: mbPoint(0, 1), end: mbPoint(0, 3), text: "" }, // delete "bc"
+      { start: mbPoint(0, 3), end: mbPoint(0, 5), text: "" }, // delete "de"
+    ]);
+
+    expect(mb.snapshot().lines(mbRow(0), mbRow(1))[0]).toBe("a");
+  });
+
+  test("editBatch with cross-buffer edits skips cross-buffer single edit", () => {
+    // An edit whose start and end are in different buffers is skipped.
+    const buf1 = createBuffer(createBufferId(), "hello");
+    const buf2 = createBuffer(createBufferId(), "world");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 1)); // MB row 0
+    mb.addExcerpt(buf2, excerptRange(0, 1)); // MB row 1
+
+    // This edit spans from buf1 to buf2 — should be skipped (not crash).
+    mb.editBatch([
+      { start: mbPoint(0, 0), end: mbPoint(1, 5), text: "X" },
+    ]);
+
+    // Neither buffer should have changed.
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(1))[0]).toBe("hello");
+    expect(snap.lines(mbRow(1), mbRow(2))[0]).toBe("world");
+  });
+
+  test("editBatch increments version when changes are made", () => {
+    const buf = createBuffer(createBufferId(), "abc");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 1));
+    const v0 = mb.snapshot().version;
+
+    mb.editBatch([{ start: mbPoint(0, 0), end: mbPoint(0, 1), text: "X" }]);
+
+    expect(mb.snapshot().version).toBeGreaterThan(v0);
+  });
+
+  test("editBatch: insert in one excerpt, delete in another, same buffer", () => {
+    const buf = createBuffer(createBufferId(), "foo\nbar\nbaz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // MB rows 0-1: "foo", "bar"
+    mb.addExcerpt(buf, excerptRange(2, 3)); // MB row 2: "baz"
+
+    mb.editBatch([
+      { start: mbPoint(0, 3), end: mbPoint(0, 3), text: "!" }, // insert "!" at end of "foo"
+      { start: mbPoint(2, 0), end: mbPoint(2, 3), text: "qux" }, // replace "baz" with "qux"
+    ]);
+
+    const snap = mb.snapshot();
+    expect(snap.lines(mbRow(0), mbRow(1))[0]).toBe("foo!");
+    expect(snap.lines(mbRow(2), mbRow(3))[0]).toBe("qux");
+  });
+});
