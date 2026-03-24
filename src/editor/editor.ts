@@ -364,6 +364,67 @@ export class Editor {
     this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
+  /**
+   * Apply multiple edits as a single undoable batch.
+   *
+   * Edits are sorted bottom-to-top internally so that row numbers for higher
+   * positions are not shifted during application. All edits are grouped into a
+   * single `HistoryEntry` so they can be undone atomically with one undo action.
+   *
+   * Non-editable excerpts are silently skipped.
+   *
+   * @param edits - Array of `{ start, end, newText }` edit descriptors
+   * @returns The number of edits that were successfully applied
+   */
+  applyBatchEdits(
+    edits: ReadonlyArray<{ start: MultiBufferPoint; end: MultiBufferPoint; newText: string }>,
+  ): number {
+    if (edits.length === 0) return 0;
+
+    const snap = this.multiBuffer.snapshot();
+    const cursorBefore = this._cursor;
+    const selectionsBefore = this._selections;
+
+    // Apply bottom-to-top so higher positions aren't shifted by lower edits.
+    const sorted = [...edits].sort((a, b) => {
+      if (a.start.row !== b.start.row) return b.start.row - a.start.row;
+      return b.start.column - a.start.column;
+    });
+
+    const historyEdits: EditOp[] = [];
+    let currentSnap = snap;
+
+    for (const { start, end, newText } of sorted) {
+      const startBuf = currentSnap.toBufferPoint(start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, start, end);
+      historyEdits.push({ editStart: start, removedText, insertedText: newText });
+      this.multiBuffer.edit(start, end, newText);
+      currentSnap = this.multiBuffer.snapshot();
+    }
+
+    if (historyEdits.length === 0) return 0;
+
+    this._undoStack.push({
+      edits: historyEdits,
+      cursorBefore,
+      selectionsBefore,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    const newSnap = this.multiBuffer.snapshot();
+    this._emit("textChange", newSnap);
+    this._emitBracketMatch(newSnap);
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
+
+    return historyEdits.length;
+  }
+
   /** Subscribe to a granular editor event. */
   on<K extends keyof EditorEventMap>(event: K, cb: (...args: EditorEventMap[K]) => void): void {
     let set = this._listeners.get(event);
