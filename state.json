@@ -1,1 +1,1 @@
-{"r":"23453685859","c":["157","260","111","282"],"prs":"311,314,326,327,330,331,333,336,337,340,341,342,345,355","notes":"T4 CI caching PR (branch repo-assist/eng-ci-caching-2026-03-23). PR#355 open. Close#356,#315."}
+{"r":"23467578577","c":["157","260","111","282"],"prs":"311,314,326,327,330,331,333,336,337,340,341,342,345,355","notes":"New PRs: editBatch(fix-issue-157-editbatch,closes#157)+resolveAnchorRange perf(improve-resolve-anchor-range). PR#355=test(diff). Close#356,#315."}
