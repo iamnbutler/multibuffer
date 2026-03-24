@@ -37,7 +37,6 @@ interface InjectionRange {
 interface BufferParse {
   tree: Tree;
   injections: Map<string, Tree>; // language -> tree for injected content
-  injectionRanges: InjectionRange[];
   /** Row → injection range index for O(1) lookup in getLineTokens(). */
   rowIndex: Map<number, InjectionRange>;
 }
@@ -154,7 +153,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     }
 
     // Find injection ranges
-    const injectionRanges = this._findInjectionRanges(tree.rootNode, text);
+    const injectionRanges = this._findInjectionRanges(tree.rootNode);
 
     // Build row → injection range index for O(1) lookup in getLineTokens().
     // Cost: O(total injected rows), paid once per parse.
@@ -179,7 +178,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       }
     }
 
-    this._bufferParses.set(bufferId, { tree, injections, injectionRanges, rowIndex });
+    this._bufferParses.set(bufferId, { tree, injections, rowIndex });
   }
 
   /**
@@ -207,13 +206,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       }
     } else {
       // Get tokens from primary language, but skip injection ranges
-      this._collectTokensWithInjectionSkip(
-        parse.tree.rootNode,
-        row,
-        tokens,
-        null,
-        parse.injectionRanges,
-      );
+      this._collectTokensWithInjectionSkip(parse.tree.rootNode, row, tokens, null);
     }
 
     return tokens;
@@ -223,7 +216,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
   /**
    * Find ranges that should be highlighted with a different language.
    */
-  private _findInjectionRanges(root: Node, _fullText: string): InjectionRange[] {
+  private _findInjectionRanges(root: Node): InjectionRange[] {
     const ranges: InjectionRange[] = [];
 
     const walk = (node: Node) => {
@@ -369,13 +362,14 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
   /**
    * Collect tokens but skip nodes that are inside injection ranges.
+   * Injection skipping is handled via node-type checks (minus_metadata,
+   * plus_metadata, skipChildren) — not by inspecting injection ranges directly.
    */
   private _collectTokensWithInjectionSkip(
     node: Node,
     targetRow: number,
     tokens: Token[],
     inheritedColor: string | null,
-    injectionRanges: InjectionRange[],
   ): void {
     if (
       node.endPosition.row < targetRow ||
@@ -460,13 +454,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
       if (child) {
-        this._collectTokensWithInjectionSkip(
-          child,
-          targetRow,
-          tokens,
-          colorToPropagate,
-          injectionRanges,
-        );
+        this._collectTokensWithInjectionSkip(child, targetRow, tokens, colorToPropagate);
       }
     }
   }
