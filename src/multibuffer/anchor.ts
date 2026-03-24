@@ -60,8 +60,11 @@ export function resolveAnchorRange(
   snapshot: MultiBufferSnapshot,
   range: AnchorRange,
 ): { start: MultiBufferPoint; end: MultiBufferPoint } | undefined {
-  const start = snapshot.resolveAnchor(range.start);
-  const end = snapshot.resolveAnchor(range.end);
+  // Use the batched API so start and end share buffer snapshot and edit-log
+  // caches. For the common case where both anchors are in the same buffer,
+  // this avoids one extra buffer.snapshot() and buffer.editsSince() call
+  // compared to calling resolveAnchor() twice independently.
+  const [start, end] = snapshot.resolveAnchors([range.start, range.end]);
   if (start === undefined || end === undefined) return undefined;
   return { start, end };
 }
