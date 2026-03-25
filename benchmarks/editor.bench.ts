@@ -75,6 +75,7 @@ let editorMoveLine1k: Editor;
 let editorDuplicate1k: Editor;
 let editorInsertBelow1k: Editor;
 let editorInsertAbove1k: Editor;
+let editorMoveVisual1k: Editor;
 
 export const editorBenchmarks: BenchmarkSuite = {
   name: "Editor dispatch (keypress latency)",
@@ -284,6 +285,37 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         editorInsertAbove1k.dispatch({ type: "insertLineAbove" });
+      },
+    },
+    {
+      // Visual cursor movement (up/down) with soft line wrapping enabled.
+      // Each line is 40 chars wide and wraps at wrapWidth=20, so each buffer row
+      // occupies 2 visual rows. Measures the full moveCursorVisual() path:
+      // segmentCharStart lookups, charColToVisualCol, visualColToCharCol.
+      // Cursor alternates between moving down and up to stay in-bounds.
+      name: "moveCursor down - visual row (1K wrapped buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        // Generate lines that are exactly 40 chars, wrapping at 20 into 2 segments
+        const lines = Array.from({ length: 1000 }, (_, i) => `Line${i.toString().padStart(4, "0")}${"x".repeat(32)}`).join("\n");
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const buf = createBuffer("bench-visual" as BufferId, lines);
+        const mb = createMultiBuffer();
+        const lineRows = lines.split("\n").length;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const start = { row: 0 as BufferRow, column: 0 };
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const end = { row: lineRows as BufferRow, column: 0 };
+        const excerptRange = { context: { start, end }, primary: { start, end } };
+        mb.addExcerpt(buf, excerptRange);
+        editorMoveVisual1k = new Editor(mb);
+        editorMoveVisual1k.setWrapWidth(20);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMoveVisual1k.setCursor({ row: 500 as MultiBufferRow, column: 10 });
+      },
+      fn: () => {
+        editorMoveVisual1k.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
       },
     },
   ],
