@@ -86,8 +86,11 @@ function moveVisualRow(
   const firstVisualRow = wrapMap.bufferRowToFirstVisualRow(row);
   const visualRowsForLine = wrapMap.visualRowsForLine(row);
 
-  // Find which segment the cursor is in by checking segment char starts
+  // Find which segment the cursor is in by checking segment char starts.
+  // Track currentSegStart alongside currentSegment to avoid a redundant
+  // segmentCharStart() call after the loop.
   let currentSegment = 0;
+  let currentSegStart = 0;
   for (let seg = 0; seg < visualRowsForLine; seg++) {
     const segStart = wrapMap.segmentCharStart(row, seg);
     const nextSegStart =
@@ -96,16 +99,21 @@ function moveVisualRow(
         : text.length;
     if (column >= segStart && column < nextSegStart) {
       currentSegment = seg;
+      currentSegStart = segStart;
       break;
     }
     if (seg === visualRowsForLine - 1 && column >= segStart) {
       currentSegment = seg;
+      currentSegStart = segStart;
     }
   }
 
-  // Calculate the visual column within the current segment
-  const segStart = wrapMap.segmentCharStart(row, currentSegment);
-  const visualColInSegment = charColToVisualCol(text, column) - charColToVisualCol(text, segStart);
+  // Calculate the visual column within the current segment.
+  // Subtract the visual offset of the segment start from the visual offset of
+  // the cursor column — both scanned from position 0, so the difference gives
+  // the cursor's visual column relative to the segment's left edge.
+  const visualColInSegment =
+    charColToVisualCol(text, column) - charColToVisualCol(text, currentSegStart);
 
   const currentVisualRow = firstVisualRow + currentSegment;
 
