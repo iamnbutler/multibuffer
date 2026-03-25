@@ -233,12 +233,12 @@ describe("Coordinate conversion after edits", () => {
     if (!res) return;
     expect(num(res.row)).toBe(14);
 
-    // Excerpt 2 (idC): bufA row 15 → offset 5 in excerpt → mb row = new excerpt2 start + 5.
-    // Excerpt 2 starts at mb row 21 after the inserted line.
+    // Excerpt 2 (idC): bufA rows [10,20) shifted to [11,21) after the insert.
+    // bufA row 15 → offset 4 in excerpt (15 - 11) → mb row = 21 + 4 = 25.
     const res2 = snap.toMultiBufferPoint(idC, point(15, 0));
     expect(res2).toBeDefined();
     if (!res2) return;
-    expect(num(res2.row)).toBe(26);
+    expect(num(res2.row)).toBe(25);
   });
 
   test("conversions correct after expanding an excerpt", () => {

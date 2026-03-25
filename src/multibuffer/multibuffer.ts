@@ -1110,14 +1110,24 @@ class MultiBufferImpl implements MultiBuffer {
       const exc = this._excerpts.get(id);
       if (!exc) continue;
 
+      let startRow = exc.range.context.start.row;
       let endRow = exc.range.context.end.row;
 
-      // If the edit changed line count and falls within this excerpt, adjust end row
+      // If the edit changed line count, adjust the excerpt's buffer-row range.
       if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
-        if (editRow >= exc.range.context.start.row && editRow < exc.range.context.end.row) {
+        if (editRow >= startRow && editRow < endRow) {
+          // Edit is inside this excerpt — expand/contract endRow only.
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           endRow = (endRow + lineDelta) as BufferRow;
+        } else if (editRow < startRow) {
+          // Edit is before this excerpt — shift both endpoints so the excerpt
+          // continues to reference the same logical buffer content.
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          startRow = Math.max(0, startRow + lineDelta) as BufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          endRow = Math.max(startRow, endRow + lineDelta) as BufferRow;
         }
+        // editRow >= endRow: edit is after this excerpt — no adjustment needed.
       }
 
       // Clamp to new buffer bounds
@@ -1128,7 +1138,7 @@ class MultiBufferImpl implements MultiBuffer {
       ) as BufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedStartRow = Math.min(
-        exc.range.context.start.row,
+        startRow,
         clampedEndRow,
       ) as BufferRow;
       const clampedRange: ExcerptRange = {
