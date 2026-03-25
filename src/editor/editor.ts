@@ -1841,50 +1841,50 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       return a.start.column - b.start.column;
     });
 
-    // Merge overlapping
+    // Merge overlapping.
+    // Track lastStart and lastEnd to avoid calling resolveAnchorRange() again on
+    // lastSel inside the loop — all resolved positions are already available from
+    // the resolved[] array above, and are updated when a merge creates new anchors.
     const merged: Selection[] = [];
+    let lastStart: MultiBufferPoint | undefined;
+    let lastEnd: MultiBufferPoint | undefined;
+
     for (const r of resolved) {
-      if (merged.length === 0) {
+      if (merged.length === 0 || lastStart === undefined || lastEnd === undefined) {
         merged.push(r.sel);
-        continue;
-      }
-
-      const lastSel = merged[merged.length - 1];
-      if (!lastSel) {
-        merged.push(r.sel);
-        continue;
-      }
-
-      const lastRange = resolveAnchorRange(snap, lastSel.range);
-      if (!lastRange) {
-        merged.push(r.sel);
+        lastStart = r.start;
+        lastEnd = r.end;
         continue;
       }
 
       // Check overlap: new start <= last end
       if (
-        r.start.row < lastRange.end.row ||
-        (r.start.row === lastRange.end.row && r.start.column <= lastRange.end.column)
+        r.start.row < lastEnd.row ||
+        (r.start.row === lastEnd.row && r.start.column <= lastEnd.column)
       ) {
         // Merge: use the selection that extends further
         if (
-          r.end.row > lastRange.end.row ||
-          (r.end.row === lastRange.end.row && r.end.column > lastRange.end.column)
+          r.end.row > lastEnd.row ||
+          (r.end.row === lastEnd.row && r.end.column > lastEnd.column)
         ) {
-          // New selection extends further - create merged selection
-          const mergedStart = this.multiBuffer.createAnchor(lastRange.start, Bias.Left);
+          // New selection extends further - create merged selection spanning lastStart→r.end
+          const mergedStart = this.multiBuffer.createAnchor(lastStart, Bias.Left);
           const mergedEnd = this.multiBuffer.createAnchor(r.end, Bias.Right);
           if (mergedStart && mergedEnd) {
             merged[merged.length - 1] = createSelection(
               createAnchorRange(mergedStart, mergedEnd),
               "end",
             );
+            lastEnd = r.end;
+            // lastStart is unchanged: merged range still starts at the same position
           }
         }
-        // Otherwise keep the existing one
+        // Otherwise keep the existing one (lastStart/lastEnd stay the same)
       } else {
         // No overlap, add as new
         merged.push(r.sel);
+        lastStart = r.start;
+        lastEnd = r.end;
       }
     }
 
