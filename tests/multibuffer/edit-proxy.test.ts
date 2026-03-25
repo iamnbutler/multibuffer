@@ -13,6 +13,7 @@ import {
   expectPoint,
   mbPoint,
   mbRow,
+  num,
   resetCounters,
 } from "../helpers.ts";
 
@@ -307,5 +308,69 @@ describe("MultiBuffer Edit Proxy - Excerpt boundary edits (mm3lh0xz-0duv)", () =
     // If start and end are in different excerpts of the same buffer, the edit
     // currently edits the underlying buffer including the gap — which is likely
     // not the intended behaviour. A future fix should clip to excerpt boundaries.
+  });
+});
+
+
+describe("MultiBuffer Edit Proxy - Excerpt range shifts after line-count-changing edits", () => {
+  test("inserting a newline shifts subsequent same-buffer excerpt ranges", () => {
+    // Regression: _refreshExcerptsForBuffer previously only adjusted the
+    // endRow of the excerpt *containing* the edit. Excerpts from the same
+    // buffer whose startRow was after the edit point were not shifted, so
+    // they would display the wrong lines after a lineDelta != 0 edit.
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // Excerpt A: rows 0-1
+    mb.addExcerpt(buf, excerptRange(2, 4)); // Excerpt B: rows 2-3
+
+    // Insert a newline before row 0 — lineDelta = +1, editRow = 0.
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "\n");
+
+    const snap = mb.snapshot();
+    // Excerpt A grows to 3 lines (rows [0, 3) in buffer).
+    expect(snap.lineCount).toBe(5);
+    // Excerpt B must still reference "Line 2" and "Line 3", not "Line 1" and "Line 2".
+    const bStart = 3; // A grew by 1
+    expect(snap.lines(mbRow(bStart), mbRow(bStart + 2))).toEqual(["Line 2", "Line 3"]);
+  });
+
+  test("deleting a line shifts subsequent same-buffer excerpt ranges", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // Excerpt A: rows 0-1
+    mb.addExcerpt(buf, excerptRange(2, 4)); // Excerpt B: rows 2-3
+
+    // Delete "Line 0\n" (the whole first line) — lineDelta = -1, editRow = 0.
+    mb.edit(mbPoint(0, 0), mbPoint(1, 0), "");
+
+    const snap = mb.snapshot();
+    // Excerpt A shrinks to 1 line.
+    expect(snap.lineCount).toBe(3);
+    // Excerpt B must still show "Line 2" and "Line 3".
+    const bStart = 1; // A shrank by 1
+    expect(snap.lines(mbRow(bStart), mbRow(bStart + 2))).toEqual(["Line 2", "Line 3"]);
+  });
+
+  test("anchor in second excerpt resolves correctly after newline insert in first excerpt", () => {
+    const buf = createBuffer(createBufferId(), "Line 0\nLine 1\nLine 2\nLine 3");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // Excerpt A: mb rows 0-1
+    mb.addExcerpt(buf, excerptRange(2, 4)); // Excerpt B: mb rows 2-3
+
+    // Anchor at the start of excerpt B, "Line 2".
+    const anchor = mb.createAnchor(mbPoint(2, 0), Bias.Right);
+    expect(anchor).toBeDefined();
+    if (!anchor) return;
+
+    // Insert a newline at the start of excerpt A — lineDelta = +1.
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), "\n");
+
+    // Excerpt B now starts at mb row 3 (A grew by 1 line).
+    const snap = mb.snapshot();
+    const resolved = snap.resolveAnchor(anchor);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+    // The anchor should track with excerpt B and resolve to mb row 3.
+    expect(num(resolved.row)).toBe(3);
   });
 });
