@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/buffer/buffer.ts";
-import { isWordChar, moveCursor, moveCursorVisual } from "../../src/editor/cursor.ts";
+import { isWordChar, moveCursor, moveCursorVisual, moveWordBoundary } from "../../src/editor/cursor.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import { WrapMap } from "../../src/renderer/wrap-map.ts";
 import {
@@ -546,5 +546,77 @@ describe("Cursor - Visual Row Movement Across Excerpt Headers (issue #89)", () =
     expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "down", "character", wrapMap), 5, 0);
     // Moving up from row 2 should land on row 1 (both in excerpt 1)
     expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "up", "character", wrapMap), 1, 0);
+  });
+});
+
+describe("Cursor - Word Boundary Movement (moveWordBoundary)", () => {
+  // moveWordBoundary skips one contiguous class of characters (word or non-word),
+  // unlike moveWord which skips two classes to reach the next word start.
+  // It is used for word-granularity deletion (Opt+Backspace / Opt+Delete).
+
+  test("move right from start of word stops at end of word", () => {
+    const snap = setup("hello world").snapshot();
+    // 'h' is a word char — skip "hello" → col 5 (' ')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 0), "right"), 0, 5);
+  });
+
+  test("move right from start of whitespace stops at end of whitespace", () => {
+    const snap = setup("hello world").snapshot();
+    // ' ' is a non-word char — skip " " → col 6 ('w')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 5), "right"), 0, 6);
+  });
+
+  test("move right from mid-word stops at end of same word", () => {
+    const snap = setup("hello world").snapshot();
+    // 'l' at col 2 is a word char — skip "llo" → col 5 (' ')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 2), "right"), 0, 5);
+  });
+
+  test("move right at end of line crosses to start of next line", () => {
+    const snap = setup("hello\nworld").snapshot();
+    // col 5 is end of "hello" — crosses to row 1, col 0
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 5), "right"), 1, 0);
+  });
+
+  test("move right at end of last line stays put", () => {
+    const snap = setup("hello").snapshot();
+    // col 5 is end of last line — no next line, stays put
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 5), "right"), 0, 5);
+  });
+
+  test("move right stops at word→non-word class boundary", () => {
+    const snap = setup("foo.bar").snapshot();
+    // 'f' is word — skip "foo" → col 3 ('.')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 0), "right"), 0, 3);
+  });
+
+  test("move right stops at non-word→word class boundary", () => {
+    const snap = setup("foo.bar").snapshot();
+    // '.' is non-word — skip "." → col 4 ('b')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 3), "right"), 0, 4);
+  });
+
+  test("move left from end of word stops at start of word", () => {
+    const snap = setup("hello world").snapshot();
+    // char before col 11 is 'd' (word) — skip "dlrow" backward → col 6 ('w')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 11), "left"), 0, 6);
+  });
+
+  test("move left when char to left is whitespace stops at start of whitespace", () => {
+    const snap = setup("hello world").snapshot();
+    // char before col 6 is ' ' (non-word) — skip " " backward → col 5 ('o')
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 6), "left"), 0, 5);
+  });
+
+  test("move left at start of line crosses to end of previous line", () => {
+    const snap = setup("hello\nworld").snapshot();
+    // col 0 on row 1 — crosses to row 0, col 5 (end of "hello")
+    expectPoint(moveWordBoundary(snap, mbPoint(1, 0), "left"), 0, 5);
+  });
+
+  test("move left at start of first line stays put", () => {
+    const snap = setup("hello").snapshot();
+    // col 0 on row 0 — no previous line, stays put
+    expectPoint(moveWordBoundary(snap, mbPoint(0, 0), "left"), 0, 0);
   });
 });
