@@ -6,11 +6,21 @@
  * tree-sitter node type → highlight category mappings.
  *
  * To add a new language:
- * 1. Create a new file (e.g., `rust.ts`) with a LanguageQuery export
+ * 1. Create a new file (e.g., `swift.ts`) with a LanguageQuery export
  * 2. Import and register it in the LANGUAGE_QUERIES map below
  */
 
+import { bashQuery } from "./bash.ts";
+import { cQuery } from "./c.ts";
+import { cssQuery } from "./css.ts";
+import { goQuery } from "./go.ts";
+import { htmlQuery } from "./html.ts";
+import { jsonQuery } from "./json.ts";
 import { markdownQuery } from "./markdown.ts";
+import { pythonQuery } from "./python.ts";
+import { rubyQuery } from "./ruby.ts";
+import { rustQuery } from "./rust.ts";
+import { tomlQuery } from "./toml.ts";
 import type { HighlightCategory, LanguageQuery } from "./types.ts";
 import { typescriptQuery } from "./typescript.ts";
 import { yamlQuery } from "./yaml.ts";
@@ -26,6 +36,17 @@ const LANGUAGE_QUERIES: ReadonlyMap<string, LanguageQuery> = new Map([
   ["markdown", markdownQuery],
   ["yaml", yamlQuery],
   ["yml", yamlQuery],
+  ["rust", rustQuery],
+  ["go", goQuery],
+  ["python", pythonQuery],
+  ["ruby", rubyQuery],
+  ["html", htmlQuery],
+  ["css", cssQuery],
+  ["json", jsonQuery],
+  ["toml", tomlQuery],
+  ["bash", bashQuery],
+  ["c", cQuery],
+  ["cpp", cQuery], // C++ uses same queries as C
 ]);
 
 /**
@@ -106,6 +127,16 @@ export function getRegisteredLanguages(): readonly string[] {
 }
 
 // Re-export individual queries for direct access
+export { bashQuery } from "./bash.ts";
+export { cQuery } from "./c.ts";
+export { cssQuery } from "./css.ts";
+export { goQuery } from "./go.ts";
+export { htmlQuery } from "./html.ts";
+export { jsonQuery } from "./json.ts";
 export { markdownQuery } from "./markdown.ts";
+export { pythonQuery } from "./python.ts";
+export { rubyQuery } from "./ruby.ts";
+export { rustQuery } from "./rust.ts";
+export { tomlQuery } from "./toml.ts";
 export { typescriptQuery } from "./typescript.ts";
 export { yamlQuery } from "./yaml.ts";
