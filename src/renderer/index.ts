@@ -10,6 +10,12 @@ export {
   InjectionHighlighter,
 } from "./injection-highlighter.ts";
 export {
+  detectLanguage,
+  getSupportedExtensions,
+  getSupportedLanguages,
+} from "./language-detection.ts";
+export { MultiLanguageHighlighter } from "./multi-language-highlighter.ts";
+export {
   calculateContentHeight,
   calculateVisibleRows,
   createViewport,
@@ -20,12 +26,22 @@ export {
 } from "./measurement.ts";
 export type { HighlightCategory, LanguageQuery } from "./queries/index.ts";
 export {
+  bashQuery,
+  cQuery,
+  cssQuery,
   getLanguageQuery,
   getRegisteredLanguages,
+  goQuery,
   hasLanguageQuery,
+  htmlQuery,
+  jsonQuery,
   markdownQuery,
   nodeTypeToCategory,
   nodeTypeToCategoryForLanguage,
+  pythonQuery,
+  rubyQuery,
+  rustQuery,
+  tomlQuery,
   typescriptQuery,
   yamlQuery,
 } from "./queries/index.ts";

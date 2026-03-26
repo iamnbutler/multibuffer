@@ -46,7 +46,54 @@ export function applyTreeEdit(tree: Tree, edit: TreeEdit): void {
   tree.edit(edit as import("web-tree-sitter").Edit);
 }
 
-/** Common interface for syntax highlighters. */
+/**
+ * Common interface for syntax highlighters.
+ *
+ * Consumers can implement this interface to bring their own highlighting
+ * engine (e.g., Shiki, Prism, TextMate grammars) and inject it into the
+ * renderer via `renderer.setHighlighter(myHighlighter)`.
+ *
+ * @example Custom highlighter using Shiki
+ * ```ts
+ * import { getHighlighter } from "shiki";
+ * import type { SyntaxHighlighter, Token } from "multibuffer/renderer";
+ *
+ * class ShikiHighlighter implements SyntaxHighlighter {
+ *   private _shiki: Awaited<ReturnType<typeof getHighlighter>> | null = null;
+ *   private _cache = new Map<string, Token[][]>();
+ *   ready = false;
+ *
+ *   async init() {
+ *     this._shiki = await getHighlighter({ themes: ["nord"], langs: ["typescript"] });
+ *     this.ready = true;
+ *   }
+ *
+ *   parseBuffer(bufferId: string, text: string): void {
+ *     if (!this._shiki) return;
+ *     const lines = text.split("\n");
+ *     const allTokens: Token[][] = [];
+ *     for (const line of lines) {
+ *       const result = this._shiki.codeToTokens(line, { lang: "typescript", theme: "nord" });
+ *       allTokens.push(result.tokens[0].map(t => ({
+ *         startColumn: t.offset,
+ *         endColumn: t.offset + t.content.length,
+ *         color: t.color ?? "",
+ *       })));
+ *     }
+ *     this._cache.set(bufferId, allTokens);
+ *   }
+ *
+ *   getLineTokens(bufferId: string, row: number): Token[] {
+ *     return this._cache.get(bufferId)?.[row] ?? [];
+ *   }
+ * }
+ *
+ * // Usage:
+ * const highlighter = new ShikiHighlighter();
+ * await highlighter.init();
+ * renderer.setHighlighter(highlighter);
+ * ```
+ */
 export interface SyntaxHighlighter {
   readonly ready: boolean;
   parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void;

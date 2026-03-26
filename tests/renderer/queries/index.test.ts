@@ -60,8 +60,12 @@ describe("nodeTypeToCategoryForLanguage — language-specific lookup", () => {
     expect(nodeTypeToCategoryForLanguage("yaml", "string_scalar")).toBe("string");
   });
 
+  test("returns keyword for 'const' in rust", () => {
+    expect(nodeTypeToCategoryForLanguage("rust", "const")).toBe("keyword");
+  });
+
   test("returns default for known node type in unknown language", () => {
-    expect(nodeTypeToCategoryForLanguage("rust", "const")).toBe("default");
+    expect(nodeTypeToCategoryForLanguage("brainfuck", "const")).toBe("default");
   });
 
   test("returns default for unknown node in unknown language", () => {
@@ -90,8 +94,14 @@ describe("getLanguageQuery", () => {
     expect(query?.nodeTypeCategory).toBeInstanceOf(Map);
   });
 
+  test("returns query for rust", () => {
+    const query = getLanguageQuery("rust");
+    expect(query).toBeDefined();
+    expect(query?.nodeTypeCategory).toBeInstanceOf(Map);
+  });
+
   test("returns undefined for unknown language", () => {
-    expect(getLanguageQuery("rust")).toBeUndefined();
+    expect(getLanguageQuery("brainfuck")).toBeUndefined();
   });
 });
 
@@ -116,8 +126,12 @@ describe("hasLanguageQuery", () => {
     expect(hasLanguageQuery("yml")).toBe(true);
   });
 
+  test("returns true for rust", () => {
+    expect(hasLanguageQuery("rust")).toBe(true);
+  });
+
   test("returns false for unknown language", () => {
-    expect(hasLanguageQuery("rust")).toBe(false);
+    expect(hasLanguageQuery("brainfuck")).toBe(false);
   });
 });
 
