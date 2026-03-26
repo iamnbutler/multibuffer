@@ -11,7 +11,7 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import { sliceTokensToRange } from "./dom.ts";
+import { computeSelectionRects, sliceTokensToRange } from "./dom.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
   calculateContentHeight,
@@ -207,6 +207,15 @@ export class CanvasRenderer implements Renderer {
   private _charWidth = 8; // Default, will be measured
   private _computedStyle: CSSStyleDeclaration | null = null;
   private _pendingRender: number | null = null;
+  private _focused = false;
+  private _cursorVisible = true;
+  private _blinkIntervalMs: number | false = 600;
+  private _blinkTimer: ReturnType<typeof setInterval> | null = null;
+  /** When true, the cursor is never rendered (for read-only mode). */
+  private _cursorHidden = false;
+  /** Cached render state + lines for blink redraws. */
+  private _lastRenderState: RenderState | null = null;
+  private _lastRenderLines: readonly string[] | null = null;
 
   // Color cache to avoid repeated CSS variable resolution
   private _colorCache = new Map<string, string>();
@@ -314,6 +323,9 @@ export class CanvasRenderer implements Renderer {
   }
 
   unmount(): void {
+    // Stop cursor blink timer
+    this._stopBlink();
+
     // Cancel any pending animation frames
     if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
       cancelAnimationFrame(this._wrapBuildFrame);
@@ -361,6 +373,8 @@ export class CanvasRenderer implements Renderer {
     this._onMouseMove = null;
     this._onMouseUp = null;
     this._onScrollCallback = null;
+    this._lastRenderState = null;
+    this._lastRenderLines = null;
   }
 
   setMeasurements(measurements: Measurements): void {
@@ -557,9 +571,21 @@ export class CanvasRenderer implements Renderer {
     // Render selections
     this._renderSelections(ctx, state);
 
-    // Render cursor if focused
-    if (state.focused && state.selections.length > 0) {
-      this._renderCursor(ctx, state);
+    // Render cursor: blinks when focused, solid when unfocused
+    if (!this._cursorHidden && state.selections.length > 0) {
+      // When focused, respect blink phase; when unfocused, always show solid cursor
+      if (!state.focused || this._cursorVisible) {
+        this._renderCursor(ctx, state);
+      }
+    }
+
+    // Cache state for blink redraws
+    this._lastRenderState = state;
+    this._lastRenderLines = lines;
+
+    // Sync focus state from RenderState
+    if (state.focused !== this._focused) {
+      this._setFocusedInternal(state.focused);
     }
   }
 
@@ -756,53 +782,29 @@ export class CanvasRenderer implements Renderer {
     const lineHeight = this._measurements.lineHeight;
     const charWidth = this._charWidth;
     const gutterWidth = this._getEffectiveGutterWidth();
+    const wrapWidth = this._measurements.wrapWidth ?? 0;
+    const scrollTopOffset = Math.floor(state.viewport.scrollTop / lineHeight) * lineHeight;
 
     ctx.fillStyle = this._resolveColor(this._theme.selection);
 
     for (const sel of state.selections) {
-      // Resolve anchors to get actual positions
       const startPoint = this._snapshot.resolveAnchor(sel.range.start);
       const endPoint = this._snapshot.resolveAnchor(sel.range.end);
-
       if (!startPoint || !endPoint) continue;
 
-      if (startPoint.row === endPoint.row && startPoint.column === endPoint.column) {
-        continue; // Empty selection
-      }
+      const rects = computeSelectionRects(
+        startPoint,
+        endPoint,
+        this._snapshot,
+        lineHeight,
+        charWidth,
+        gutterWidth,
+        wrapWidth,
+        this._wrapMap,
+      );
 
-      // Normalize selection direction
-      let startRow = startPoint.row;
-      let startCol = startPoint.column;
-      let endRow = endPoint.row;
-      let endCol = endPoint.column;
-      if (startRow > endRow || (startRow === endRow && startCol > endCol)) {
-        [startRow, startCol, endRow, endCol] = [endRow, endCol, startRow, startCol];
-      }
-
-      // Calculate visual positions relative to viewport
-      for (let row = startRow; row <= endRow; row++) {
-        if (row < state.viewport.startRow || row >= state.viewport.endRow) continue;
-
-        const lineText = this._getLineText(
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-          row as MultiBufferRow,
-        );
-        const visualRow = this._wrapMap
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-          ? this._wrapMap.bufferRowToFirstVisualRow(row as MultiBufferRow)
-          : row;
-        const screenY = (visualRow - Math.floor(state.viewport.scrollTop / lineHeight)) * lineHeight;
-
-        const isFirstRow = row === startRow;
-        const isLastRow = row === endRow;
-
-        const selStartCol = isFirstRow ? startCol : 0;
-        const selEndCol = isLastRow ? endCol : lineText.length;
-
-        const startX = gutterWidth + charColToVisualCol(lineText.slice(0, selStartCol), selStartCol) * charWidth;
-        const endX = gutterWidth + charColToVisualCol(lineText.slice(0, selEndCol), selEndCol) * charWidth;
-
-        ctx.fillRect(startX, screenY, endX - startX, lineHeight);
+      for (const rect of rects) {
+        ctx.fillRect(rect.x, rect.y - scrollTopOffset, rect.width, rect.height);
       }
     }
   }
@@ -969,6 +971,38 @@ export class CanvasRenderer implements Renderer {
     this._onScrollCallback = cb;
   }
 
+  /** Update focus state — call when the editor gains or loses keyboard focus. */
+  setFocused(focused: boolean): void {
+    this._setFocusedInternal(focused);
+  }
+
+  /**
+   * Configure cursor blink behavior.
+   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking
+   *             (steady cursor). Default is 600ms.
+   * @throws {RangeError} If `ms` is a number that is not positive.
+   */
+  setCursorBlink(ms: number | false): void {
+    if (typeof ms === "number" && ms <= 0) {
+      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
+    }
+    this._blinkIntervalMs = ms;
+    this._restartBlink();
+  }
+
+  /**
+   * Set whether the cursor should be hidden.
+   * When true, the cursor is never rendered (for read-only mode).
+   */
+  setCursorHidden(hidden: boolean): void {
+    this._cursorHidden = hidden;
+    if (hidden) {
+      this._stopBlink();
+    } else if (this._focused) {
+      this._restartBlink();
+    }
+  }
+
   /**
    * Render the cursor at a given position.
    */
@@ -989,6 +1023,55 @@ export class CanvasRenderer implements Renderer {
   }
 
   // --- Private Methods ---
+
+  /**
+   * Internal focus state update. Starts or stops the blink timer.
+   * Called from both `setFocused()` and `render()` (to sync with RenderState).
+   */
+  private _setFocusedInternal(focused: boolean): void {
+    this._focused = focused;
+    if (focused) {
+      this._restartBlink();
+    } else {
+      this._stopBlink();
+      this._cursorVisible = true; // solid cursor when unfocused
+    }
+  }
+
+  /**
+   * Unconditionally stop and restart the cursor blink interval.
+   * Resets visibility to true so the cursor is immediately shown.
+   */
+  private _restartBlink(): void {
+    this._stopBlink();
+    this._cursorVisible = true;
+
+    if (this._blinkIntervalMs === false || !this._focused || this._cursorHidden) {
+      return;
+    }
+
+    this._blinkTimer = setInterval(() => {
+      this._cursorVisible = !this._cursorVisible;
+      this._blinkRedraw();
+    }, this._blinkIntervalMs);
+  }
+
+  /** Stop the cursor blink timer. */
+  private _stopBlink(): void {
+    if (this._blinkTimer !== null) {
+      clearInterval(this._blinkTimer);
+      this._blinkTimer = null;
+    }
+  }
+
+  /**
+   * Re-render using cached state to update cursor visibility.
+   * Avoids requiring the caller to pass state on every blink tick.
+   */
+  private _blinkRedraw(): void {
+    if (!this._lastRenderState || !this._lastRenderLines) return;
+    this.render(this._lastRenderState, this._lastRenderLines);
+  }
 
   private _measureCharWidth(container: HTMLElement): number {
     if (this._measurements.charWidth) {

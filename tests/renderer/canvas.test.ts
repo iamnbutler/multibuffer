@@ -797,3 +797,123 @@ describe("canvas renderer exports", () => {
     expect(typeof CanvasRenderer).toBe("function");
   });
 });
+
+describe("CanvasRenderer cursor blink and focus", () => {
+  test("setCursorBlink throws on non-positive interval", () => {
+    const { CanvasRenderer } = require("../../src/renderer/canvas.ts");
+    const renderer = new CanvasRenderer({ lineHeight: 20, charWidth: 8, gutterWidth: 40 });
+    expect(() => renderer.setCursorBlink(0)).toThrow(RangeError);
+    expect(() => renderer.setCursorBlink(-100)).toThrow(RangeError);
+  });
+
+  test("setCursorBlink accepts positive number", () => {
+    const { CanvasRenderer } = require("../../src/renderer/canvas.ts");
+    const renderer = new CanvasRenderer({ lineHeight: 20, charWidth: 8, gutterWidth: 40 });
+    expect(() => renderer.setCursorBlink(500)).not.toThrow();
+  });
+
+  test("setCursorBlink accepts false to disable blinking", () => {
+    const { CanvasRenderer } = require("../../src/renderer/canvas.ts");
+    const renderer = new CanvasRenderer({ lineHeight: 20, charWidth: 8, gutterWidth: 40 });
+    expect(() => renderer.setCursorBlink(false)).not.toThrow();
+  });
+
+  test("setFocused does not throw", () => {
+    const { CanvasRenderer } = require("../../src/renderer/canvas.ts");
+    const renderer = new CanvasRenderer({ lineHeight: 20, charWidth: 8, gutterWidth: 40 });
+    expect(() => renderer.setFocused(true)).not.toThrow();
+    expect(() => renderer.setFocused(false)).not.toThrow();
+  });
+
+  test("setCursorHidden does not throw", () => {
+    const { CanvasRenderer } = require("../../src/renderer/canvas.ts");
+    const renderer = new CanvasRenderer({ lineHeight: 20, charWidth: 8, gutterWidth: 40 });
+    expect(() => renderer.setCursorHidden(true)).not.toThrow();
+    expect(() => renderer.setCursorHidden(false)).not.toThrow();
+  });
+});
+
+describe("computeSelectionRects integration", () => {
+  test("computeSelectionRects is importable from dom.ts", () => {
+    const { computeSelectionRects } = require("../../src/renderer/dom.ts");
+    expect(typeof computeSelectionRects).toBe("function");
+  });
+
+  test("empty selection produces no rects", () => {
+    const { computeSelectionRects } = require("../../src/renderer/dom.ts");
+    const start = { row: row(0), column: 0 };
+    const end = { row: row(0), column: 0 };
+
+    const bufferId = createBufferId();
+    const buffer = createBuffer(bufferId, "hello world");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buffer, excerptRange(0, 1));
+    const snapshot = mb.snapshot();
+
+    const rects = computeSelectionRects(start, end, snapshot, 20, 8, 40, 0, null);
+    expect(rects).toEqual([]);
+  });
+
+  test("single-line selection produces one rect", () => {
+    const { computeSelectionRects } = require("../../src/renderer/dom.ts");
+
+    const bufferId = createBufferId();
+    const buffer = createBuffer(bufferId, "hello world");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buffer, excerptRange(0, 1));
+    const snapshot = mb.snapshot();
+
+    const start = { row: row(0), column: 2 };
+    const end = { row: row(0), column: 7 };
+    const rects = computeSelectionRects(start, end, snapshot, 20, 8, 40, 0, null);
+    expect(rects.length).toBe(1);
+    expect(rects[0].x).toBe(40 + 2 * 8); // gutterWidth + startCol * charWidth
+    expect(rects[0].y).toBe(0);
+    expect(rects[0].width).toBe(5 * 8); // (7-2) * charWidth
+    expect(rects[0].height).toBe(20);
+  });
+
+  test("multi-line selection produces one rect per line", () => {
+    const { computeSelectionRects } = require("../../src/renderer/dom.ts");
+
+    const bufferId = createBufferId();
+    const buffer = createBuffer(bufferId, "hello\nworld\nfoo");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buffer, excerptRange(0, 3));
+    const snapshot = mb.snapshot();
+
+    const start = { row: row(0), column: 2 };
+    const end = { row: row(2), column: 1 };
+    const rects = computeSelectionRects(start, end, snapshot, 20, 8, 40, 0, null);
+    expect(rects.length).toBe(3);
+    // Row 0: from col 2 to end of line (5 chars + 0.3 overshoot)
+    expect(rects[0].y).toBe(0);
+    // Row 1: full line
+    expect(rects[1].y).toBe(20);
+    // Row 2: from col 0 to col 1
+    expect(rects[2].y).toBe(40);
+    expect(rects[2].x).toBe(40); // gutterWidth + 0
+    expect(rects[2].width).toBe(8); // 1 * charWidth
+  });
+
+  test("selection with soft wrapping produces rects per visual segment", () => {
+    const { computeSelectionRects } = require("../../src/renderer/dom.ts");
+    const { WrapMap } = require("../../src/renderer/wrap-map.ts");
+
+    const bufferId = createBufferId();
+    const buffer = createBuffer(bufferId, "abcdefghijklmnopqrst"); // 20 chars
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buffer, excerptRange(0, 1));
+    const snapshot = mb.snapshot();
+
+    const wrapMap = new WrapMap(snapshot, 10); // wrap at 10 cols
+
+    const start = { row: row(0), column: 5 };
+    const end = { row: row(0), column: 15 };
+    const rects = computeSelectionRects(start, end, snapshot, 20, 8, 40, 10, wrapMap);
+    // Should have 2 rects: one for segment 0 (cols 5-9) and one for segment 1 (cols 10-14)
+    expect(rects.length).toBe(2);
+    expect(rects[0].y).toBe(0); // first visual row
+    expect(rects[1].y).toBe(20); // second visual row (wrapped)
+  });
+});
