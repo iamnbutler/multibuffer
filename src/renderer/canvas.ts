@@ -211,6 +211,15 @@ export class CanvasRenderer implements Renderer {
   // Color cache to avoid repeated CSS variable resolution
   private _colorCache = new Map<string, string>();
 
+  // Cursor blink state
+  private _focused = false;
+  private _cursorVisible = true;
+  private _blinkTimer: ReturnType<typeof setInterval> | null = null;
+  private _blinkIntervalMs: number | false = 600;
+  /** Last render state, cached for cursor blink redraws. */
+  private _lastRenderState: RenderState | null = null;
+  private _lastRenderLines: readonly string[] | null = null;
+
   // Event handlers
   private _onScroll: (() => void) | null = null;
   private _onClick: ((e: MouseEvent) => void) | null = null;
@@ -314,6 +323,11 @@ export class CanvasRenderer implements Renderer {
   }
 
   unmount(): void {
+    // Stop cursor blink timer
+    this._stopBlink();
+    this._lastRenderState = null;
+    this._lastRenderLines = null;
+
     // Cancel any pending animation frames
     if (this._wrapBuildFrame !== null && typeof cancelAnimationFrame !== "undefined") {
       cancelAnimationFrame(this._wrapBuildFrame);
@@ -422,6 +436,64 @@ export class CanvasRenderer implements Renderer {
     this._scheduleRender();
   }
 
+  /** Update focus state — cursor blinks when focused, solid when unfocused. */
+  setFocused(focused: boolean): void {
+    if (this._focused === focused) return;
+    this._focused = focused;
+    if (focused) {
+      this._startBlink();
+    } else {
+      this._stopBlink();
+      // Show solid cursor when unfocused
+      this._cursorVisible = true;
+      this._blinkRedraw();
+    }
+  }
+
+  /**
+   * Configure cursor blink behavior.
+   * @param ms - Blink interval in milliseconds (must be > 0), or `false` to disable blinking
+   */
+  setCursorBlink(ms: number | false): void {
+    if (typeof ms === "number" && ms <= 0) {
+      throw new RangeError(`setCursorBlink: interval must be > 0, got ${ms}`);
+    }
+    this._blinkIntervalMs = ms;
+    if (this._focused) {
+      this._stopBlink();
+      this._startBlink();
+    }
+  }
+
+  /** Return the current blink interval setting. */
+  getCursorBlink(): number | false {
+    return this._blinkIntervalMs;
+  }
+
+  private _startBlink(): void {
+    this._stopBlink();
+    if (this._blinkIntervalMs === false) return;
+    this._cursorVisible = true;
+    this._blinkTimer = setInterval(() => {
+      this._cursorVisible = !this._cursorVisible;
+      this._blinkRedraw();
+    }, this._blinkIntervalMs);
+  }
+
+  private _stopBlink(): void {
+    if (this._blinkTimer !== null) {
+      clearInterval(this._blinkTimer);
+      this._blinkTimer = null;
+    }
+  }
+
+  /** Redraw using cached render state (for blink toggling without full re-render). */
+  private _blinkRedraw(): void {
+    if (this._lastRenderState && this._lastRenderLines) {
+      this.render(this._lastRenderState, this._lastRenderLines);
+    }
+  }
+
   /**
    * Set the snapshot for content rendering.
    * Called by the editor to update the content state.
@@ -451,6 +523,16 @@ export class CanvasRenderer implements Renderer {
 
   render(state: RenderState, lines: readonly string[]): void {
     if (!this._ctx || !this._canvas) return;
+
+    // Cache for blink redraws
+    this._lastRenderState = state;
+    this._lastRenderLines = lines;
+
+    // Reset blink cycle on each render (cursor stays visible after edits/movement)
+    if (this._focused && this._blinkIntervalMs !== false) {
+      this._cursorVisible = true;
+      this._startBlink();
+    }
 
     this._resizeCanvas();
     const ctx = this._ctx;
@@ -557,8 +639,8 @@ export class CanvasRenderer implements Renderer {
     // Render selections
     this._renderSelections(ctx, state);
 
-    // Render cursor if focused
-    if (state.focused && state.selections.length > 0) {
+    // Render cursor if focused (or unfocused-solid) and visible in blink cycle
+    if (state.focused && state.selections.length > 0 && this._cursorVisible) {
       this._renderCursor(ctx, state);
     }
   }
