@@ -16,6 +16,7 @@ import { diffControllerBenchmarks } from "./diff-controller.bench.ts";
 import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { highlighterBenchmarks } from "./highlighter.bench.ts";
+import { injectionHighlighterBenchmarks } from "./injection-highlighter.bench.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { rendererBenchmarks } from "./renderer.bench.ts";
 import { tileMapBenchmarks } from "./tile-map.bench.ts";
@@ -35,6 +36,7 @@ const suites: BenchmarkSuite[] = [
   diffBenchmarks,
   diffControllerBenchmarks,
   highlighterBenchmarks,
+  injectionHighlighterBenchmarks,
 ];
 
 if (!jsonMode) {
