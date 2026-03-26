@@ -13,6 +13,7 @@ import type {
   Anchor,
   Bias,
   Buffer,
+  BufferOffset,
   BufferPoint,
   BufferRow,
   BufferSnapshot,
@@ -26,6 +27,7 @@ import type {
   ExcerptRange,
   ExcerptSpec,
   MultiBuffer,
+  MultiBufferEdit,
   MultiBufferEventMap,
   MultiBufferPoint,
   MultiBufferRow,
@@ -1070,6 +1072,75 @@ class MultiBufferImpl implements MultiBuffer {
 
     // Refresh all excerpts from this buffer with new snapshots
     this._refreshExcerptsForBuffer(buffer, editRow, lineDelta);
+  }
+
+  editBatch(edits: readonly MultiBufferEdit[]): void {
+    if (edits.length === 0) return;
+    const snap = this.snapshot();
+
+    // Resolved edit: buffer-level offsets + which buffer to apply to.
+    interface ResolvedEdit {
+      startOffset: BufferOffset;
+      endOffset: BufferOffset;
+      text: string;
+    }
+
+    // Group resolved edits by buffer ID. All offsets are resolved from the
+    // pre-batch snapshot so that edits don't interfere with each other's positions.
+    const byBuffer = new Map<string, ResolvedEdit[]>();
+
+    for (const { start, end, text } of edits) {
+      const startBuf = snap.toBufferPoint(start);
+      if (!startBuf) continue;
+
+      const endBuf =
+        start.row === end.row && start.column === end.column
+          ? startBuf
+          : snap.toBufferPoint(end);
+      if (!endBuf) continue;
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      const bid = startBuf.excerpt.bufferId as string;
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      if ((endBuf.excerpt.bufferId as string) !== bid) continue;
+
+      const buffer = this._buffers.get(bid);
+      if (!buffer) continue;
+
+      const bufSnap = buffer.snapshot();
+      const startOffset = bufSnap.pointToOffset(startBuf.point);
+      const endOffset = bufSnap.pointToOffset(endBuf.point);
+
+      let group = byBuffer.get(bid);
+      if (!group) {
+        group = [];
+        byBuffer.set(bid, group);
+      }
+      group.push({ startOffset, endOffset, text });
+    }
+
+    // Apply each buffer's edits in reverse offset order to preserve positions.
+    for (const [bid, bufEdits] of byBuffer) {
+      const buffer = this._buffers.get(bid);
+      if (!buffer) continue;
+
+      bufEdits.sort((a, b) => {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for offset comparison
+        return (b.startOffset as number) - (a.startOffset as number);
+      });
+
+      for (const { startOffset, endOffset, text } of bufEdits) {
+        if (text.length === 0) {
+          buffer.delete(startOffset, endOffset);
+        } else if (startOffset === endOffset) {
+          buffer.insert(startOffset, text);
+        } else {
+          buffer.replace(startOffset, endOffset, text);
+        }
+      }
+
+      this._refreshExcerptsForBuffer(buffer);
+    }
   }
 
   updateExcerptMetadata(

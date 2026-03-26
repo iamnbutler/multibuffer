@@ -221,6 +221,16 @@ export interface ExcerptSpec {
 }
 
 /**
+ * A single edit operation for use with editBatch().
+ * Each edit applies to a single buffer; start and end must resolve to the same buffer.
+ */
+export interface MultiBufferEdit {
+  readonly start: MultiBufferPoint;
+  readonly end: MultiBufferPoint;
+  readonly text: string;
+}
+
+/**
  * A multibuffer presents multiple excerpts from one or more buffers
  * as a single unified scrollable view.
  */
@@ -267,6 +277,18 @@ export interface MultiBuffer {
   moveExcerpt(id: ExcerptId, insertBefore: ExcerptId | undefined): void;
   createAnchor(point: MultiBufferPoint, bias: import("../buffer/types.ts").Bias): Anchor | undefined;
   edit(start: MultiBufferPoint, end: MultiBufferPoint, text: string): void;
+  /**
+   * Apply multiple edits, grouped by buffer, with a single cache rebuild per buffer.
+   *
+   * Each edit must have start and end in the same buffer (cross-buffer single edits are skipped).
+   * Edits to the same buffer are applied in reverse offset order so that earlier edits
+   * don't shift the positions of later ones.
+   * All offsets are resolved from the state before any edits in this batch.
+   *
+   * This enables atomic-looking multi-excerpt, cross-excerpt, and multi-buffer edits —
+   * unlocking the agent workflows blocked by the single-edit limitation.
+   */
+  editBatch(edits: readonly MultiBufferEdit[]): void;
   /**
    * Update the metadata for an excerpt by shallow-merging a patch.
    * No-op if the excerpt doesn't exist.
