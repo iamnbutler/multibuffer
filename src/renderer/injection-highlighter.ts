@@ -212,7 +212,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
         row,
         tokens,
         null,
-        parse.injectionRanges,
       );
     }
 
@@ -375,7 +374,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     targetRow: number,
     tokens: Token[],
     inheritedColor: string | null,
-    injectionRanges: InjectionRange[],
   ): void {
     if (
       node.endPosition.row < targetRow ||
@@ -465,7 +463,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
           targetRow,
           tokens,
           colorToPropagate,
-          injectionRanges,
         );
       }
     }
