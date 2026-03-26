@@ -14,6 +14,8 @@ export {
   resolveAnchorRange,
   reverseSelection,
 } from "./anchor.ts";
+export type { FileNavigator, FileNavigatorOptions, OpenedFileInfo } from "./file-navigator.ts";
+export { createFileNavigator } from "./file-navigator.ts";
 export { createMultiBuffer } from "./multibuffer.ts";
 export { keysCompare, keysEqual, type SlotKey, SlotMap } from "./slot_map.ts";
 export * from "./types.ts";
