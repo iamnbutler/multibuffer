@@ -22,12 +22,7 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### adjustOffset
 
-A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
-
-- Offsets before the edit pass through unchanged.
-- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
-- Offsets at the edit start with `Bias.Right` jump past inserted text.
-- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit, respecting [Bias](#bias) to resolve ambiguous positions: offsets before the edit pass through unchanged; offsets after the deleted range shift by `insertedLength − deletedLength`; offsets at the edit boundary clamp or jump via bias (`Bias.Right` jumps past inserted text; `Bias.Left` or within-deleted-range clamps to edit start).
 
 Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
 
@@ -43,10 +38,7 @@ A behavior of the `insertNewline` command: the new line automatically receives t
 
 ### Bias
 
-A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds.
-
-- `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
-- `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
+A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds. `Bias.Left` stays left of inserted text (clips before a boundary); `Bias.Right` advances past it (clips at or after a boundary).
 
 ### Buffer
 
@@ -82,13 +74,7 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 ### Closer
 
-An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
-
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and applies `ready-to-merge` when CI is green with no blocking reviews, `needs-review` when blocking issues exist, or closes PRs that are duplicate, spam, or fundamentally broken. Defaults to `needs-review` when uncertain. Draft status is irrelevant — all PRs are triaged on their code and review state alone.
 
 See: `.github/workflows/closer.md`
 
@@ -140,11 +126,7 @@ See: `src/diff/types.ts`
 
 ### DiffKind
 
-The type of change a [DiffLine](#diffline) represents:
-
-- `"equal"` — the line is unchanged between old and new.
-- `"insert"` — the line was added in the new version (has no `oldRow`).
-- `"delete"` — the line was removed from the old version (has no `newRow`).
+The type of change a [DiffLine](#diffline) represents: `"equal"` (unchanged), `"insert"` (added in new version, no `oldRow`), or `"delete"` (removed from old version, no `newRow`).
 
 ### DiffLine
 
@@ -200,9 +182,7 @@ The public view of an excerpt, exposed to consumers. Contains the excerpt's `id`
 
 ### ExcerptRange
 
-The specification for creating an excerpt. Contains:
-- `context` — the full `BufferRange` to display (including any surrounding context lines).
-- `primary` — the highlighted sub-range within `context`.
+The specification for creating an excerpt. `context` is the full `BufferRange` to display (including surrounding context lines); `primary` is the highlighted sub-range within it.
 
 ---
 
@@ -244,7 +224,7 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 
 ### Implementor
 
-An automated AI agent (`.github/workflows/implementor.md`) that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command on any issue. Creates draft pull requests, self-maintains its open PRs for CI failures (delegating complex fixes to `/pr-fix`), and can decompose large issues into sub-issues also labeled `agent:implement`. Every output is prefixed with `[Implementor]` for transparency.
+An automated AI agent (`.github/workflows/implementor.md`) that implements issues labeled `agent:implement` following the project's TDD discipline (Types → Tests → Implementation). Runs twice daily (7 am/2 pm UTC) or via `/implement` on any issue. Creates draft PRs, self-maintains them for CI failures, and can decompose large issues into sub-issues. All output is prefixed with `[Implementor]`.
 
 See: `.github/workflows/implementor.md`
 
@@ -338,7 +318,7 @@ Given a multibuffer row, binary search finds the containing excerpt; subtracting
 
 ### Read-Only Mode
 
-A mode in which the `Editor` silently ignores all text-mutating commands. Enabled by passing `readOnly: true` to the `Editor` constructor or by calling `editor.setReadOnly(true)` at runtime. While active, `dispatch()` discards any command classified as an edit command — including `insertText`, `cut`, `redo`, `deleteLine`, `moveLine`, `duplicateLine`, `indentLines`, `dedentLines`, and others — while still processing cursor-movement commands. The current state is readable via the `editor.readOnly` getter.
+A mode in which the `Editor` silently ignores all text-mutating commands (`insertText`, `cut`, `deleteLine`, `indentLines`, etc.) while still processing cursor-movement commands. Enable via `readOnly: true` to the constructor or `editor.setReadOnly(true)` at runtime; read via `editor.readOnly`.
 
 See: `src/editor/editor.ts`
 
@@ -348,14 +328,7 @@ An interface (`src/renderer/types.ts`) that rendering backends implement. A rend
 
 ### Reviewer
 
-An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
-
-- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
-- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
-- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
-- Up to 25 inline review comments per run, prioritising blocking issues first.
-
-Read-only: never writes implementation code or pushes to branches.
+An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event and via `/review`. Enforces the project's four priorities (accuracy, performance, consistency, public API UX). Uses `REQUEST_CHANGES` for blocking issues and `COMMENT` for suggestions; requires concrete justification for every `biome-ignore`; creates at most 1 issue per run for recurring antipatterns; limits inline comments to 25 per run. Read-only: never writes implementation code or pushes to branches.
 
 See: `.github/workflows/reviewer.md`
 
@@ -415,12 +388,7 @@ Displaying a single logical line across multiple visual rows when it exceeds the
 
 ### Surrogate Pair Snapping
 
-The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
-
-- `Bias.Left` — steps back to the high surrogate (the position *before* the supplementary character).
-- `Bias.Right` — steps past the low surrogate (the position *after* the supplementary character).
-
-This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
+The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair. When a position points at a low surrogate (0xDC00–0xDFFF), [Bias](#bias) determines the snap: `Bias.Left` steps back to the high surrogate (before the character); `Bias.Right` steps past the low surrogate (after it). Matches surrogate-pair-aware cursor movement in `cursor.ts`.
 
 See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
@@ -438,12 +406,7 @@ An artificial newline appended after an excerpt's last line to visually separate
 
 ### TreeEdit
 
-An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
-
-- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
-- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
-
-Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Carries byte-offset fields (`startIndex`/`oldEndIndex`/`newEndIndex`) and row/column fields (`startPosition`/`oldEndPosition`/`newEndPosition`) for the changed range. Passed alongside the new buffer text to `Highlighter.parseBuffer()`; the helper `applyTreeEdit(tree, edit)` applies it to an existing tree before re-parsing.
 
 See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
