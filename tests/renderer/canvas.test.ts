@@ -797,3 +797,37 @@ describe("canvas renderer exports", () => {
     expect(typeof CanvasRenderer).toBe("function");
   });
 });
+
+describe("cursor blink configuration", () => {
+  const { CanvasRenderer } = require("../../src/renderer/index.ts");
+  const m: Measurements = { lineHeight: 20, charWidth: 8, gutterWidth: 40 };
+
+  test("getCursorBlink returns default 600ms", () => {
+    const r = new CanvasRenderer(m);
+    expect(r.getCursorBlink()).toBe(600);
+  });
+
+  test("setCursorBlink updates interval", () => {
+    const r = new CanvasRenderer(m);
+    r.setCursorBlink(400);
+    expect(r.getCursorBlink()).toBe(400);
+  });
+
+  test("setCursorBlink(false) disables blinking", () => {
+    const r = new CanvasRenderer(m);
+    r.setCursorBlink(false);
+    expect(r.getCursorBlink()).toBe(false);
+  });
+
+  test("setCursorBlink throws for non-positive values", () => {
+    const r = new CanvasRenderer(m);
+    expect(() => r.setCursorBlink(0)).toThrow(RangeError);
+    expect(() => r.setCursorBlink(-100)).toThrow(RangeError);
+  });
+
+  test("setFocused does not throw when called without mount", () => {
+    const r = new CanvasRenderer(m);
+    expect(() => r.setFocused(true)).not.toThrow();
+    expect(() => r.setFocused(false)).not.toThrow();
+  });
+});
