@@ -1,26 +1,19 @@
 # Test Improver Memory
 
 ## Commands
-- bun test/typecheck/lint/fuzz/test:e2e (e2e needs serve:playground); no coverage in CI
-- CI: install→build:demo→typecheck→lint→test
+bun test/typecheck/lint/fuzz/test:e2e; CI: install→build:demo→typecheck→lint→test; no coverage
 
 ## Framework
-- bun:test; tests/ mirrors src/; helpers.ts + property-helpers.ts
-- num() unwraps branded types; biome-ignore for branded casts
+bun:test; tests/ mirrors src/; helpers.ts+property-helpers.ts; num() unwraps brands; biome-ignore for casts
 
-## Open PRs
-- #312: multi-cursor undo/redo tests (clean)
-- #335: ProjectTree get/has dir tests (clean)
-- #357: cursor cross-line word movement tests (clean)
-- TBD: moveWordBoundary unit tests (branch: test-assist/cursor-word-boundary, PR# pending)
+## Open PRs (all clean)
+#312 multi-cursor undo/redo; #335 ProjectTree dir get/has; #357 cross-line word movement; #368 moveWordBoundary
 
-## Backlog
-1-3: anchor bias/singleton/edit-proxy — BLOCKED (unimplemented APIs)
+## Backlog (all BLOCKED on unimplemented APIs)
+anchor bias/singleton/edit-proxy; future: #360 editBatch, #364 replaceAll undo (after merge)
 
 ## Round-Robin
-Last: 2026-03-25 run 23536619797; tasks 1,2,3,7. Next: 4,5,6,7.
+Last: 2026-03-26 run 23589826965; tasks 4,5,6,7. Next: 1,2,3,7.
 
 ## Notes
-- Pre-existing failures: canvas/webgpu; src/react/ typecheck
-- No test.todo items remain; maintainer added 215 tests in #348
-- moveWordBoundary (added in #351) now has 11 direct unit tests
+Pre-existing failures: canvas/webgpu; src/react/ typecheck. Main=ce545ec since 2026-03-23.
