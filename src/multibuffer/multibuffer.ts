@@ -761,23 +761,20 @@ class MultiBufferImpl implements MultiBuffer {
   removeExcerpt(excerptId: ExcerptId): void {
     // Update reverse index before removing from SlotMap (while bufferId is still accessible)
     const exc = this._excerpts.get(excerptId);
-    const existed = !!exc;
-    if (exc) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
-      const bid = exc.bufferId as string;
-      const excSet = this._bufferToExcerpts.get(bid);
-      if (excSet) {
-        excSet.delete(MultiBufferImpl._excKey(excerptId));
-        if (excSet.size === 0) this._bufferToExcerpts.delete(bid);
-      }
+    if (!exc) return; // Nothing to remove — skip version bump and filter
+    // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string, Map key is string
+    const bid = exc.bufferId as string;
+    const excSet = this._bufferToExcerpts.get(bid);
+    if (excSet) {
+      excSet.delete(MultiBufferImpl._excKey(excerptId));
+      if (excSet.size === 0) this._bufferToExcerpts.delete(bid);
     }
     this._excerpts.remove(excerptId);
     this._order = this._order.filter(
       (id) => id.index !== excerptId.index || id.generation !== excerptId.generation,
     );
     this._markDirty();
-    // Only emit if the excerpt actually existed
-    if (existed) this._emit("excerptRemoved", excerptId);
+    this._emit("excerptRemoved", excerptId);
   }
 
   clearExcerpts(): readonly ExcerptId[] {
