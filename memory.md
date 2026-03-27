@@ -13,7 +13,8 @@ bun:test; tests/ mirrors src/; helpers.ts+property-helpers.ts; num() unwraps bra
 anchor bias/singleton/edit-proxy; future: #360 editBatch, #364 replaceAll undo (after merge)
 
 ## Round-Robin
-Last: 2026-03-26 run 23589826965; tasks 4,5,6,7. Next: 1,2,3,7.
+Last: 2026-03-27 run 23642166645; tasks 1,2,3,7. Next: 4,5,6,7.
 
 ## Notes
 Pre-existing failures: canvas/webgpu; src/react/ typecheck. Main=ce545ec since 2026-03-23.
+Maintainer created PR #373 (diff-styles+helpers tests) referencing issue #46 — confirms active engagement.
