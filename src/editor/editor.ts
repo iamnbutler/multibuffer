@@ -607,10 +607,7 @@ export class Editor {
         const cursor = this.cursor;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
         const lineText = snap.lines(cursor.row, (cursor.row + 1) as MultiBufferRow)[0] ?? "";
-        const match = lineText.match(/^( +)/);
-        if (match?.[1]) {
-          insertText = `\n${match[1]}`;
-        }
+        insertText = `\n${_indentOf(lineText)}`;
       }
 
       if (!isCollapsed(snap, primarySel)) {
@@ -655,10 +652,7 @@ export class Editor {
       if (text === "\n") {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
         const lineText = currentSnap.lines(start.row, (start.row + 1) as MultiBufferRow)[0] ?? "";
-        const match = lineText.match(/^( +)/);
-        if (match?.[1]) {
-          insertText = `\n${match[1]}`;
-        }
+        insertText = `\n${_indentOf(lineText)}`;
       }
 
       const removedText = this._getTextInRange(currentSnap, start, end);
@@ -1309,7 +1303,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
 
     // Inherit the current line's leading whitespace (matches Enter auto-indent)
-    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+    const indent = _indentOf(currentLineText);
 
     const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
     if (!this._edit(snap, insertPoint, insertPoint, `\n${indent}`)) return;
@@ -1330,7 +1324,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // Inherit the current line's leading whitespace (consistent with Enter and insertLineBelow)
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const currentLineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
-    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+    const indent = _indentOf(currentLineText);
 
     // Insert the indented blank line before the current line
     const insertPoint: MultiBufferPoint = { row, column: 0 };
@@ -1904,6 +1898,11 @@ function _selectionsEqual(a: readonly Selection[], b: readonly Selection[]): boo
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+/** Returns the leading spaces of a line, or "" if there is none. */
+function _indentOf(lineText: string): string {
+  return lineText.match(/^( +)/)?.[1] ?? "";
 }
 
 /**
