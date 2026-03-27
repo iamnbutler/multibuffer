@@ -156,6 +156,19 @@ describe("MultiBuffer - Multiple Excerpts", () => {
     expect(num(mb.excerpts[0]?.startRow ?? mbRow(-1))).toBe(0);
     expect(num(mb.excerpts[0]?.endRow ?? mbRow(-1))).toBe(10);
   });
+
+  test("removing a non-existent excerpt does not bump snapshot version", () => {
+    const mb = createMultiBuffer();
+    const buffer = createBuffer(createBufferId(), generateText(10));
+    const id = mb.addExcerpt(buffer, excerptRange(0, 10));
+    mb.removeExcerpt(id); // removes successfully
+
+    const v1 = mb.snapshot().version;
+    mb.removeExcerpt(id); // id no longer valid — should be a no-op
+    const v2 = mb.snapshot().version;
+
+    expect(v2).toBe(v1); // version must not change on a no-op removal
+  });
 });
 
 
