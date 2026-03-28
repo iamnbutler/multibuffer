@@ -1515,9 +1515,14 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     if (startBuf && !startBuf.excerpt.editable) return false;
     if (endBuf && !endBuf.excerpt.editable) return false;
 
+    // Reject edits where either endpoint falls outside all excerpts.
+    // multiBuffer.edit() would silently no-op in that case, but _edit would
+    // have already pushed a phantom undo entry and incremented _textVersion —
+    // causing spurious textChange events and useless undo history entries.
+    if (!startBuf || !endBuf) return false;
+
     // Same excerpt (or same point) — single edit
     if (
-      !startBuf || !endBuf ||
       (start.row === end.row && start.column === end.column) ||
       startBuf.excerpt.id.index === endBuf.excerpt.id.index
     ) {
