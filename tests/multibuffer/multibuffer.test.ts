@@ -1119,6 +1119,14 @@ describe("clearExcerpts", () => {
     expect(oldIds).toEqual([]);
   });
 
+  test("clearing empty multibuffer does not bump version", () => {
+    const mb = createMultiBuffer();
+    const v0 = mb.snapshot().version;
+    mb.clearExcerpts();
+    const v1 = mb.snapshot().version;
+    expect(v1).toBe(v0);
+  });
+
   test("resets singleton flag after clearing", () => {
     const mb = createMultiBuffer();
     const buffer = createBuffer(createBufferId(), "a\nb\n");

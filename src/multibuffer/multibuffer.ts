@@ -782,6 +782,8 @@ class MultiBufferImpl implements MultiBuffer {
 
   clearExcerpts(): readonly ExcerptId[] {
     const oldIds = [...this._order];
+    // Skip version bump and cache invalidation when there is nothing to clear.
+    if (oldIds.length === 0) return oldIds;
     for (const id of oldIds) {
       this._excerpts.remove(id);
     }
