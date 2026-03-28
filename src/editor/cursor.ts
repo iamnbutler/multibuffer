@@ -249,12 +249,12 @@ function moveCharacter(
 function scanWordForward(text: string, pos: number): number {
   while (pos < text.length) {
     const cp = text.codePointAt(pos) ?? 0;
-    if (!isWordChar(String.fromCodePoint(cp))) break;
+    if (!isWordCodePoint(cp)) break;
     pos += cp > 0xffff ? 2 : 1;
   }
   while (pos < text.length) {
     const cp = text.codePointAt(pos) ?? 0;
-    if (isWordChar(String.fromCodePoint(cp))) break;
+    if (isWordCodePoint(cp)) break;
     pos += cp > 0xffff ? 2 : 1;
   }
   return pos;
@@ -268,13 +268,13 @@ function scanWordBackward(text: string, pos: number): number {
   while (pos > 0) {
     const prev = prevCpStart(text, pos);
     const cp = text.codePointAt(prev) ?? 0;
-    if (isWordChar(String.fromCodePoint(cp))) break;
+    if (isWordCodePoint(cp)) break;
     pos = prev;
   }
   while (pos > 0) {
     const prev = prevCpStart(text, pos);
     const cp = text.codePointAt(prev) ?? 0;
-    if (!isWordChar(String.fromCodePoint(cp))) break;
+    if (!isWordCodePoint(cp)) break;
     pos = prev;
   }
   return pos;
@@ -351,11 +351,11 @@ export function moveWordBoundary(
       }
       // Determine the class of the first character, then skip that class
       const firstCp = text.codePointAt(col) ?? 0;
-      const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+      const firstIsWord = isWordCodePoint(firstCp);
       let pos = col;
       while (pos < text.length) {
         const cp = text.codePointAt(pos) ?? 0;
-        if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+        if (isWordCodePoint(cp) !== firstIsWord) break;
         pos += cp > 0xffff ? 2 : 1;
       }
       return { row: current.row, column: pos };
@@ -375,12 +375,12 @@ export function moveWordBoundary(
     }
     const prevStart = prevCpStart(text, col);
     const firstCp = text.codePointAt(prevStart) ?? 0;
-    const firstIsWord = isWordChar(String.fromCodePoint(firstCp));
+    const firstIsWord = isWordCodePoint(firstCp);
     let pos = col;
     while (pos > 0) {
       const prev = prevCpStart(text, pos);
       const cp = text.codePointAt(prev) ?? 0;
-      if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
+      if (isWordCodePoint(cp) !== firstIsWord) break;
       pos = prev;
     }
     return { row: current.row, column: pos };
@@ -493,6 +493,29 @@ function prevCpStart(text: string, pos: number): number {
     if (hi >= 0xd800 && hi <= 0xdbff) return pos - 2;
   }
   return pos - 1;
+}
+
+/**
+ * Returns true if the given code point is a word character.
+ *
+ * ASCII fast path (code points ≤ 0x7F) avoids `String.fromCodePoint` allocation
+ * and the Unicode-property regex for the common case of ASCII text. This matters
+ * because `scanWordForward`, `scanWordBackward`, and `moveWordBoundary` each call
+ * this in a tight per-character loop during word movement.
+ *
+ * Non-ASCII code points fall back to the Unicode-aware regex so CJK, Cyrillic,
+ * Arabic, and all other script letters are still recognised correctly.
+ */
+function isWordCodePoint(cp: number): boolean {
+  if (cp <= 0x7f) {
+    return (
+      (cp >= 0x61 && cp <= 0x7a) || // a–z
+      (cp >= 0x41 && cp <= 0x5a) || // A–Z
+      (cp >= 0x30 && cp <= 0x39) || // 0–9
+      cp === 0x5f // _
+    );
+  }
+  return /^[\p{L}\p{N}_]$/u.test(String.fromCodePoint(cp));
 }
 
 /**
