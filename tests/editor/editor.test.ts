@@ -2143,6 +2143,32 @@ describe("Editor - Undo Stack Limit", () => {
   });
 });
 
+// ─── Edit outside excerpt guard ──────────────────────────────────
+
+describe("Editor - edit outside excerpt guard", () => {
+  test("insertText on empty multibuffer produces no undo entry and no textChange event", () => {
+    const mb = createMultiBuffer();
+    const editor = new Editor(mb);
+
+    let textChangeCount = 0;
+    editor.on("textChange", () => { textChangeCount++; });
+
+    editor.dispatch({ type: "insertText", text: "x" });
+
+    expect(textChangeCount).toBe(0);
+    // Undo should be a no-op — no entry was pushed
+    editor.dispatch({ type: "undo" });
+    expect(textChangeCount).toBe(0);
+  });
+
+  test("insertText on empty multibuffer does not change text content", () => {
+    const mb = createMultiBuffer();
+    const editor = new Editor(mb);
+    editor.dispatch({ type: "insertText", text: "hello" });
+    expect(mb.snapshot().lineCount).toBe(0);
+  });
+});
+
 // ─── getCutText ──────────────────────────────────────────────────
 
 describe("Editor - getCutText", () => {
