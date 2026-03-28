@@ -1520,11 +1520,12 @@ describe("moveExcerpt", () => {
   test("version changes after moveExcerpt", () => {
     const mb = createMultiBuffer();
     const buf = createBuffer(createBufferId(), generateText(20));
-    mb.addExcerpt(buf, excerptRange(0, 10));
-    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    mb.addExcerpt(buf, excerptRange(10, 20));
     const v0 = mb.snapshot().version;
 
-    mb.moveExcerpt(idB, undefined);
+    // Move A (first) to end — a genuine reorder, version must change
+    mb.moveExcerpt(idA, undefined);
 
     expect(mb.snapshot().version).toBeGreaterThan(v0);
   });
@@ -1540,5 +1541,52 @@ describe("moveExcerpt", () => {
     mb.moveExcerpt(idA, idC);
 
     expect(mb.lineCount).toBe(totalBefore);
+  });
+
+  test("moveExcerpt(id, id) is a no-op — order and version unchanged", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(30));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const idC = mb.addExcerpt(buf, excerptRange(20, 30));
+    const vBefore = mb.snapshot().version;
+
+    // Moving A before itself must keep order [A, B, C], not corrupt it to [B, C, A]
+    mb.moveExcerpt(idA, idA);
+
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idB);
+    expect(mb.excerpts[2]?.id).toEqual(idC);
+    expect(mb.snapshot().version).toBe(vBefore);
+  });
+
+  test("no-op when excerpt is already immediately before insertBefore", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const vBefore = mb.snapshot().version;
+
+    // A is already immediately before B — should be a no-op
+    mb.moveExcerpt(idA, idB);
+
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idB);
+    expect(mb.snapshot().version).toBe(vBefore);
+  });
+
+  test("no-op when moving last excerpt to end (insertBefore undefined)", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(20));
+    const idA = mb.addExcerpt(buf, excerptRange(0, 10));
+    const idB = mb.addExcerpt(buf, excerptRange(10, 20));
+    const vBefore = mb.snapshot().version;
+
+    // B is already last — moving to end should be a no-op
+    mb.moveExcerpt(idB, undefined);
+
+    expect(mb.excerpts[0]?.id).toEqual(idA);
+    expect(mb.excerpts[1]?.id).toEqual(idB);
+    expect(mb.snapshot().version).toBe(vBefore);
   });
 });

@@ -936,6 +936,23 @@ class MultiBufferImpl implements MultiBuffer {
     const currentIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === idKey);
     if (currentIdx === -1) return;
 
+    // Early-exit no-op checks — avoids corrupted ordering and unnecessary version bumps.
+    if (insertBefore === undefined) {
+      // Moving to end — no-op if already last
+      if (currentIdx === this._order.length - 1) return;
+    } else {
+      const beforeKey = MultiBufferImpl._excKey(insertBefore);
+      // Moving before oneself: after removal, searching for `insertBefore` (same id)
+      // returns -1, causing the excerpt to be appended to the end instead of staying
+      // in place.  Guard here before any splice occurs.
+      if (beforeKey === idKey) return;
+      const beforeIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === beforeKey);
+      // No-op if already immediately before insertBefore
+      if (beforeIdx !== -1 && beforeIdx === currentIdx + 1) return;
+      // insertBefore not found → fallback appends to end; no-op if already last
+      if (beforeIdx === -1 && currentIdx === this._order.length - 1) return;
+    }
+
     // Remove from current position
     this._order.splice(currentIdx, 1);
 
