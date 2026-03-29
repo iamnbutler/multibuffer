@@ -6,17 +6,17 @@ bun test/typecheck/lint/fuzz/test:e2e; CI: install→build:demo→typecheck→li
 ## Framework
 bun:test; tests/ mirrors src/; helpers.ts+property-helpers.ts; num() unwraps brands; biome-ignore for casts
 
-## Open PRs (all clean)
-#312 multi-cursor undo/redo; #335 ProjectTree dir get/has; #357 cross-line word movement; #368 moveWordBoundary
+## Open PRs (all clean, as of 2026-03-29)
+#312 multi-cursor undo/redo; #335 ProjectTree dir get/has; #357 cross-line word movement; #368 moveWordBoundary; #373 diff-styles+hunkToHeader (maintainer's PR)
 
-## Backlog (all BLOCKED on unimplemented APIs)
-anchor bias/singleton/edit-proxy; future: #375 editBatch, #374 FileNavigator, #376 multi-lang highlighting (after merge)
+## Backlog
+All blocked: anchor bias/singleton/edit-proxy (unimplemented APIs); singleton optimization (unimplemented).
+Future (when Repo Assist PRs merge): #375 editBatch, #374 FileNavigator, #376 multi-lang highlighting; #383/#385 _edit guard regressions; #387/#388/#391 no-op version bump edge cases; #364 replaceAll undo.
 
 ## Round-Robin
-Last: 2026-03-28 run 23683287775; tasks 4,5,6,7. Next: 1,2,3,7.
+Last: 2026-03-29 run 23707051078; tasks 1,2,3,7. Next: 4,5,6,7.
 
 ## Notes
 Pre-existing failures: canvas/webgpu; src/react/ typecheck. Main=ce545ec since 2026-03-23.
-Maintainer created PR #373 (diff-styles+helpers tests) referencing issue #46 — confirming active engagement.
-Maintainer's 2026-03-26 comment on #46 lists all 4 open Test Improver PRs as pending review.
-Large batch of Repo Assist PRs open (#374-#387+) — main unchanged; test opportunities emerge when they merge.
+Maintainer's 2026-03-26 comment on #46 lists 5 open PRs (#312,#335,#357,#368,#373) as pending review.
+20+ Repo Assist PRs open (#364-#391) — main unchanged; coverage comprehensive across all source areas.
