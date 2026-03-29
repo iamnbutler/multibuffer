@@ -1383,18 +1383,16 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
     const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
 
-    // Check if any line actually has leading spaces to remove
+    // Check if any line actually has leading spaces to remove.
+    // Collect per-line removal counts in one pass so the cursor-line
+    // adjustment below can reuse them without repeating the same logic.
     let anyChange = false;
+    const removed: number[] = [];
     const dedented = lines.map((line) => {
-      let spacesToRemove = 0;
-      if (line.length > 0 && line[0] === " ") {
-        spacesToRemove = 1;
-        if (line.length > 1 && line[1] === " ") {
-          spacesToRemove = 2;
-        }
-      }
-      if (spacesToRemove > 0) anyChange = true;
-      return line.slice(spacesToRemove);
+      const n = line[0] === " " ? (line[1] === " " ? 2 : 1) : 0;
+      removed.push(n);
+      if (n > 0) anyChange = true;
+      return line.slice(n);
     });
 
     if (!anyChange) return;
@@ -1403,17 +1401,10 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
 
-    // Figure out how many spaces were removed from the cursor's line
+    // Look up the pre-computed removal count for the cursor's line.
     const cursor = this.cursor;
     const cursorLineIndex = cursor.row - startRow;
-    const cursorLine = lines[cursorLineIndex] ?? "";
-    let spacesRemovedOnCursorLine = 0;
-    if (cursorLine.length > 0 && cursorLine[0] === " ") {
-      spacesRemovedOnCursorLine = 1;
-      if (cursorLine.length > 1 && cursorLine[1] === " ") {
-        spacesRemovedOnCursorLine = 2;
-      }
-    }
+    const spacesRemovedOnCursorLine = removed[cursorLineIndex] ?? 0;
 
     // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
     if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"), lines.join("\n"))) return;
