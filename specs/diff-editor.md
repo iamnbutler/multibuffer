@@ -159,18 +159,7 @@ Fields:
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff on edit support. See [§7.2](#72-creatediffcontroller) for the full interface definition.
 
 ### 4.2 Excerpt Structure
 
@@ -279,16 +268,7 @@ for each hunk:
 
 **Debounce**: Default 150ms. Configurable via `debounceMs` option.
 
-**Process**:
-1. Cancel any pending re-diff timer.
-2. Schedule new re-diff after debounce delay.
-3. On timer fire:
-   a. Get current text from old and new buffers.
-   b. Run `diff()`.
-   c. Remove all existing excerpts.
-   d. Build new excerpts from diff result.
-   e. Generate new decorations.
-   f. Notify all subscribers.
+On each `notifyChange()` call, any pending timer is cancelled and a new one scheduled. After the debounce delay, the controller reads both buffers, runs `diff()`, rebuilds excerpts and decorations, and notifies all subscribers.
 
 ### 5.5 Convergence and Divergence
 
@@ -323,13 +303,7 @@ After: delete "foo" + insert "bar"  →  2 lines, 2 excerpts
 
 ### 5.6 Cursor Preservation
 
-The MultiBuffer's anchor system handles cursor preservation:
-
-1. Editor creates anchors at cursor position before operations.
-2. Anchors reference excerpt ID + buffer offset + version.
-3. When excerpts are rebuilt, the replacement map tracks old→new ID mappings.
-4. `resolveAnchor()` follows replacement chain and adjusts for buffer edits.
-5. Cursor position is restored after re-diff.
+The MultiBuffer's anchor system handles cursor preservation: anchors reference excerpt ID + buffer offset + version. When excerpts are rebuilt, the replacement map tracks old→new ID mappings, and `resolveAnchor()` follows the chain to restore the cursor position after re-diff.
 
 **Edge cases**:
 - Cursor on delete line that disappears (convergence): Cursor moves to the resulting equal line.
@@ -460,45 +434,27 @@ interface Measurements {
 
 ### 8.1 Diff Algorithm Tests
 
-- Empty inputs (both empty, one empty, neither empty).
-- Identical inputs → `isEqual: true`.
-- Single-line change in middle of file.
-- Multi-line contiguous delete.
-- Multi-line contiguous insert.
-- Interleaved changes.
-- Change at file start/end.
-- Context line merging (changes within 2*context).
-- Context line separation (changes beyond 2*context).
+- Empty inputs (both/one empty) and identical inputs (`isEqual: true`).
+- Single-line and multi-line changes (delete, insert, interleaved) at any file position.
+- Context line merging (within 2×context) vs. separation (beyond 2×context).
 
 ### 8.2 Diff MultiBuffer Tests
 
-- Excerpt count matches expected grouping.
-- Excerpt source buffers (old vs new) correct.
-- Excerpt editable flags correct.
-- Decoration ranges match excerpt boundaries.
-- Decoration styles correct for line kind.
+- Excerpt count, source buffers (old vs new), and editable flags match diff grouping.
+- Decoration ranges and styles match excerpt boundaries and line kind.
 - Total line count correct.
 
 ### 8.3 DiffController Tests
 
-- `reDiff()` updates decorations.
-- `notifyChange()` debounces correctly.
-- Subscribers receive updates after re-diff.
-- Convergence: edit to match old collapses pair.
-- Divergence: edit to differ creates new pair.
-- Cursor preserved through re-diff.
-- `dispose()` cleans up timers.
+- `reDiff()` updates decorations; `notifyChange()` debounces; subscribers are notified.
+- Convergence (edit to match old collapses pair) and divergence (edit to differ creates new pair).
+- Cursor preserved through re-diff; `dispose()` cleans up timers.
 
 ### 8.4 Renderer Tests (E2E)
 
-- Diff gutter shows correct line numbers.
-- Delete lines show "−" sign.
-- Insert lines show "+" sign.
-- Equal lines show no sign.
-- Background colors applied correctly.
-- No excerpt headers in diff mode.
-- Hit testing works with diff gutter width.
-- Selection rendering accounts for diff gutter.
+- Gutter shows correct line numbers and signs ("+"/"-"/space) per line kind.
+- Background colors applied correctly; no excerpt headers in diff mode.
+- Hit testing and selection rendering account for diff gutter width.
 
 ## 9. Performance Requirements
 
