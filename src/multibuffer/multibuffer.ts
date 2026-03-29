@@ -975,6 +975,9 @@ class MultiBufferImpl implements MultiBuffer {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const newEnd = Math.min(snapshot.lineCount, oldEnd + linesAfter) as BufferRow;
 
+    // No-op: already at boundary or zero expansion — skip rebuild and version bump.
+    if (newStart === oldStart && newEnd === oldEnd) return;
+
     const newRange: ExcerptRange = {
       context: {
         start: { row: newStart, column: 0 },
