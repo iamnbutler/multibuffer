@@ -802,6 +802,10 @@ class MultiBufferImpl implements MultiBuffer {
       options?: ExcerptAddOptions;
     }>,
   ): readonly ExcerptId[] {
+    // No-op when both the incoming list and the current state are empty.
+    // Avoids a spurious version bump that would trigger unnecessary re-renders.
+    if (entries.length === 0 && this._order.length === 0) return [];
+
     // Collect old IDs before removing for event emission
     const oldIds = [...this._order];
 
@@ -872,7 +876,11 @@ class MultiBufferImpl implements MultiBuffer {
     const oldExcSet = this._bufferToExcerpts.get(bufferId);
     const oldIds: ExcerptId[] = oldExcSet ? [...oldExcSet.values()] : [];
 
-    // 2. Remove old excerpts from SlotMap and reverse index
+    // 2. Early exit when there is nothing to do — no old excerpts and no new ranges.
+    //    Avoids a spurious version bump (same class of bug as removeExcerpt/clearExcerpts).
+    if (oldIds.length === 0 && ranges.length === 0) return [];
+
+    // 3. Remove old excerpts from SlotMap and reverse index
     const oldKeySet = new Set<string>(oldIds.map(MultiBufferImpl._excKey));
     for (const id of oldIds) {
       this._excerpts.remove(id);
@@ -880,7 +888,7 @@ class MultiBufferImpl implements MultiBuffer {
     this._order = this._order.filter((id) => !oldKeySet.has(MultiBufferImpl._excKey(id)));
     this._bufferToExcerpts.delete(bufferId);
 
-    // 3. Add new excerpts
+    // 4. Add new excerpts
     const snapshot = buffer.snapshot();
     const newIds: ExcerptId[] = [];
     const newExcSet = new Map<string, ExcerptId>();
@@ -897,7 +905,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._bufferToExcerpts.set(bufferId, newExcSet);
     }
 
-    // 4. Build replacement map: each old ID maps to the first new ID
+    // 5. Build replacement map: each old ID maps to the first new ID
     //    that covers the same buffer region (or the first new ID as fallback)
     if (newIds.length > 0) {
       for (const oldId of oldIds) {
