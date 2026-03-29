@@ -875,6 +875,17 @@ describe("MultiBuffer - Batch Operations", () => {
     // Remaining excerpt should be from buf2
     expect(mb.excerpts[0]?.bufferId).toBe(buf2.id);
   });
+
+  test("setExcerptsForBuffer([]) on buffer with no existing excerpts does not bump snapshot version", () => {
+    const buf = createBuffer(createBufferId(), "Hello");
+    const mb = createMultiBuffer();
+    const v0 = mb.snapshot().version;
+
+    // buf has never been added to mb — this should be a no-op
+    mb.setExcerptsForBuffer(buf, []);
+
+    expect(mb.snapshot().version).toBe(v0);
+  });
 });
 
 
@@ -1387,6 +1398,15 @@ describe("setExcerpts (batch)", () => {
 
     expect(mb.excerpts.length).toBe(0);
     expect(mb.lineCount).toBe(0);
+  });
+
+  test("setExcerpts([]) on empty multibuffer does not bump snapshot version", () => {
+    const mb = createMultiBuffer();
+    const v0 = mb.snapshot().version;
+
+    mb.setExcerpts([]);
+
+    expect(mb.snapshot().version).toBe(v0);
   });
 
   test("respects options per entry", () => {
