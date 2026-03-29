@@ -218,3 +218,35 @@ describe("expandExcerpt with multiple excerpts", () => {
     expect(mb.lineCount).toBe(13); // 8 + 5
   });
 });
+
+describe("expandExcerpt no-op version stability", () => {
+  test("expandExcerpt(id, 0, 0) does not bump snapshot version", () => {
+    const { mb, excerptId } = setup(20, 5, 10);
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(excerptId, 0, 0);
+    expect(mb.snapshot().version).toBe(v0);
+  });
+
+  test("expandExcerpt when already at buffer start does not bump version", () => {
+    // Excerpt starts at row 0; expanding linesBefore cannot go further
+    const { mb, excerptId } = setup(20, 0, 5);
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(excerptId, 5, 0); // clamps: newStart = max(0, 0-5) = 0 = oldStart
+    expect(mb.snapshot().version).toBe(v0);
+  });
+
+  test("expandExcerpt when already at buffer end does not bump version", () => {
+    // Excerpt ends at lineCount (20); expanding linesAfter cannot go further
+    const { mb, excerptId } = setup(20, 15, 20);
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(excerptId, 0, 10); // clamps: newEnd = min(20, 20+10) = 20 = oldEnd
+    expect(mb.snapshot().version).toBe(v0);
+  });
+
+  test("expandExcerpt that actually expands does bump version", () => {
+    const { mb, excerptId } = setup(20, 5, 10);
+    const v0 = mb.snapshot().version;
+    mb.expandExcerpt(excerptId, 2, 0); // genuinely expands
+    expect(mb.snapshot().version).toBeGreaterThan(v0);
+  });
+});
