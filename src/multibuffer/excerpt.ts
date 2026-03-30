@@ -6,6 +6,8 @@
  */
 
 import type {
+  BufferPoint,
+  BufferRow,
   BufferSnapshot,
   Excerpt,
   ExcerptId,
@@ -163,12 +165,12 @@ export function mergeExcerptRanges(
       // Overlapping or adjacent — merge
       const endRow = Math.max(current.context.end.row, next.context.end.row);
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      const mergedEnd = { row: endRow as import("./types.ts").BufferRow, column: 0 };
-      const primaryStart: import("./types.ts").BufferPoint =
+      const mergedEnd = { row: endRow as BufferRow, column: 0 };
+      const primaryStart: BufferPoint =
         current.primary.start.row < next.primary.start.row
           ? current.primary.start
           : next.primary.start;
-      const primaryEnd: import("./types.ts").BufferPoint =
+      const primaryEnd: BufferPoint =
         current.primary.end.row > next.primary.end.row
           ? current.primary.end
           : next.primary.end;
