@@ -11,7 +11,6 @@ import { createExcerpt, toExcerptInfo } from "./excerpt.ts";
 import { SlotMap } from "./slot_map.ts";
 import type {
   Anchor,
-  Bias,
   Buffer,
   BufferPoint,
   BufferRow,
@@ -31,6 +30,7 @@ import type {
   MultiBufferRow,
   MultiBufferSnapshot,
 } from "./types.ts";
+import { Bias } from "./types.ts";
 
 class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly lineCount: number;
@@ -254,9 +254,11 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     // 5. Find the best excerpt for this buffer point.
     //    Start with the initial excerpt, but if the point falls outside its range,
     //    search other excerpts from the same buffer.
+    //    Pass the anchor's bias so overlapping excerpts resolve to the correct side.
     const resolvedExcerpt = this._findExcerptForBufferPoint(
       bufferPoint,
       initialExcerpt,
+      anchor.textAnchor.bias,
     );
 
     const info = this.excerptInfoIndex.get(
@@ -331,8 +333,12 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
         bufferPoint = snap.offsetToPoint(clampedOffset);
       }
 
-      // 4. Find best excerpt for this buffer point
-      const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
+      // 4. Find best excerpt for this buffer point, respecting the anchor's bias
+      const resolvedExcerpt = this._findExcerptForBufferPoint(
+        bufferPoint,
+        initialExcerpt,
+        anchor.textAnchor.bias,
+      );
 
       // 5. Convert to multibuffer point via the shared index (O(1))
       const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
@@ -418,8 +424,12 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
         bufferPoint = snap.offsetToPoint(clampedOffset);
       }
 
-      // 5. Find best excerpt for this buffer point
-      const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
+      // 5. Find best excerpt for this buffer point, respecting the anchor's bias
+      const resolvedExcerpt = this._findExcerptForBufferPoint(
+        bufferPoint,
+        initialExcerpt,
+        anchor.textAnchor.bias,
+      );
 
       // 6. Convert to multibuffer point
       const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
@@ -458,6 +468,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   private _findExcerptForBufferPoint(
     bufferPoint: BufferPoint,
     initialExcerpt: Excerpt,
+    bias?: Bias,
   ): Excerpt {
     const startRow = initialExcerpt.range.context.start.row;
     const endRow = initialExcerpt.range.context.end.row;
@@ -465,20 +476,88 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       return initialExcerpt;
     }
 
-    // Search other excerpts from the same buffer
     // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
     const bid = initialExcerpt.bufferId as string;
-    for (const alt of this._excerptData) {
-      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
-      if ((alt.bufferId as string) !== bid) continue;
-      const altStart = alt.range.context.start.row;
-      const altEnd = alt.range.context.end.row;
-      if (bufferPoint.row >= altStart && bufferPoint.row < altEnd) {
-        return alt;
+
+    if (bias === undefined) {
+      // No bias — return first matching excerpt from the same buffer (existing behaviour)
+      for (const alt of this._excerptData) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+        if ((alt.bufferId as string) !== bid) continue;
+        if (
+          bufferPoint.row >= alt.range.context.start.row &&
+          bufferPoint.row < alt.range.context.end.row
+        ) {
+          return alt;
+        }
+      }
+      return initialExcerpt;
+    }
+
+    // Bias-aware resolution: when the anchor has drifted outside its initial excerpt,
+    // use bias to disambiguate between overlapping excerpts from the same buffer.
+    // _excerptData is in display order, matching the Bias.Left / Bias.Right semantics:
+    //   Bias.Left  → prefer the latest matching excerpt at or before the initial's position
+    //                (keeps an anchor that was at an excerpt end "to the left" of the boundary)
+    //   Bias.Right → prefer the earliest matching excerpt at or after the initial's position
+    //                (keeps an anchor that was at an excerpt start "to the right" of the boundary)
+    // If no such match exists, return the initial excerpt so _bufferPointToMbPoint can clamp it.
+    const initialKey = `${initialExcerpt.id.index}:${initialExcerpt.id.generation}`;
+    let initialIdx = -1;
+    for (let i = 0; i < this._excerptData.length; i++) {
+      const e = this._excerptData[i];
+      if (e && `${e.id.index}:${e.id.generation}` === initialKey) {
+        initialIdx = i;
+        break;
       }
     }
 
-    // No matching excerpt found; return the initial one (will be clamped)
+    if (initialIdx === -1) {
+      // Initial excerpt not in current snapshot (shouldn't happen); fall back to first match
+      for (const alt of this._excerptData) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+        if ((alt.bufferId as string) !== bid) continue;
+        if (
+          bufferPoint.row >= alt.range.context.start.row &&
+          bufferPoint.row < alt.range.context.end.row
+        ) {
+          return alt;
+        }
+      }
+      return initialExcerpt;
+    }
+
+    if (bias === Bias.Left) {
+      // Find the latest matching excerpt at or before the initial's display position
+      let best: Excerpt | undefined;
+      for (let i = 0; i <= initialIdx; i++) {
+        const e = this._excerptData[i];
+        if (!e) continue;
+        // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+        if ((e.bufferId as string) !== bid) continue;
+        if (
+          bufferPoint.row >= e.range.context.start.row &&
+          bufferPoint.row < e.range.context.end.row
+        ) {
+          best = e;
+        }
+      }
+      return best ?? initialExcerpt;
+    }
+
+    // Bias.Right: find the earliest matching excerpt at or after the initial's display position
+    for (let i = initialIdx; i < this._excerptData.length; i++) {
+      const e = this._excerptData[i];
+      if (!e) continue;
+      // biome-ignore lint/plugin/no-type-assertion: expect: BufferId is branded string
+      if ((e.bufferId as string) !== bid) continue;
+      if (
+        bufferPoint.row >= e.range.context.start.row &&
+        bufferPoint.row < e.range.context.end.row
+      ) {
+        return e;
+      }
+    }
     return initialExcerpt;
   }
 

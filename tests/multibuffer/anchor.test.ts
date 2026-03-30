@@ -377,16 +377,84 @@ describe("Anchor Bias - Delete Behavior", () => {
 
 
 describe("Anchor Bias - Excerpt Boundaries", () => {
-  test.todo("Bias.Left at excerpt end stays in current excerpt", () => {
-    // Depends on bias-aware excerptAt
+  test("Bias.Left at excerpt end stays in current excerpt", () => {
+    // Buffer: "A\nB\nC\nD\n" (4 lines).
+    // excerpt1 = rows [0,3), excerpt2 = rows [2,4) — overlap at buffer row 2 ("C").
+    // Anchor at last row of excerpt1 (display row 2 = buffer row 2) with Bias.Left.
+    // After deleting "C\n", buffer row 2 is "D" — in excerpt2 only.
+    // Bias.Left: anchor should stay in excerpt1, clamped to its new last row (display row 1).
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\n");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3)); // "A","B","C" → display [0,3)
+    mb.addExcerpt(buf, excerptRange(2, 4)); // "C","D"     → display [3,5), overlap at row 2
+
+    const a = mb.createAnchor(mbPoint(2, 0), Bias.Left);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    mb.edit(mbPoint(2, 0), mbPoint(4, 0), ""); // delete "C\n" via mb → excerpt1=[0,2), excerpt2=[2,3)
+
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+
+    expectPoint(resolved, 1, 0); // clamped to excerpt1's last row
   });
 
-  test.todo("Bias.Right at excerpt start stays in current excerpt", () => {
-    // Depends on bias-aware excerptAt
+  test("Bias.Right at excerpt start stays in current excerpt", () => {
+    // Buffer: "A\nB\nC\nD\n" (4 lines).
+    // excerpt1 = rows [0,3), excerpt2 = rows [1,4) — overlap at buffer rows 1,2.
+    // Anchor at first row of excerpt2 (display row 3 = buffer row 1 = "B") with Bias.Right.
+    // After deleting "A\nB\n", buffer row 0 is "C" — in excerpt1 only.
+    // Bias.Right: anchor should stay in excerpt2, clamped to its new start (display row 1).
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\n");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3)); // "A","B","C" → display [0,3)
+    mb.addExcerpt(buf, excerptRange(1, 4)); // "B","C","D" → display [3,6), overlap at rows 1,2
+
+    const a = mb.createAnchor(mbPoint(3, 0), Bias.Right);
+    expect(a).toBeDefined();
+    if (!a) return;
+
+    mb.edit(mbPoint(0, 0), mbPoint(4, 0), ""); // delete "A\nB\n" via mb → excerpt1=[0,1), excerpt2=[1,2)
+
+    const resolved = mb.snapshot().resolveAnchor(a);
+    expect(resolved).toBeDefined();
+    if (!resolved) return;
+
+    expectPoint(resolved, 1, 0); // clamped to excerpt2's start (display row 1)
   });
 
-  test.todo("clipping preserves bias at excerpt boundary", () => {
-    // Depends on bias-aware excerptAt
+  test("clipping preserves bias at excerpt boundary", () => {
+    // Buffer: "A\nB\nC\nD\n".
+    // excerpt1 = rows [0,3), excerpt2 = rows [2,4) — shared buffer row 2 ("C").
+    // Two anchors at the same buffer row 2, one per excerpt, with opposing biases.
+    // After deleting "C\n", both anchors drift to the new buffer row 2 ("D"),
+    // which lives only in excerpt2 — but bias determines which excerpt each resolves to.
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\n");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3)); // "A","B","C" → display [0,3)
+    mb.addExcerpt(buf, excerptRange(2, 4)); // "C","D"     → display [3,5), overlap at row 2
+
+    const aLeft = mb.createAnchor(mbPoint(2, 0), Bias.Left);  // in excerpt1, last row
+    const aRight = mb.createAnchor(mbPoint(3, 0), Bias.Right); // in excerpt2, first row
+    expect(aLeft).toBeDefined();
+    expect(aRight).toBeDefined();
+    if (!aLeft || !aRight) return;
+
+    mb.edit(mbPoint(2, 0), mbPoint(4, 0), ""); // delete "C\n" via mb
+
+    const snap = mb.snapshot();
+    const leftResolved = snap.resolveAnchor(aLeft);
+    const rightResolved = snap.resolveAnchor(aRight);
+    expect(leftResolved).toBeDefined();
+    expect(rightResolved).toBeDefined();
+    if (!leftResolved || !rightResolved) return;
+
+    // Bias.Left → clamps to excerpt1's end = display row 1 ("B")
+    expectPoint(leftResolved, 1, 0);
+    // Bias.Right → stays in excerpt2, new row 2 ("D") is within excerpt2=[2,3)
+    expectPoint(rightResolved, 2, 0);
   });
 });
 
