@@ -219,6 +219,30 @@ describe("clipPoint", () => {
     const clipped = snap.clipPoint(mbPoint(5, 10), Bias.Right);
     expectPoint(clipped, 0, 0);
   });
+
+  test("clipPoint on trailing newline row clamps column to 0", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "Hello\nWorld");
+    mb.addExcerpt(buf, excerptRange(0, 2), { hasTrailingNewline: true });
+
+    const snap = mb.snapshot();
+    // lineCount is 3: row 0 "Hello", row 1 "World", row 2 trailing newline (empty)
+    expect(snap.lineCount).toBe(3);
+    // Trailing newline row is empty — large column should clamp to 0
+    const clipped = snap.clipPoint(mbPoint(2, 100), Bias.Right);
+    expectPoint(clipped, 2, 0);
+  });
+
+  test("clipPoint past end with trailing newline excerpt returns trailing row column 0", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), "Hello\nWorld");
+    mb.addExcerpt(buf, excerptRange(0, 2), { hasTrailingNewline: true });
+
+    const snap = mb.snapshot();
+    // Row 99 is past end; last row (row 2) is the trailing newline — column 0
+    const clipped = snap.clipPoint(mbPoint(99, 10), Bias.Right);
+    expectPoint(clipped, 2, 0);
+  });
 });
 
 
