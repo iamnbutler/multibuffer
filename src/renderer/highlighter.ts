@@ -46,10 +46,87 @@ export function applyTreeEdit(tree: Tree, edit: TreeEdit): void {
   tree.edit(edit as import("web-tree-sitter").Edit);
 }
 
-/** Common interface for syntax highlighters. */
+/**
+ * Common interface for syntax highlighters.
+ *
+ * The built-in {@link Highlighter} uses tree-sitter WASM grammars, but you can
+ * bring any tokeniser you like — Shiki, Prism, TextMate grammars, etc. — by
+ * implementing this three-member interface and passing the instance to
+ * `renderer.setHighlighter(myHighlighter)`.
+ *
+ * @example Custom highlighter backed by Shiki
+ * ```ts
+ * import { createHighlighter } from "shiki";
+ * import type { SyntaxHighlighter, Token } from "multibuffer/renderer";
+ *
+ * class ShikiHighlighter implements SyntaxHighlighter {
+ *   private _shiki: Awaited<ReturnType<typeof createHighlighter>> | null = null;
+ *   private _lineCache = new Map<string, Token[][]>(); // bufferId → lines
+ *
+ *   get ready(): boolean { return this._shiki !== null; }
+ *
+ *   async init(lang: string): Promise<void> {
+ *     this._shiki = await createHighlighter({ themes: ["github-dark"], langs: [lang] });
+ *   }
+ *
+ *   parseBuffer(bufferId: string, text: string): void {
+ *     if (!this._shiki) return;
+ *     // Shiki returns one array of tokens per line.
+ *     const lines = this._shiki.codeToTokensBase(text, { lang: "typescript", theme: "github-dark" });
+ *     this._lineCache.set(bufferId, lines.map(row =>
+ *       row.map(t => ({ startColumn: t.offset, endColumn: t.offset + t.content.length, color: t.color ?? "#fff" }))
+ *     ));
+ *   }
+ *
+ *   getLineTokens(bufferId: string, row: number): Token[] {
+ *     return this._lineCache.get(bufferId)?.[row] ?? [];
+ *   }
+ * }
+ *
+ * // Wire it up:
+ * const highlighter = new ShikiHighlighter();
+ * await highlighter.init("typescript");
+ * renderer.setHighlighter(highlighter);
+ * ```
+ *
+ * @remarks
+ * - `parseBuffer` is called by the renderer every time a buffer's text
+ *   changes. For incremental parsers you can use the optional {@link TreeEdit}
+ *   parameter; for full-parse highlighters you can ignore it.
+ * - `getLineTokens` is called once per visible line during rendering.
+ *   Tokens **must** be returned in ascending `startColumn` order; overlapping
+ *   ranges are not supported. Return an empty array when no tokens are
+ *   available for a line.
+ * - `ready` gates both `parseBuffer` and `getLineTokens`: the renderer skips
+ *   highlighting entirely while `ready` is `false`, so it is safe to return
+ *   `false` until async initialisation completes.
+ */
 export interface SyntaxHighlighter {
+  /**
+   * `true` once the highlighter has finished loading its grammar/resources.
+   * The renderer will not call `parseBuffer` or `getLineTokens` until this
+   * returns `true`.
+   */
   readonly ready: boolean;
+  /**
+   * Parse (or re-parse) a buffer's full text and store the result internally.
+   *
+   * @param bufferId - Opaque identifier matching the buffer's `BufferId`.
+   * @param text     - The buffer's current full text.
+   * @param edit     - Optional incremental-edit descriptor. When provided,
+   *                   incremental parsers can reuse the previous tree; others
+   *                   may safely ignore this parameter.
+   */
   parseBuffer(bufferId: string, text: string, edit?: TreeEdit): void;
+  /**
+   * Return syntax tokens for a single line of a previously-parsed buffer.
+   *
+   * Tokens must be in ascending `startColumn` order and must not overlap.
+   * Return an empty array for lines with no colour information.
+   *
+   * @param bufferId - Same identifier passed to `parseBuffer`.
+   * @param row      - Zero-based buffer row (not display/wrapped row).
+   */
   getLineTokens(bufferId: string, row: number): Token[];
 }
 
