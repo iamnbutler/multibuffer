@@ -497,6 +497,10 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       const lastRow = (this.lineCount - 1) as MultiBufferRow;
+      // Trailing newline row is an empty virtual row — column is always 0.
+      if (lastExcerpt.hasTrailingNewline) {
+        return { row: lastRow, column: 0 };
+      }
       const data = this.excerptDataIndex.get(
         `${lastExcerpt.id.index}:${lastExcerpt.id.generation}`,
       );
@@ -525,6 +529,11 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     if (!data) return point;
 
     const offsetInExcerpt = point.row - info.startRow;
+    const rangeLines = info.range.context.end.row - info.range.context.start.row;
+    if (offsetInExcerpt >= rangeLines) {
+      // This row is the trailing newline virtual row — it is always empty.
+      return { row: point.row, column: 0 };
+    }
     const bufferRow = info.range.context.start.row + offsetInExcerpt;
     const bufferPoint = data.buffer.clipPoint(
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction

@@ -407,11 +407,11 @@ describe("MultiBuffer - Clipping", () => {
     mb.addExcerpt(buf1, excerptRange(0, 2), { hasTrailingNewline: true });
     mb.addExcerpt(buf2, excerptRange(0, 2));
 
-    // Row 2 is trailing newline of excerpt 1 (endRow=3, startRow=0).
-    // It maps past the buffer's content, so clipPoint clamps to last buffer line.
+    // Row 2 is the trailing newline virtual row of excerpt 1 — it is always empty.
+    // Any column should clamp to 0 regardless of the last real buffer line's length.
     const snap = mb.snapshot();
     const clipped = snap.clipPoint(mbPoint(2, 5), Bias.Left);
-    expectPoint(clipped, 2, 3); // clipped to "BBB" length
+    expectPoint(clipped, 2, 0);
   });
 
   test("clipPoint past end clamps to last line", () => {
