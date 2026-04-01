@@ -32,6 +32,11 @@ import type {
   MultiBufferSnapshot,
 } from "./types.ts";
 
+/** Serialize an ExcerptId to a string map key ("index:generation"). */
+function _excKey(id: ExcerptId): string {
+  return `${id.index}:${id.generation}`;
+}
+
 class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
   readonly lineCount: number;
   readonly excerpts: readonly ExcerptInfo[];
@@ -71,7 +76,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     if (!this._excerptDataIndex) {
       this._excerptDataIndex = new Map<string, Excerpt>();
       for (const e of this._excerptData) {
-        this._excerptDataIndex.set(`${e.id.index}:${e.id.generation}`, e);
+        this._excerptDataIndex.set(_excKey(e.id), e);
       }
     }
     return this._excerptDataIndex;
@@ -82,7 +87,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     if (!this._excerptInfoIndex) {
       this._excerptInfoIndex = new Map<string, ExcerptInfo>();
       for (const info of this.excerpts) {
-        this._excerptInfoIndex.set(`${info.id.index}:${info.id.generation}`, info);
+        this._excerptInfoIndex.set(_excKey(info.id), info);
       }
     }
     return this._excerptInfoIndex;
@@ -133,7 +138,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     excerptId: ExcerptId,
     point: BufferPoint,
   ): MultiBufferPoint | undefined {
-    const info = this.excerptInfoIndex.get(`${excerptId.index}:${excerptId.generation}`);
+    const info = this.excerptInfoIndex.get(_excKey(excerptId));
     if (!info) return undefined;
 
     const startBufferRow = info.range.context.start.row;
@@ -183,7 +188,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       if (!info) continue;
       if (info.startRow >= clampedEnd) break;
 
-      const data = dataByKey.get(`${info.id.index}:${info.id.generation}`);
+      const data = dataByKey.get(_excKey(info.id));
       if (!data) continue;
 
       const rowStart = Math.max(info.startRow, startRow);
@@ -216,16 +221,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     let currentId = anchor.excerptId;
     const maxChainLength = 100; // prevent infinite loops
     for (let i = 0; i < maxChainLength; i++) {
-      const key = `${currentId.index}:${currentId.generation}`;
-      const replacement = this._replacedExcerpts.get(key);
+      const replacement = this._replacedExcerpts.get(_excKey(currentId));
       if (!replacement) break;
       currentId = replacement;
     }
 
     // 2. Find the excerpt data via O(1) index (lazy-built once per snapshot)
-    const initialExcerpt = this.excerptDataIndex.get(
-      `${currentId.index}:${currentId.generation}`,
-    );
+    const initialExcerpt = this.excerptDataIndex.get(_excKey(currentId));
     if (!initialExcerpt) return undefined;
 
     // 3. Get the mutable buffer to replay edits since anchor creation
@@ -259,9 +261,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       initialExcerpt,
     );
 
-    const info = this.excerptInfoIndex.get(
-      `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`,
-    );
+    const info = this.excerptInfoIndex.get(_excKey(resolvedExcerpt.id));
     if (!info) return undefined;
 
     return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, info);
@@ -287,14 +287,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       let currentId = anchor.excerptId;
       const maxChain = 100;
       for (let i = 0; i < maxChain; i++) {
-        const key = `${currentId.index}:${currentId.generation}`;
-        const replacement = this._replacedExcerpts.get(key);
+        const replacement = this._replacedExcerpts.get(_excKey(currentId));
         if (!replacement) break;
         currentId = replacement;
       }
 
       // 2. Find excerpt data via cache (O(1) instead of O(n) find)
-      const excerptKey = `${currentId.index}:${currentId.generation}`;
+      const excerptKey = _excKey(currentId);
       const initialExcerpt = excerptDataCache.get(excerptKey);
       if (!initialExcerpt) return undefined;
 
@@ -335,8 +334,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
 
       // 5. Convert to multibuffer point via the shared index (O(1))
-      const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
-      const info = excerptInfoCache.get(resolvedKey);
+      const info = excerptInfoCache.get(_excKey(resolvedExcerpt.id));
       if (!info) return undefined;
 
       return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, info);
@@ -365,14 +363,13 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       let currentId = anchor.excerptId;
       const maxChain = 100;
       for (let i = 0; i < maxChain; i++) {
-        const key = `${currentId.index}:${currentId.generation}`;
-        const replacement = this._replacedExcerpts.get(key);
+        const replacement = this._replacedExcerpts.get(_excKey(currentId));
         if (!replacement) break;
         currentId = replacement;
       }
 
       // 2. Quick viewport overlap check via O(1) excerpt info lookup
-      const excerptKey = `${currentId.index}:${currentId.generation}`;
+      const excerptKey = _excKey(currentId);
       const info = excerptInfoCache.get(excerptKey);
       if (!info) return undefined;
 
@@ -422,8 +419,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       const resolvedExcerpt = this._findExcerptForBufferPoint(bufferPoint, initialExcerpt);
 
       // 6. Convert to multibuffer point
-      const resolvedKey = `${resolvedExcerpt.id.index}:${resolvedExcerpt.id.generation}`;
-      const resolvedInfo = excerptInfoCache.get(resolvedKey);
+      const resolvedInfo = excerptInfoCache.get(_excKey(resolvedExcerpt.id));
       if (!resolvedInfo) return undefined;
 
       return this._bufferPointToMbPoint(bufferPoint, resolvedExcerpt, resolvedInfo);
@@ -497,9 +493,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
       }
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       const lastRow = (this.lineCount - 1) as MultiBufferRow;
-      const data = this.excerptDataIndex.get(
-        `${lastExcerpt.id.index}:${lastExcerpt.id.generation}`,
-      );
+      const data = this.excerptDataIndex.get(_excKey(lastExcerpt.id));
       if (data) {
         const bufferRow =
           lastExcerpt.range.context.end.row - 1;
@@ -519,9 +513,7 @@ class MultiBufferSnapshotImpl implements MultiBufferSnapshot {
     const info = this.excerptAt(point.row);
     if (!info) return point;
 
-    const data = this.excerptDataIndex.get(
-      `${info.id.index}:${info.id.generation}`,
-    );
+    const data = this.excerptDataIndex.get(_excKey(info.id));
     if (!data) return point;
 
     const offsetInExcerpt = point.row - info.startRow;
@@ -579,11 +571,6 @@ class MultiBufferImpl implements MultiBuffer {
   private _listeners: {
     [K in keyof MultiBufferEventMap]?: Set<(...args: MultiBufferEventMap[K]) => void>;
   } = {};
-
-  /** Serialize an ExcerptId to a string key. */
-  private static _excKey(id: ExcerptId): string {
-    return `${id.index}:${id.generation}`;
-  }
 
   /** Mark the cache stale and increment the version on every mutation. */
   private _markDirty(): void {
@@ -702,14 +689,14 @@ class MultiBufferImpl implements MultiBuffer {
       excSet = new Map<string, ExcerptId>();
       this._bufferToExcerpts.set(bufferId, excSet);
     }
-    excSet.set(MultiBufferImpl._excKey(id), id);
+    excSet.set(_excKey(id), id);
     this._markDirty();
     // Only rebuild cache and emit if there are listeners — avoids destroying the lazy strategy.
     if (this._listeners.excerptAdded?.size) {
       this._ensureCache();
-      const key = MultiBufferImpl._excKey(id);
+      const key = _excKey(id);
       const info = this._cachedInfos.find(
-        (i) => MultiBufferImpl._excKey(i.id) === key,
+        (i) => _excKey(i.id) === key,
       );
       if (info) this._emit("excerptAdded", info);
     }
@@ -738,7 +725,7 @@ class MultiBufferImpl implements MultiBuffer {
         excSet = new Map<string, ExcerptId>();
         this._bufferToExcerpts.set(bufferId, excSet);
       }
-      excSet.set(MultiBufferImpl._excKey(id), id);
+      excSet.set(_excKey(id), id);
       ids.push(id);
     }
     // Single version bump + lazy cache rebuild for the entire batch
@@ -748,10 +735,10 @@ class MultiBufferImpl implements MultiBuffer {
       this._ensureCache();
       // Build O(1) lookup map once instead of O(n) find per id
       const infoByKey = new Map(
-        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+        this._cachedInfos.map((i) => [_excKey(i.id), i]),
       );
       for (const id of ids) {
-        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        const info = infoByKey.get(_excKey(id));
         if (info) this._emit("excerptAdded", info);
       }
     }
@@ -767,7 +754,7 @@ class MultiBufferImpl implements MultiBuffer {
       const bid = exc.bufferId as string;
       const excSet = this._bufferToExcerpts.get(bid);
       if (excSet) {
-        excSet.delete(MultiBufferImpl._excKey(excerptId));
+        excSet.delete(_excKey(excerptId));
         if (excSet.size === 0) this._bufferToExcerpts.delete(bid);
       }
     }
@@ -835,7 +822,7 @@ class MultiBufferImpl implements MultiBuffer {
         excSet = new Map<string, ExcerptId>();
         this._bufferToExcerpts.set(bufferId, excSet);
       }
-      excSet.set(MultiBufferImpl._excKey(id), id);
+      excSet.set(_excKey(id), id);
     }
 
     // Single rebuild at the end instead of N+1 rebuilds.
@@ -850,10 +837,10 @@ class MultiBufferImpl implements MultiBuffer {
       this._ensureCache();
       // Build O(1) lookup map once instead of O(n) find per id
       const infoByKey = new Map(
-        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+        this._cachedInfos.map((i) => [_excKey(i.id), i]),
       );
       for (const id of newIds) {
-        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        const info = infoByKey.get(_excKey(id));
         if (info) this._emit("excerptAdded", info);
       }
     }
@@ -873,11 +860,11 @@ class MultiBufferImpl implements MultiBuffer {
     const oldIds: ExcerptId[] = oldExcSet ? [...oldExcSet.values()] : [];
 
     // 2. Remove old excerpts from SlotMap and reverse index
-    const oldKeySet = new Set<string>(oldIds.map(MultiBufferImpl._excKey));
+    const oldKeySet = new Set<string>(oldIds.map(_excKey));
     for (const id of oldIds) {
       this._excerpts.remove(id);
     }
-    this._order = this._order.filter((id) => !oldKeySet.has(MultiBufferImpl._excKey(id)));
+    this._order = this._order.filter((id) => !oldKeySet.has(_excKey(id)));
     this._bufferToExcerpts.delete(bufferId);
 
     // 3. Add new excerpts
@@ -891,7 +878,7 @@ class MultiBufferImpl implements MultiBuffer {
       this._excerpts.set(id, excerpt);
       this._order.push(id);
       newIds.push(id);
-      newExcSet.set(MultiBufferImpl._excKey(id), id);
+      newExcSet.set(_excKey(id), id);
     }
     if (newExcSet.size > 0) {
       this._bufferToExcerpts.set(bufferId, newExcSet);
@@ -901,9 +888,8 @@ class MultiBufferImpl implements MultiBuffer {
     //    that covers the same buffer region (or the first new ID as fallback)
     if (newIds.length > 0) {
       for (const oldId of oldIds) {
-        const key = `${oldId.index}:${oldId.generation}`;
         // biome-ignore lint/plugin/no-type-assertion: expect: newIds[0] is guaranteed non-undefined by length check
-        this._replacedExcerpts.set(key, newIds[0] as ExcerptId);
+        this._replacedExcerpts.set(_excKey(oldId), newIds[0] as ExcerptId);
       }
     }
 
@@ -918,10 +904,10 @@ class MultiBufferImpl implements MultiBuffer {
       this._ensureCache();
       // Build O(1) lookup map once instead of O(n) find per id
       const infoByKey = new Map(
-        this._cachedInfos.map((i) => [MultiBufferImpl._excKey(i.id), i]),
+        this._cachedInfos.map((i) => [_excKey(i.id), i]),
       );
       for (const id of newIds) {
-        const info = infoByKey.get(MultiBufferImpl._excKey(id));
+        const info = infoByKey.get(_excKey(id));
         if (info) this._emit("excerptAdded", info);
       }
     }
@@ -932,8 +918,8 @@ class MultiBufferImpl implements MultiBuffer {
     // No-op if the excerpt doesn't exist
     if (!this._excerpts.get(id)) return;
 
-    const idKey = MultiBufferImpl._excKey(id);
-    const currentIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === idKey);
+    const idKey = _excKey(id);
+    const currentIdx = this._order.findIndex((eid) => _excKey(eid) === idKey);
     if (currentIdx === -1) return;
 
     // Remove from current position
@@ -942,8 +928,8 @@ class MultiBufferImpl implements MultiBuffer {
     if (insertBefore === undefined) {
       this._order.push(id);
     } else {
-      const beforeKey = MultiBufferImpl._excKey(insertBefore);
-      const targetIdx = this._order.findIndex((eid) => MultiBufferImpl._excKey(eid) === beforeKey);
+      const beforeKey = _excKey(insertBefore);
+      const targetIdx = this._order.findIndex((eid) => _excKey(eid) === beforeKey);
       if (targetIdx === -1) {
         // insertBefore not found; append to end
         this._order.push(id);
