@@ -746,6 +746,32 @@ describe("Editor - Multi-excerpt", () => {
     expect(num(editor.cursor.row)).toBe(4);
   });
 
+  test("right at end of line before trailing-newline row skips it", () => {
+    const { editor } = setupMulti();
+    // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline (header)
+    // Excerpt 2: row 3 = "Charlie", row 4 = "Delta"
+    // "Bravo" is 5 chars; place cursor at end (col 5)
+    editor.setCursor(mbPoint(1, 5));
+    // Moving right at end of "Bravo" should skip the trailing-newline header row (row 2)
+    // and land at column 0 of "Charlie" (row 3), not at row 2.
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(3);
+    expect(editor.cursor.column).toBe(0);
+  });
+
+  test("left at start of line after trailing-newline row skips it", () => {
+    const { editor } = setupMulti();
+    // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline (header)
+    // Excerpt 2: row 3 = "Charlie", row 4 = "Delta"
+    // Place cursor at start of "Charlie" (row 3, col 0)
+    editor.setCursor(mbPoint(3, 0));
+    // Moving left at start of "Charlie" should skip the trailing-newline header row (row 2)
+    // and land at the end of "Bravo" (row 1, col 5), not at row 2.
+    editor.dispatch({ type: "moveCursor", direction: "left", granularity: "character" });
+    expect(num(editor.cursor.row)).toBe(1);
+    expect(editor.cursor.column).toBe(5); // "Bravo".length === 5
+  });
+
   test("Shift+Down selection crosses excerpt boundary (issue #89, #106)", () => {
     const { editor } = setupMulti();
     // Excerpt 1: row 0 = "Alpha", row 1 = "Bravo", row 2 = trailing newline (header)
