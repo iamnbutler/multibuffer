@@ -206,11 +206,33 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FsAdapter
+
+A platform-agnostic filesystem adapter interface (`src/project/types.ts`). Implement this interface to use `ProjectTree` with different backends — Bun/Node, browser File System Access API, or in-memory for testing. Exposes `readdir(path)` for listing directory entries and an optional `stat(path)` for file metadata.
+
+See: `src/project/types.ts`, [ProjectTree](#projecttree)
+
+---
+
 ## G
 
 ### Generational Arena
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+
+### GlobMatcher
+
+A function type `(pattern: string, path: string) => boolean` (`src/project/types.ts`). Injected into `ProjectTree` to filter files and directories by glob pattern. If not provided, the built-in minimal glob implementation is used. Supply a custom implementation for advanced pattern syntax beyond what the built-in matcher supports.
+
+See: `src/project/types.ts`, [ProjectTree](#projecttree)
+
+### GlyphAtlas
+
+A texture atlas for GPU text rendering (`src/renderer/glyph-atlas.ts`). Rasterizes individual characters to an offscreen canvas using a row-based packing strategy (left-to-right, top-to-bottom), then provides texture data for upload to WebGPU. Uses fixed cell sizes (`charWidth × lineHeight`) for monospace fonts; glyphs are added lazily on first use. Stores a single-channel alpha texture — shape only — with color applied in the shader. The `dirty` flag tracks when the texture needs re-uploading.
+
+See: `src/renderer/glyph-atlas.ts`
 
 ### Goal Column
 
@@ -254,6 +276,12 @@ An [EditorCommand](#editorcommand) that prepends 2 spaces to the cursor line or 
 
 See also: [dedentLines](#dedentlines)
 
+### InjectionHighlighter
+
+A syntax highlighter (`src/renderer/injection-highlighter.ts`) that extends the base tree-sitter highlighter with support for language injections. Maintains a separate parse tree per injected language and routes per-row token requests to the appropriate tree using a row-to-injection-range index for O(1) lookup. Implements the `SyntaxHighlighter` interface.
+
+See also: [Language Injection](#language-injection), [Incremental Parsing](#incremental-parsing)
+
 ### Incremental Parsing
 
 An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) where the previous parse tree is passed to tree-sitter's `parser.parse(text, oldTree)`. Tree-sitter reuses unchanged subtrees instead of re-parsing the entire file on every edit. Enabled by supplying a [TreeEdit](#treeedit) descriptor so the old tree is updated via `tree.edit()` before re-parsing; on large files this eliminates significant per-keystroke overhead.
@@ -275,6 +303,12 @@ A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent`
 ---
 
 ## L
+
+### Language Injection
+
+The mechanism by which an [InjectionHighlighter](#injectionhighlighter) highlights embedded languages within a file. For example, YAML frontmatter inside a Markdown file is parsed and highlighted as YAML by creating a separate tree-sitter parse for the injected language range. Injection ranges carry a `rowOffset` so tokens returned by the injected tree are mapped back to correct buffer row coordinates.
+
+See also: [InjectionHighlighter](#injectionhighlighter), [Incremental Parsing](#incremental-parsing)
 
 ### Line Pooling
 
@@ -308,6 +342,12 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 
 An immutable snapshot of the multibuffer's state. Carries a monotonically increasing `version` counter that increments on every mutation (shared globally across all `MultiBuffer` instances). Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns. The `version` field is used by the DOM renderer to skip `WrapMap` reconstruction when neither the snapshot content nor the wrap width has changed since the last render.
 
+### Multi-Cursor
+
+The state of having more than one active [Selection](#selection) in the `Editor`. The `Editor._selections` array holds all selections simultaneously; each selection owns its own cursor. Most commands (`insertText`, `moveCursor`, `deleteBackward`, etc.) operate on every selection in parallel, with results merged and deduplicated. The last entry in `_selections` is the [Primary Selection](#primary-selection), which controls where `editor.cursor` reports and where the editor scrolls.
+
+See also: [Primary Selection](#primary-selection), [Selection](#selection)
+
 ### Myers' Algorithm
 
 The O(ND) line-level diff algorithm used in `src/diff/diff.ts`, where N is the sum of line counts in both texts and D is the number of differing lines. Finds the shortest edit script by tracking the furthest-reaching path on each diagonal of an edit graph. The implementation stores the trace as active diagonal slices of size `2d+1` at each step `d`, reducing memory from O(max·D) to O(D²) — a significant win for large files with few changes.
@@ -331,6 +371,36 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### Primary Selection
+
+The last entry in `Editor._selections`. When multiple selections exist ([Multi-Cursor](#multi-cursor)), the primary selection is the one `editor.cursor` reports and the one the editor scrolls to keep visible. Setting a cursor from a mouse click replaces all selections with a single primary selection, clearing any multi-cursor state.
+
+See also: [Multi-Cursor](#multi-cursor), [Selection](#selection)
+
+### ProjectDirectoryEntry
+
+A directory node in a `ProjectTree` result (`src/project/types.ts`). Carries `type: "directory"`, `name`, `path`, and `relativePath`. Provides a `children()` method returning an async iterable that walks the directory lazily on demand, enabling efficient traversal of large repositories.
+
+See: `src/project/types.ts`, [ProjectEntry](#projectentry), [ProjectTree](#projecttree)
+
+### ProjectEntry
+
+A discriminated union `ProjectFileEntry | ProjectDirectoryEntry` (`src/project/types.ts`). The `type` field (`"file"` or `"directory"`) is the discriminant and allows type-narrowing without casts.
+
+See: `src/project/types.ts`
+
+### ProjectFileEntry
+
+A file node in a `ProjectTree` result (`src/project/types.ts`). Carries `type: "file"`, `name`, `path`, and `relativePath`. Optional `size` and `mtime` fields are populated only when `ProjectTreeOptions.includeMetadata` is `true` and the [FsAdapter](#fsadapter) implements `stat()`.
+
+See: `src/project/types.ts`, [ProjectEntry](#projectentry), [ProjectTree](#projecttree)
+
+### ProjectTree
+
+An interface (`src/project/types.ts`) for lazily enumerating files in a directory tree with include/exclude glob filtering. Configured with a [FsAdapter](#fsadapter), [GlobMatcher](#globmatcher), and optional depth limit. Provides `entries()` (full walk), `children(path)` (single directory), `get(path)` (single entry lookup), and `has(path)` (existence check), all respecting the configured filters.
+
+See: `src/project/types.ts`, [FsAdapter](#fsadapter), [GlobMatcher](#globmatcher)
 
 ---
 
@@ -431,6 +501,20 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 ### TextSummary
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
+
+### Tile
+
+A fixed-height chunk of rows managed by [TileManager](#tilemanager) (`src/renderer/tile-map.ts`). Defined by `startRow` (inclusive) and `endRow` (exclusive), and carries a `dirty` flag indicating whether it needs to be redrawn. Tiles are identified by their `startRow` value.
+
+See: `src/renderer/tile-map.ts`, [TileManager](#tilemanager)
+
+### TileManager
+
+A class (`src/renderer/tile-map.ts`) that tracks dirty regions of the viewport as a set of [Tile](#tile) objects. Divides the viewport into fixed-size tiles (default 10 lines each); only dirty tiles are redrawn, reducing render work for localized edits. Invalidation reasons include `"edit"`, `"selection"`, `"scroll"`, `"theme"`, `"resize"`, and `"initial"`. Multiple invalidations per frame are coalesced automatically.
+
+Key methods: `markDirty(row, reason)`, `getDirtyTiles()`, `clearDirty()`, `setViewport(startRow, endRow)`.
+
+See: `src/renderer/tile-map.ts`, [Tile](#tile)
 
 ### Trailing Newline (synthetic)
 
