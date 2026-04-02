@@ -86,12 +86,7 @@ When user edits:
 1. Editor modifies the new buffer via `MultiBuffer.edit()`.
 2. Editor fires `onChange` callback.
 3. Diff controller receives `notifyChange()`.
-4. After debounce delay, controller:
-   - Reads current text from both buffers.
-   - Runs `diff()` to get new hunks.
-   - Rebuilds excerpts in the MultiBuffer.
-   - Regenerates decorations.
-   - Notifies subscribers.
+4. After debounce delay, controller re-diffs both buffers, rebuilds excerpts and decorations, and notifies subscribers.
 
 ### 3.3 External Dependencies
 
@@ -143,19 +138,7 @@ Fields:
 
 #### 4.1.5 DecorationStyle
 
-All visual properties for a decorated line.
-
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+Visual properties for a decorated line: `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, `textDecoration`; gutter-specific: `gutterBackground`, `gutterColor`, `gutterSign`, `gutterSignColor`. All optional via `Partial<DecorationStyle>`.
 
 #### 4.1.6 DiffController
 
@@ -282,13 +265,7 @@ for each hunk:
 **Process**:
 1. Cancel any pending re-diff timer.
 2. Schedule new re-diff after debounce delay.
-3. On timer fire:
-   a. Get current text from old and new buffers.
-   b. Run `diff()`.
-   c. Remove all existing excerpts.
-   d. Build new excerpts from diff result.
-   e. Generate new decorations.
-   f. Notify all subscribers.
+3. On timer fire: read both buffers, run `diff()`, remove existing excerpts, build new excerpts and decorations, notify subscribers.
 
 ### 5.5 Convergence and Divergence
 
@@ -323,13 +300,7 @@ After: delete "foo" + insert "bar"  →  2 lines, 2 excerpts
 
 ### 5.6 Cursor Preservation
 
-The MultiBuffer's anchor system handles cursor preservation:
-
-1. Editor creates anchors at cursor position before operations.
-2. Anchors reference excerpt ID + buffer offset + version.
-3. When excerpts are rebuilt, the replacement map tracks old→new ID mappings.
-4. `resolveAnchor()` follows replacement chain and adjusts for buffer edits.
-5. Cursor position is restored after re-diff.
+The MultiBuffer's anchor system handles cursor preservation: before re-diff, anchors mark cursor positions (excerpt ID + buffer offset + version). When excerpts rebuild, a replacement map tracks old→new IDs; `resolveAnchor()` follows the chain to restore cursor position.
 
 **Edge cases**:
 - Cursor on delete line that disappears (convergence): Cursor moves to the resulting equal line.
@@ -460,15 +431,9 @@ interface Measurements {
 
 ### 8.1 Diff Algorithm Tests
 
-- Empty inputs (both empty, one empty, neither empty).
-- Identical inputs → `isEqual: true`.
-- Single-line change in middle of file.
-- Multi-line contiguous delete.
-- Multi-line contiguous insert.
-- Interleaved changes.
-- Change at file start/end.
-- Context line merging (changes within 2*context).
-- Context line separation (changes beyond 2*context).
+- Empty, identical, and mismatched inputs; `isEqual: true` for identical/both-empty.
+- Single-line and multi-line changes (delete, insert, interleaved) at any file position.
+- Context merging (changes within 2×context) vs separation (changes beyond 2×context).
 
 ### 8.2 Diff MultiBuffer Tests
 
@@ -491,14 +456,8 @@ interface Measurements {
 
 ### 8.4 Renderer Tests (E2E)
 
-- Diff gutter shows correct line numbers.
-- Delete lines show "−" sign.
-- Insert lines show "+" sign.
-- Equal lines show no sign.
-- Background colors applied correctly.
-- No excerpt headers in diff mode.
-- Hit testing works with diff gutter width.
-- Selection rendering accounts for diff gutter.
+- Gutter: correct line numbers, signs ("+" insert / "−" delete / none for equal), no excerpt headers in diff mode.
+- Background colors, hit testing, and selection rendering all account for diff gutter width.
 
 ## 9. Performance Requirements
 
