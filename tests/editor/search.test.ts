@@ -524,4 +524,36 @@ describe("SearchController - Multi-excerpt", () => {
     search.goTo(1);
     expect(editor.getSelectedText()).toBe("foo");
   });
+
+  test("search results are sorted by display order after moveExcerpt reorders excerpts", () => {
+    // buf1 is inserted first (slot-map index 0), buf2 second (index 1).
+    // After moveExcerpt, buf2 is displayed first (rows 0+) and buf1 second.
+    // Results must be sorted by display row, not by slot-map index.
+    const buf1 = createBuffer(createBufferId(), "foo in buf1");
+    const buf2 = createBuffer(createBufferId(), "foo in buf2");
+
+    const mb = createMultiBuffer();
+    const id1 = mb.addExcerpt(buf1, excerptRange(0, 1));
+    mb.addExcerpt(buf2, excerptRange(0, 1));
+
+    // Move id1 (buf1) to the end — now buf2 is displayed first, buf1 second.
+    mb.moveExcerpt(id1, undefined);
+
+    const editor = new Editor(mb);
+    const search = new SearchController(editor);
+
+    const count = search.find("foo");
+    expect(count).toBe(2);
+
+    const resolved = search.resolveResults();
+    expect(resolved[0]).toBeDefined();
+    expect(resolved[1]).toBeDefined();
+
+    // Display order: buf2 (row 0) before buf1 (row 1+).
+    // Without the fix, compareAnchors would sort by slot index: buf1 (0) before buf2 (1),
+    // giving results[0].start.row > results[1].start.row — the wrong order.
+    const row0 = resolved[0]!.start.row;
+    const row1 = resolved[1]!.start.row;
+    expect(row0).toBeLessThan(row1);
+  });
 });
