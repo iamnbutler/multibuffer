@@ -194,10 +194,12 @@ function moveCharacter(
       const cp = text.codePointAt(column) ?? 0;
       return { row, column: column + (cp > 0xffff ? 2 : 1) };
     }
-    // At end of line — wrap to start of next line
+    // At end of line — wrap to start of next line, skipping trailing-newline rows
     if (row + 1 < lineCount) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      return { row: (row + 1) as MultiBufferRow, column: 0 };
+      const rawNextRow = (row + 1) as MultiBufferRow;
+      const newRow = skipTrailingNewlineRow(snapshot, rawNextRow, "down", lineCount);
+      return { row: newRow, column: 0 };
     }
     return current;
   }
@@ -208,13 +210,14 @@ function moveCharacter(
       const lineText = snapshot.lines(row, nextRow(row, lineCount));
       return { row, column: prevCpStart(lineText[0] ?? "", column) };
     }
-    // At start of line — wrap to end of previous line
+    // At start of line — wrap to end of previous line, skipping trailing-newline rows
     if (row > 0) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const prevRow = (row - 1) as MultiBufferRow;
-      const prevLineText = snapshot.lines(prevRow, row);
+      const rawPrevRow = (row - 1) as MultiBufferRow;
+      const newRow = skipTrailingNewlineRow(snapshot, rawPrevRow, "up", lineCount);
+      const prevLineText = snapshot.lines(newRow, nextRow(newRow, lineCount));
       const prevLen = prevLineText[0]?.length ?? 0;
-      return { row: prevRow, column: prevLen };
+      return { row: newRow, column: prevLen };
     }
     return current;
   }
