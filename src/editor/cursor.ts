@@ -192,7 +192,7 @@ function moveCharacter(
     if (column < text.length) {
       // Advance by the full code point width (2 for surrogate pairs, 1 for BMP)
       const cp = text.codePointAt(column) ?? 0;
-      return { row, column: column + (cp > 0xffff ? 2 : 1) };
+      return { row, column: column + cpWidth(cp) };
     }
     // At end of line — wrap to start of next line
     if (row + 1 < lineCount) {
@@ -250,12 +250,12 @@ function scanWordForward(text: string, pos: number): number {
   while (pos < text.length) {
     const cp = text.codePointAt(pos) ?? 0;
     if (!isWordChar(String.fromCodePoint(cp))) break;
-    pos += cp > 0xffff ? 2 : 1;
+    pos += cpWidth(cp);
   }
   while (pos < text.length) {
     const cp = text.codePointAt(pos) ?? 0;
     if (isWordChar(String.fromCodePoint(cp))) break;
-    pos += cp > 0xffff ? 2 : 1;
+    pos += cpWidth(cp);
   }
   return pos;
 }
@@ -356,7 +356,7 @@ export function moveWordBoundary(
       while (pos < text.length) {
         const cp = text.codePointAt(pos) ?? 0;
         if (isWordChar(String.fromCodePoint(cp)) !== firstIsWord) break;
-        pos += cp > 0xffff ? 2 : 1;
+        pos += cpWidth(cp);
       }
       return { row: current.row, column: pos };
     }
@@ -483,6 +483,15 @@ function skipTrailingNewlineRow(
 function nextRow(row: MultiBufferRow, lineCount: number): MultiBufferRow {
   // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
   return Math.min(row + 1, lineCount) as MultiBufferRow;
+}
+
+/**
+ * Returns the number of UTF-16 code units occupied by a code point.
+ * Supplementary code points (> U+FFFF) require a surrogate pair (2 units);
+ * all BMP code points fit in 1 unit.
+ */
+function cpWidth(cp: number): 1 | 2 {
+  return cp > 0xffff ? 2 : 1;
 }
 
 /** Return the UTF-16 offset at which the code point immediately before pos begins. */
