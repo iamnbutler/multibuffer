@@ -921,14 +921,13 @@ export class Editor {
       }
       this._redoStack = [];
       this._textVersion++;
-    }
-
-    this._selections = this._mergeSelections(newSelections, currentSnap);
-    const primarySel = this._selections[this._selections.length - 1];
-    if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
-      const resolved = currentSnap.resolveAnchor(headAnchor);
-      if (resolved) this._cursor = resolved;
+      this._selections = this._mergeSelections(newSelections, currentSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = currentSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
     }
   }
 

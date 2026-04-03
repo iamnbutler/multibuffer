@@ -521,6 +521,25 @@ describe("Editor - Delete Forward", () => {
     expect(getText(mb)).toBe("HelloWorld");
     expectPoint(editor.cursor, 0, 5);
   });
+
+  test("deleteForward with multiple cursors on non-editable excerpt preserves selections", () => {
+    const buf = createBuffer(createBufferId(), "Hello\nWorld");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2), { editable: false });
+    const editor = new Editor(mb);
+
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 0) });
+    expect(editor.selections.length).toBe(2);
+
+    // deleteForward on non-editable excerpt should be a no-op
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+
+    // Selections must be preserved — previously the bug cleared them to []
+    expect(editor.selections.length).toBe(2);
+    // Buffer text must be unchanged
+    expect(getText(mb)).toBe("Hello\nWorld");
+  });
 });
 
 // ─── Delete Line ────────────────────────────────────────────────
