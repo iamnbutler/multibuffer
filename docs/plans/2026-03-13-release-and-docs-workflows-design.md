@@ -27,12 +27,6 @@ Standard GitHub Actions workflow (not `gh aw`).
 
 The PR goes through normal CI (typecheck, lint, test) and review. No special labels or automation needed — the release-deploy workflow identifies it by branch name.
 
-### What it does NOT do
-
-- Run tests (CI handles that on the PR)
-- Create tags (release-deploy handles that)
-- Generate release notes (release-deploy handles that)
-
 ## 2. Release / Deploy (`release-deploy.yml`)
 
 Standard GitHub Actions workflow.
@@ -79,19 +73,7 @@ Rendered from `bun run bench --json` output (which returns `SuiteResult[]`):
 
 ## 3. Release Notes Template (`.github/release-notes-template.md`)
 
-```markdown
-## What's Changed
-
-{{changes}}
-
-## Benchmarks
-
-{{benchmarks}}
-
-**Full Changelog**: {{compare_url}}
-```
-
-The release-deploy workflow reads this template and substitutes the placeholders. Keeping it as a separate file so it's easy to tweak the format without touching workflow YAML.
+Three placeholders: `{{changes}}` (categorized PR list), `{{benchmarks}}` (table from `bun run bench --json`), `{{compare_url}}` (GitHub compare link). Kept separate from workflow YAML to allow format edits without touching the workflow.
 
 ## 4. Docs / Update (`docs-update.md`)
 
@@ -127,27 +109,6 @@ Remove `"private": true` to prepare for eventual npm publishing.
 
 ## File inventory
 
-New files:
+New: `.github/workflows/release.yml`, `.github/workflows/release-deploy.yml`, `.github/release-notes-template.md`, `.github/workflows/docs-update.md`
 
-| File | Type |
-|------|------|
-| `.github/workflows/release.yml` | GitHub Actions workflow |
-| `.github/workflows/release-deploy.yml` | GitHub Actions workflow |
-| `.github/release-notes-template.md` | Release notes template |
-| `.github/workflows/docs-update.md` | `gh aw` workflow definition |
-
-Modified files:
-
-| File | Change |
-|------|--------|
-| `package.json` | Remove `"private": true` |
-
-## Sequencing
-
-1. Add release notes template
-2. Add release workflow
-3. Add release-deploy workflow (depends on template)
-4. Add docs-update workflow
-5. Remove `private` from package.json
-
-Steps 1-3 can be one PR. Step 4 is independent. Step 5 can go with either.
+Modified: `package.json` — remove `"private": true`
