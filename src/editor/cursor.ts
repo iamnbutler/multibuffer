@@ -486,7 +486,7 @@ function nextRow(row: MultiBufferRow, lineCount: number): MultiBufferRow {
 }
 
 /** Return the UTF-16 offset at which the code point immediately before pos begins. */
-function prevCpStart(text: string, pos: number): number {
+export function prevCpStart(text: string, pos: number): number {
   const lo = text.charCodeAt(pos - 1);
   if (lo >= 0xdc00 && lo <= 0xdfff && pos >= 2) {
     const hi = text.charCodeAt(pos - 2);
