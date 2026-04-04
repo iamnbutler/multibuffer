@@ -121,14 +121,7 @@ An interface (`src/renderer/types.ts`) describing the full set of visual propert
 
 ### DiffController
 
-A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
-
-Key methods:
-
-- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
-- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
-- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
-- `dispose()` — cleans up timers and subscriptions.
+A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling. Key methods: `reDiff()` (immediate re-diff, returns `isEqual`), `notifyChange()` (debounced re-diff, default 150 ms), `onUpdate(callback)` (subscribes to decoration updates, returns unsubscribe), and `dispose()` (cleans up timers and subscriptions).
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
@@ -140,11 +133,7 @@ See: `src/diff/types.ts`
 
 ### DiffKind
 
-The type of change a [DiffLine](#diffline) represents:
-
-- `"equal"` — the line is unchanged between old and new.
-- `"insert"` — the line was added in the new version (has no `oldRow`).
-- `"delete"` — the line was removed from the old version (has no `newRow`).
+One of `"equal"` (line unchanged), `"insert"` (line added in new version, has no `oldRow`), or `"delete"` (line removed from old version, has no `newRow`).
 
 ### DiffLine
 
@@ -200,9 +189,7 @@ The public view of an excerpt, exposed to consumers. Contains the excerpt's `id`
 
 ### ExcerptRange
 
-The specification for creating an excerpt. Contains:
-- `context` — the full `BufferRange` to display (including any surrounding context lines).
-- `primary` — the highlighted sub-range within `context`.
+The specification for creating an excerpt: `context` (the full `BufferRange` to display, including any surrounding context lines) and `primary` (the highlighted sub-range within `context`).
 
 ---
 
@@ -438,12 +425,7 @@ An artificial newline appended after an excerpt's last line to visually separate
 
 ### TreeEdit
 
-An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
-
-- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
-- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
-
-Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class: `startIndex`/`oldEndIndex`/`newEndIndex` (byte offsets of the changed range) and `startPosition`/`oldEndPosition`/`newEndPosition` (row/column positions of the range endpoints). Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
 
 See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
