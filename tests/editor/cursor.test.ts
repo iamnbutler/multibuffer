@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createBuffer } from "../../src/buffer/buffer.ts";
-import { isWordChar, moveCursor, moveCursorVisual } from "../../src/editor/cursor.ts";
+import { isWordChar, moveCursor, moveCursorVisual, moveWordBoundary } from "../../src/editor/cursor.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import { WrapMap } from "../../src/renderer/wrap-map.ts";
 import {
@@ -546,5 +546,61 @@ describe("Cursor - Visual Row Movement Across Excerpt Headers (issue #89)", () =
     expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "down", "character", wrapMap), 5, 0);
     // Moving up from row 2 should land on row 1 (both in excerpt 1)
     expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "up", "character", wrapMap), 1, 0);
+  });
+});
+
+describe("Cursor - Word Movement Across Excerpt Headers", () => {
+  // Excerpt 1: "aa bb\ncc dd" → rows 0–1 (content) + row 2 (trailing-newline header)
+  // Excerpt 2: "ee ff\ngg hh" → rows 3–4
+  function setupWithHeader() {
+    const buf1 = createBuffer(createBufferId(), "aa bb\ncc dd");
+    const buf2 = createBuffer(createBufferId(), "ee ff\ngg hh");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 2));
+    return mb;
+  }
+
+  test("word right at end of last content row skips trailing-newline header and lands in next excerpt", () => {
+    // Row 1 is "cc dd" (len 5). Cursor at col 5 (end of line) should jump to row 3
+    // (first row of excerpt 2, "ee ff") and scan forward from col 0.
+    const snap = setupWithHeader().snapshot();
+    // scanWordForward("ee ff", 0): skips "ee" (2 chars), skips " " (1 char) → col 3 (start of "ff")
+    expectPoint(moveCursor(snap, mbPoint(1, 5), "right", "word"), 3, 3);
+  });
+
+  test("word left at start of first content row of excerpt 2 skips trailing-newline header and lands in previous excerpt", () => {
+    // Row 3 is "ee ff". Cursor at col 0 should jump to row 1 (last row of excerpt 1,
+    // "cc dd", len 5) and scan backward from col 5.
+    const snap = setupWithHeader().snapshot();
+    // scanWordBackward("cc dd", 5) skips non-word (none), then skips word chars "dd" → col 3
+    expectPoint(moveCursor(snap, mbPoint(3, 0), "left", "word"), 1, 3);
+  });
+});
+
+describe("Cursor - Word Boundary Movement Across Excerpt Headers", () => {
+  // Excerpt 1: "aa bb\ncc dd" → rows 0–1 (content) + row 2 (trailing-newline header)
+  // Excerpt 2: "ee ff\ngg hh" → rows 3–4
+  function setupWithHeader() {
+    const buf1 = createBuffer(createBufferId(), "aa bb\ncc dd");
+    const buf2 = createBuffer(createBufferId(), "ee ff\ngg hh");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 2), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 2));
+    return mb;
+  }
+
+  test("word-boundary right at end of last content row skips trailing-newline header", () => {
+    // Row 1 is "cc dd" (len 5). At col 5 (end of line), moveWordBoundary right should
+    // skip row 2 (trailing-newline header) and land at row 3 col 0 (start of "ee ff").
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveWordBoundary(snap, mbPoint(1, 5), "right"), 3, 0);
+  });
+
+  test("word-boundary left at start of first content row of excerpt 2 skips trailing-newline header", () => {
+    // Row 3 is "ee ff". At col 0, moveWordBoundary left should skip row 2 (header) and
+    // land at row 1 col 5 (end of "cc dd").
+    const snap = setupWithHeader().snapshot();
+    expectPoint(moveWordBoundary(snap, mbPoint(3, 0), "left"), 1, 5);
   });
 });
