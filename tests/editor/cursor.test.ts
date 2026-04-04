@@ -354,6 +354,33 @@ describe("Cursor - Page Granularity", () => {
     const snap = setup("Hello World").snapshot();
     expectPoint(moveCursor(snap, mbPoint(0, 3), "right", "page"), 0, 11);
   });
+
+  // ── Page navigation skips trailing-newline rows ──────────────────
+  // Multibuffer layout:
+  //   Excerpt 1: 30 lines "AAAA" → rows 0–29 (content) + row 30 (trailing newline/header)
+  //   Excerpt 2: 35 lines "BBBB" → rows 31–65
+  function setupPageWithHeader() {
+    const text1 = Array.from({ length: 30 }, () => "AAAA").join("\n");
+    const text2 = Array.from({ length: 35 }, () => "BBBB").join("\n");
+    const buf1 = createBuffer(createBufferId(), text1);
+    const buf2 = createBuffer(createBufferId(), text2);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 30), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 35));
+    return mb;
+  }
+
+  test("page down skips trailing-newline row and lands on first row of next excerpt", () => {
+    // Row 0 + 30 = row 30 (trailing newline). Should skip forward to row 31.
+    const snap = setupPageWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "down", "page"), 31, 0);
+  });
+
+  test("page up skips trailing-newline row and lands on last content row of previous excerpt", () => {
+    // Row 60 − 30 = row 30 (trailing newline). Should skip backward to row 29.
+    const snap = setupPageWithHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(60, 0), "up", "page"), 29, 0);
+  });
 });
 
 describe("Cursor - Visual Line Movement (Wrapped Lines)", () => {
