@@ -295,7 +295,8 @@ function moveWord(
       // Cross line boundary: cursor started at end of line, continue on next line
       if (col === text.length && current.row + 1 < snapshot.lineCount) {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-        const nextRowIdx = (current.row + 1) as MultiBufferRow;
+        const rawNext = (current.row + 1) as MultiBufferRow;
+        const nextRowIdx = skipTrailingNewlineRow(snapshot, rawNext, "down", snapshot.lineCount);
         const nextLineText = snapshot.lines(nextRowIdx, nextRow(nextRowIdx, snapshot.lineCount));
         const nextText = nextLineText[0] ?? "";
         const nextPos = scanWordForward(nextText, 0);
@@ -309,8 +310,9 @@ function moveWord(
     // Cross line boundary: at column 0, continue word movement on previous line
     if (pos === 0 && col === 0 && current.row > 0) {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const prevRowIdx = (current.row - 1) as MultiBufferRow;
-      const prevLineText = snapshot.lines(prevRowIdx, current.row);
+      const rawPrev = (current.row - 1) as MultiBufferRow;
+      const prevRowIdx = skipTrailingNewlineRow(snapshot, rawPrev, "up", snapshot.lineCount);
+      const prevLineText = snapshot.lines(prevRowIdx, nextRow(prevRowIdx, snapshot.lineCount));
       const prevText = prevLineText[0] ?? "";
       const prevPos = scanWordBackward(prevText, prevText.length);
       return { row: prevRowIdx, column: prevPos };
@@ -342,10 +344,12 @@ export function moveWordBoundary(
 
     if (direction === "right") {
       if (col >= text.length) {
-        // At end of line — cross to start of next line
+        // At end of line — cross to start of next line, skipping trailing-newline rows
         if (current.row + 1 < snapshot.lineCount) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-          return { row: (current.row + 1) as MultiBufferRow, column: 0 };
+          const rawNext = (current.row + 1) as MultiBufferRow;
+          const newRow = skipTrailingNewlineRow(snapshot, rawNext, "down", snapshot.lineCount);
+          return { row: newRow, column: 0 };
         }
         return current;
       }
@@ -363,11 +367,12 @@ export function moveWordBoundary(
 
     // left: determine the class of the character immediately before the cursor
     if (col <= 0) {
-      // At start of line — cross to end of previous line
+      // At start of line — cross to end of previous line, skipping trailing-newline rows
       if (current.row > 0) {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-        const prevRow = (current.row - 1) as MultiBufferRow;
-        const prevLineText = snapshot.lines(prevRow, current.row);
+        const rawPrev = (current.row - 1) as MultiBufferRow;
+        const prevRow = skipTrailingNewlineRow(snapshot, rawPrev, "up", snapshot.lineCount);
+        const prevLineText = snapshot.lines(prevRow, nextRow(prevRow, snapshot.lineCount));
         const prevLen = prevLineText[0]?.length ?? 0;
         return { row: prevRow, column: prevLen };
       }
