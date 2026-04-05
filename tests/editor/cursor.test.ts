@@ -287,6 +287,25 @@ describe("Cursor - Buffer Granularity", () => {
     const snap = setup("AAA\nBBB\nCCC").snapshot();
     expectPoint(moveCursor(snap, mbPoint(0, 1), "right", "buffer"), 2, 3);
   });
+
+  test("move to buffer end skips trailing-newline separator row", () => {
+    // Excerpt with hasTrailingNewline: rows 0–2 are content ("a","b","c"), row 3 is the
+    // trailing-newline separator. Cmd+End must land at row 2 col 1 ("c"), not row 3.
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    const snap = mb.snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "buffer"), 2, 1);
+  });
+
+  test("move to buffer end unaffected when last excerpt has no trailing newline", () => {
+    // Sanity check: with no trailing newline, behaviour is unchanged.
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3));
+    const snap = mb.snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 0), "right", "buffer"), 2, 1);
+  });
 });
 
 // Helper: buffer with `rows` lines of uniform content, plus an optional short line at the end

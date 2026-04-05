@@ -445,7 +445,11 @@ function moveBuffer(
     return { row: 0 as MultiBufferRow, column: 0 };
   }
   // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-  const lastRow = (snapshot.lineCount - 1) as MultiBufferRow;
+  const rawLastRow = (snapshot.lineCount - 1) as MultiBufferRow;
+  // Skip a trailing-newline separator row if the last excerpt has one.
+  // Without this, Cmd+End would land on the excerpt-separator row instead of
+  // the last content character.
+  const lastRow = skipTrailingNewlineRow(snapshot, rawLastRow, "up", snapshot.lineCount);
   const lineText = snapshot.lines(lastRow, nextRow(lastRow, snapshot.lineCount));
   const lineLen = lineText[0]?.length ?? 0;
   return { row: lastRow, column: lineLen };
