@@ -1232,6 +1232,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     if (direction === "down") {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const belowRow = (row + 1) as MultiBufferRow;
+      // Don't move across a trailing-newline separator row (excerpt boundary).
+      const belowExcerpt = snap.excerptAt(belowRow);
+      if (belowExcerpt?.hasTrailingNewline && belowRow === belowExcerpt.endRow - 1) return;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const twoRowsEnd = (row + 2) as MultiBufferRow;
       // Fetch both lines in a single snap.lines() call instead of two.
@@ -1252,6 +1255,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     } else {
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const aboveRow = (row - 1) as MultiBufferRow;
+      // Don't move across a trailing-newline separator row (excerpt boundary).
+      const aboveExcerpt = snap.excerptAt(aboveRow);
+      if (aboveExcerpt?.hasTrailingNewline && aboveRow === aboveExcerpt.endRow - 1) return;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
       const nextRowEnd = (row + 1) as MultiBufferRow;
       // Fetch both lines in a single snap.lines() call instead of two.
