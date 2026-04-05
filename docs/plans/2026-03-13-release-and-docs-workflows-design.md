@@ -27,12 +27,6 @@ Standard GitHub Actions workflow (not `gh aw`).
 
 The PR goes through normal CI (typecheck, lint, test) and review. No special labels or automation needed — the release-deploy workflow identifies it by branch name.
 
-### What it does NOT do
-
-- Run tests (CI handles that on the PR)
-- Create tags (release-deploy handles that)
-- Generate release notes (release-deploy handles that)
-
 ## 2. Release / Deploy (`release-deploy.yml`)
 
 Standard GitHub Actions workflow.
@@ -97,29 +91,13 @@ The release-deploy workflow reads this template and substitutes the placeholders
 
 A `gh aw` agentic workflow following the same pattern as `code-simplifier.md`.
 
-**Triggers:**
-- `schedule: weekly` (compiles to something like `0 7 * * 3` — Wednesday 7am UTC)
-- `workflow_dispatch`
-- Dispatched by release-deploy workflow after creating a release
+**Triggers:** `schedule: weekly` (`0 7 * * 3` — Wednesday 7am UTC), `workflow_dispatch`, and dispatched by release-deploy after creating a release.
 
-**Scope — files to update:**
-- `README.md` — architecture, status, test/bench counts, demo instructions
-- `CLAUDE.md` — file tree, architecture section, subpath exports, constraints
-- `docs/*.md` — glossary, bindings, any other docs that drifted
+**Scope:** `README.md` (architecture, status, test/bench counts), `CLAUDE.md` (file tree, exports, constraints), and `docs/*.md` (glossary, bindings, drifted docs). Reads the actual codebase to determine truth; skips if nothing changed.
 
-**Principles:**
-- Read the actual codebase to determine truth (file tree, test count, bench count, exports)
-- Keep docs terse and focused — trim bloat, remove stale sections
-- Don't invent content — only reflect what exists in the code
-- Skip if nothing changed (no PR created)
+**Safe outputs:** `create-pull-request` with title prefix `[docs-update]`, labels `[docs, automation]`, expires `1d`; `skip-if-match: 'is:pr is:open in:title "[docs-update]"'`.
 
-**Safe outputs:**
-- `create-pull-request` with title prefix `[docs-update]`, labels `[docs, automation]`, expires `1d`
-- `skip-if-match: 'is:pr is:open in:title "[docs-update]"'`
-
-**Tools:** `github` toolset (repos, pull_requests) + file read/write.
-
-**Permissions:** `read-all` for codebase inspection, write for PR creation.
+**Tools/Permissions:** `github` toolset (repos, pull_requests) + file read/write; `read-all` for codebase inspection, write for PR creation.
 
 ## 5. package.json change
 
