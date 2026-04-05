@@ -278,6 +278,55 @@ describe("insertLineAbove", () => {
   });
 });
 
+// ─── moveLine - excerpt boundary guards ────────────────────────────
+
+describe("moveLine - excerpt boundary guards", () => {
+  /**
+   * Two-excerpt multibuffer:
+   *   Excerpt 1: "a\nb\nc" with hasTrailingNewline → rows 0-2 content, row 3 separator
+   *   Excerpt 2: "x\ny\nz"                         → rows 4-6 content
+   */
+  function setupTwoExcerpts(): { mb: MultiBuffer; editor: Editor } {
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const buf2 = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    const editor = new Editor(mb);
+    return { mb, editor };
+  }
+
+  test("moveLine down is a no-op when below row is a trailing-newline separator", () => {
+    const { mb, editor } = setupTwoExcerpts();
+    // Row 2 is the last content row of excerpt 1; row 3 is the separator.
+    editor.setCursor(mbPoint(2, 0));
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    // Text must be unchanged — separator row must not be swapped with content.
+    const snap = mb.snapshot();
+    const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
+    expect(lines[0]).toBe("a");
+    expect(lines[1]).toBe("b");
+    expect(lines[2]).toBe("c");
+    // Cursor stays at row 2
+    expectPoint(editor.cursor, 2, 0);
+  });
+
+  test("moveLine up is a no-op when above row is a trailing-newline separator", () => {
+    const { mb, editor } = setupTwoExcerpts();
+    // Row 4 is the first content row of excerpt 2; row 3 is the separator.
+    editor.setCursor(mbPoint(4, 0));
+    editor.dispatch({ type: "moveLine", direction: "up" });
+    // Text must be unchanged.
+    const snap = mb.snapshot();
+    const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
+    expect(lines[4]).toBe("x");
+    expect(lines[5]).toBe("y");
+    expect(lines[6]).toBe("z");
+    // Cursor stays at row 4
+    expectPoint(editor.cursor, 4, 0);
+  });
+});
+
 // ─── deleteLine with multi-cursor ──────────────────────────────────
 
 describe("deleteLine - multi-cursor", () => {
