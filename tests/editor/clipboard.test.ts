@@ -274,3 +274,48 @@ describe("Clipboard - getCutText", () => {
     expect(editor.getCutText()).toBe("second");
   });
 });
+
+// ─── getCutText — multi-cursor ──────────────────────────────────────
+
+describe("Clipboard - getCutText multi-cursor", () => {
+  test("two collapsed cursors on different lines returns both lines", () => {
+    const editor = setup("first\nsecond\nthird");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    expect(editor.selections.length).toBe(2);
+    // Both cursors collapsed — getCutText returns "first\n" + "third" (no trailing newline on last)
+    expect(editor.getCutText()).toBe("first\nthird");
+  });
+
+  test("two collapsed cursors on same line deduplicates the row", () => {
+    const editor = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 3) });
+    // Both cursors on row 0 — getCutText should return "hello\n" once
+    expect(editor.getCutText()).toBe("hello\n");
+  });
+
+  test("three collapsed cursors on non-last, non-last, last lines", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 0) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    expect(editor.selections.length).toBe(3);
+    // rows 0 and 1 get \n appended; row 2 (last line) does not
+    expect(editor.getCutText()).toBe("aaa\nbbb\nccc");
+  });
+
+  test("at least one non-collapsed selection — uses getSelectedText, skips collapsed", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    // Cursor 1: extend to select "aaa" on row 0 (non-collapsed)
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    // Cursor 2: collapsed at row 2 — addCursor creates a collapsed cursor
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    expect(editor.selections.length).toBe(2);
+    // hasNonCollapsedSelection is true (cursor 1 is non-collapsed)
+    // → getCutText delegates to getSelectedText
+    // getSelectedText skips collapsed selections (cursor 2), so only "aaa" is returned
+    expect(editor.getCutText()).toBe("aaa");
+  });
+});
