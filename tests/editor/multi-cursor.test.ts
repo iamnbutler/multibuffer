@@ -248,6 +248,98 @@ describe("Multi-cursor - clearing", () => {
   });
 });
 
+// ─── collapseSelection dispatch with multi-cursor ──────────────────
+
+describe("Multi-cursor - collapseSelection dispatch", () => {
+  test("collapse to 'start' moves each cursor to start of its selection", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    // Selection 1: cursor at (0,0), extend right 3 → selects "aaa" on row 0
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    // Selection 2: cursor at (2,0), extend right 3 → selects "ccc" on row 2
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    expect(editor.selections.length).toBe(2);
+
+    editor.dispatch({ type: "collapseSelection", to: "start" });
+
+    // After collapse, both selections should be collapsed
+    const snap = editor.multiBuffer.snapshot();
+    expect(editor.selections.length).toBe(2);
+    for (const sel of editor.selections) {
+      const start = snap.resolveAnchor(sel.range.start);
+      const end = snap.resolveAnchor(sel.range.end);
+      expect(start).toBeDefined();
+      expect(end).toBeDefined();
+      if (start && end) {
+        expect(start.row).toBe(end.row);
+        expect(start.column).toBe(end.column);
+      }
+    }
+    // First cursor should be at row 0, col 0 (start of "aaa")
+    const first = editor.selections[0];
+    if (first) {
+      const pt = snap.resolveAnchor(first.range.start);
+      if (pt) {
+        expect(num(pt.row)).toBe(0);
+        expect(pt.column).toBe(0);
+      }
+    }
+  });
+
+  test("collapse to 'end' moves each cursor to end of its selection", () => {
+    const editor = setup("aaa\nbbb\nccc");
+    // Selection 1: "aaa" on row 0 (cols 0-3)
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    // Selection 2: "ccc" on row 2 (cols 0-3)
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    expect(editor.selections.length).toBe(2);
+
+    editor.dispatch({ type: "collapseSelection", to: "end" });
+
+    const snap = editor.multiBuffer.snapshot();
+    expect(editor.selections.length).toBe(2);
+    // Each selection should be collapsed at the end (col 3)
+    for (const sel of editor.selections) {
+      const start = snap.resolveAnchor(sel.range.start);
+      const end = snap.resolveAnchor(sel.range.end);
+      expect(start).toBeDefined();
+      expect(end).toBeDefined();
+      if (start && end) {
+        expect(start.row).toBe(end.row);
+        expect(start.column).toBe(end.column);
+        expect(end.column).toBe(3); // end of "aaa"/"ccc"
+      }
+    }
+  });
+
+  test("collapsing overlapping selections to same point merges them", () => {
+    const editor = setup("hello");
+    // Two selections both starting at col 0 — after extending, both select "hello"
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 0) });
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+
+    // Both select identical range — collapse to "start" should yield a single cursor
+    editor.dispatch({ type: "collapseSelection", to: "start" });
+    expect(editor.selections.length).toBe(1);
+  });
+
+  test("collapseSelection on single selection is a no-op for count", () => {
+    const editor = setup("hello world");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
+    expect(editor.selections.length).toBe(1);
+
+    editor.dispatch({ type: "collapseSelection", to: "start" });
+    expect(editor.selections.length).toBe(1);
+    expect(editor.cursor.column).toBe(0);
+  });
+});
+
 // ─── Selection accessor backward compatibility ─────────────────────
 
 describe("Multi-cursor - backward compatibility", () => {
