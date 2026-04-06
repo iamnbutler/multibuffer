@@ -1439,23 +1439,15 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     let minRow = this.cursor.row;
     let maxRow = this.cursor.row;
     for (const sel of this._selections) {
-      if (!isCollapsed(snap, sel)) {
-        const range = resolveAnchorRange(snap, sel.range);
-        if (range) {
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          minRow = Math.min(minRow, range.start.row) as MultiBufferRow;
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
-        }
-      } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
-        const resolved = snap.resolveAnchor(headAnchor);
-        if (resolved) {
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          minRow = Math.min(minRow, resolved.row) as MultiBufferRow;
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          maxRow = Math.max(maxRow, resolved.row) as MultiBufferRow;
-        }
+      // Resolve once: for collapsed cursors start.row === end.row, so
+      // Math.min(row, row) and Math.max(row, row) are still correct.
+      // Eliminates the isCollapsed() pre-check that re-resolved both anchors redundantly.
+      const range = resolveAnchorRange(snap, sel.range);
+      if (range) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
+        minRow = Math.min(minRow, range.start.row) as MultiBufferRow;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
+        maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
       }
     }
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
@@ -1790,18 +1782,13 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     for (let i = 0; i < this._selections.length; i++) {
       const sel = this._selections[i];
       if (!sel) continue;
-
-      if (!isCollapsed(snap, sel)) {
-        const range = resolveAnchorRange(snap, sel.range);
-        if (range) {
-          resolved.push({ start: range.start, end: range.end, index: i });
-        }
-      } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
-        const point = snap.resolveAnchor(headAnchor);
-        if (point) {
-          resolved.push({ start: point, end: point, index: i });
-        }
+      // Resolve once: for collapsed cursors (start === end anchor) this still produces
+      // identical start/end points, so the caller's edit(start, end, text) is a no-op
+      // deletion and a pure insert — identical behaviour to the old collapsed branch.
+      // Eliminates the isCollapsed() pre-check that re-resolved both anchors redundantly.
+      const range = resolveAnchorRange(snap, sel.range);
+      if (range) {
+        resolved.push({ start: range.start, end: range.end, index: i });
       }
     }
 
