@@ -67,6 +67,10 @@ let editorInsert1k: Editor;
 let editorInsert10k: Editor;
 let editorDelete1k: Editor;
 let editorMove1k: Editor;
+let editorMoveWordRight1k: Editor;
+let editorMoveWordLeft1k: Editor;
+let editorMoveWordRight100excerpts: Editor;
+let editorDeleteForward1k: Editor;
 let editorNewline1k: Editor;
 let editorInsert100excerpts: Editor;
 let editorIndent1k: Editor;
@@ -136,6 +140,80 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         editorMove1k.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+      },
+    },
+    {
+      // Word-right navigation (Ctrl+Right / Alt+Right).
+      // Drives scanWordForward → isWordCodePoint per-character loop.
+      // Position resets to col 0 each setup; 1000 iters will exhaust words on
+      // the line and subsequent dispatches measure the no-move path.
+      name: "moveCursor right - word (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorMoveWordRight1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMoveWordRight1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorMoveWordRight1k.dispatch({ type: "moveCursor", direction: "right", granularity: "word" });
+      },
+    },
+    {
+      // Word-left navigation (Ctrl+Left / Alt+Left).
+      // Drives scanWordBackward → isWordCodePoint per-character loop.
+      name: "moveCursor left - word (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorMoveWordLeft1k = makeEditor(1000);
+        // Position mid-line so the first several iters actually scan backward.
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMoveWordLeft1k.setCursor({ row: 500 as MultiBufferRow, column: 32 });
+      },
+      fn: () => {
+        editorMoveWordLeft1k.dispatch({ type: "moveCursor", direction: "left", granularity: "word" });
+      },
+    },
+    {
+      // Word-right in a multi-excerpt editor: 100 excerpts × 10 lines.
+      // Measures word-scan overhead when excerpt lookup is part of the hot path.
+      name: "moveCursor right - word (100 excerpts × 10 lines)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        const mb = createMultiBuffer();
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        const buf = createBuffer("bench-multi-word" as BufferId, generateText(1000));
+        for (let i = 0; i < 100; i++) {
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+          const start = { row: (i * 10) as BufferRow, column: 0 };
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+          const end = { row: ((i + 1) * 10) as BufferRow, column: 0 };
+          const r: ExcerptRange = { context: { start, end }, primary: { start, end } };
+          mb.addExcerpt(buf, r);
+        }
+        editorMoveWordRight100excerpts = new Editor(mb);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorMoveWordRight100excerpts.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorMoveWordRight100excerpts.dispatch({ type: "moveCursor", direction: "right", granularity: "word" });
+      },
+    },
+    {
+      // Delete-forward (Delete key): symmetric counterpart to deleteBackward.
+      // Had no benchmark coverage despite being on the same keypress-to-model-update path.
+      name: "deleteForward - char (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorDeleteForward1k = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorDeleteForward1k.setCursor({ row: 500 as MultiBufferRow, column: 0 });
+      },
+      fn: () => {
+        editorDeleteForward1k.dispatch({ type: "deleteForward", granularity: "character" });
       },
     },
     {
