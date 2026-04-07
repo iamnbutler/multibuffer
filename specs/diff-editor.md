@@ -106,71 +106,27 @@ When user edits:
 
 #### 4.1.1 DiffLine
 
-A single line in the diff output.
-
-Fields:
-- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
-- `text` (string) - The line content without trailing newline.
-- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
+A single line in the diff output. Fields: `kind` ("equal" | "insert" | "delete"), `text` (line content without trailing newline), `oldRow` (0-based; `undefined` for inserts), `newRow` (0-based; `undefined` for deletes).
 
 #### 4.1.2 DiffHunk
 
-A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
-
-Fields:
-- `oldStart` (number) - Starting line number in old buffer.
-- `oldCount` (number) - Number of lines from old buffer in this hunk.
-- `newStart` (number) - Starting line number in new buffer.
-- `newCount` (number) - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
+A contiguous group of diff lines with shared context, analogous to a unified diff hunk. Fields: `oldStart`/`oldCount`, `newStart`/`newCount` (line ranges in each buffer), `lines` (DiffLine[] including context).
 
 #### 4.1.3 DiffResult
 
-Complete diff output.
-
-Fields:
-- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
-- `isEqual` (boolean) - True if old and new text are identical.
+Complete diff output. Fields: `hunks` (readonly DiffHunk[]), `isEqual` (true when texts are identical; hunks is then empty).
 
 #### 4.1.4 Decoration
 
-Visual styling applied to a range of text.
-
-Fields:
-- `range` (MultiBufferRange) - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+Visual styling applied to a row range. Fields: `range` (MultiBufferRange), `style` (Partial\<DecorationStyle\> — backgroundColor, gutterSign, gutterSignColor, etc.).
 
 #### 4.1.5 DecorationStyle
 
-All visual properties for a decorated line.
-
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+All visual properties for a decorated line: `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, `textDecoration` (text styling) and `gutterBackground`, `gutterColor`, `gutterSign`, `gutterSignColor` (gutter styling).
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Stateful controller managing a live diff view. See [§7.2](#72-creatediffcontroller) for the full TypeScript interface.
 
 ### 4.2 Excerpt Structure
 
@@ -323,17 +279,9 @@ After: delete "foo" + insert "bar"  →  2 lines, 2 excerpts
 
 ### 5.6 Cursor Preservation
 
-The MultiBuffer's anchor system handles cursor preservation:
+The MultiBuffer's anchor system handles cursor preservation. Before re-diff, anchors capture cursor position (excerpt ID + buffer offset + version); when excerpts are rebuilt, the replacement map tracks old→new excerpt ID mappings so `resolveAnchor()` can restore the cursor.
 
-1. Editor creates anchors at cursor position before operations.
-2. Anchors reference excerpt ID + buffer offset + version.
-3. When excerpts are rebuilt, the replacement map tracks old→new ID mappings.
-4. `resolveAnchor()` follows replacement chain and adjusts for buffer edits.
-5. Cursor position is restored after re-diff.
-
-**Edge cases**:
-- Cursor on delete line that disappears (convergence): Cursor moves to the resulting equal line.
-- Cursor on equal line that diverges: Cursor moves to the insert line (the editable one).
+**Edge cases**: A cursor on a delete line that converges moves to the resulting equal line; a cursor on an equal line that diverges moves to the insert line.
 
 ### 5.7 Decoration Styles
 
