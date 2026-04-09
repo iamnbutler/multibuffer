@@ -212,4 +212,167 @@ describe("Selection - Select All", () => {
     if (start) expectPoint(start, 0, 0);
     if (end) expectPoint(end, 2, 3);
   });
+
+  test("select all on single-line buffer selects entire line", () => {
+    const mb = setup("hello");
+    const snap = mb.snapshot();
+    const sel = selectAll(snap, mb);
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    expect(isCollapsed(snap, sel)).toBe(false);
+    const start = snap.resolveAnchor(sel.range.start);
+    const end = snap.resolveAnchor(sel.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 5);
+  });
+
+  test("select all on empty buffer produces collapsed selection at origin", () => {
+    const mb = setup("");
+    const snap = mb.snapshot();
+    const sel = selectAll(snap, mb);
+    expect(sel).toBeDefined();
+    if (!sel) return;
+
+    expect(isCollapsed(snap, sel)).toBe(true);
+    const start = snap.resolveAnchor(sel.range.start);
+    if (start) expectPoint(start, 0, 0);
+  });
+});
+
+describe("Selection - Extend by word granularity", () => {
+  test("extend right by word selects through current word to next word start", () => {
+    // "hello world": from (0,0), skip word "hello" then space → lands at (0,6)
+    const mb = setup("hello world");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(0, 0));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "right", "word");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("end");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 6);
+  });
+
+  test("extend left by word selects back to start of current word", () => {
+    // "hello world": from end-of-line (0,11), skip "world" backward → lands at (0,6)
+    const mb = setup("hello world");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(0, 11));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "left", "word");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("start");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 0, 6);
+    if (end) expectPoint(end, 0, 11);
+  });
+
+  test("extending right by word twice then left shrinks selection toward anchor", () => {
+    // "one two three": two right-by-word extends build (0,0)→(0,8), head="end"
+    // one left-by-word shrinks to (0,0)→(0,4), head still "end"
+    const mb = setup("one two three");
+    const snap = mb.snapshot();
+
+    const sel0 = selectionAtPoint(mb, mbPoint(0, 0));
+    if (!sel0) return;
+    const sel1 = extendSelection(snap, mb, sel0, "right", "word");
+    if (!sel1) return;
+    const sel2 = extendSelection(snap, mb, sel1, "right", "word");
+    if (!sel2) return;
+
+    expect(sel2.head).toBe("end");
+    const endAfterTwo = snap.resolveAnchor(sel2.range.end);
+    if (endAfterTwo) expectPoint(endAfterTwo, 0, 8);
+
+    const sel3 = extendSelection(snap, mb, sel2, "left", "word");
+    if (!sel3) return;
+
+    expect(sel3.head).toBe("end");
+    const start = snap.resolveAnchor(sel3.range.start);
+    const end = snap.resolveAnchor(sel3.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 4);
+  });
+});
+
+describe("Selection - Extend by line granularity", () => {
+  test("extend right by line selects to end of line", () => {
+    const mb = setup("hello world");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(0, 5));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "right", "line");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("end");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 0, 5);
+    if (end) expectPoint(end, 0, 11);
+  });
+
+  test("extend left by line selects to start of line (home)", () => {
+    const mb = setup("hello world");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(0, 5));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "left", "line");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("start");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 0, 5);
+  });
+});
+
+describe("Selection - Extend by buffer granularity", () => {
+  test("extend right by buffer selects to end of document", () => {
+    const mb = setup("aaa\nbbb\nccc");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(1, 1));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "right", "buffer");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("end");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 1, 1);
+    if (end) expectPoint(end, 2, 3);
+  });
+
+  test("extend left by buffer selects to start of document", () => {
+    const mb = setup("aaa\nbbb\nccc");
+    const snap = mb.snapshot();
+    const sel = selectionAtPoint(mb, mbPoint(1, 1));
+    if (!sel) return;
+
+    const extended = extendSelection(snap, mb, sel, "left", "buffer");
+    expect(extended).toBeDefined();
+    if (!extended) return;
+
+    expect(extended.head).toBe("start");
+    const start = snap.resolveAnchor(extended.range.start);
+    const end = snap.resolveAnchor(extended.range.end);
+    if (start) expectPoint(start, 0, 0);
+    if (end) expectPoint(end, 1, 1);
+  });
 });
