@@ -1110,17 +1110,27 @@ class MultiBufferImpl implements MultiBuffer {
       const exc = this._excerpts.get(id);
       if (!exc) continue;
 
+      let startRow = exc.range.context.start.row;
       let endRow = exc.range.context.end.row;
 
-      // If the edit changed line count and falls within this excerpt, adjust end row
+      // Adjust row ranges when the edit changes the line count.
       if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
-        if (editRow >= exc.range.context.start.row && editRow < exc.range.context.end.row) {
+        if (editRow < exc.range.context.start.row) {
+          // Edit is before this excerpt — shift both start and end rows so the
+          // excerpt continues to reference the same buffer content after the insert/delete.
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          startRow = (startRow + lineDelta) as BufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          endRow = (endRow + lineDelta) as BufferRow;
+        } else if (editRow < exc.range.context.end.row) {
+          // Edit is within this excerpt — only the end row needs to grow/shrink.
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           endRow = (endRow + lineDelta) as BufferRow;
         }
+        // else: edit is at or after the excerpt's end — no adjustment needed.
       }
 
-      // Clamp to new buffer bounds
+      // Clamp to new buffer bounds (handles negative lineDelta that pushes rows < 0).
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedEndRow = Math.min(
         endRow,
@@ -1128,7 +1138,7 @@ class MultiBufferImpl implements MultiBuffer {
       ) as BufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedStartRow = Math.min(
-        exc.range.context.start.row,
+        Math.max(0, startRow),
         clampedEndRow,
       ) as BufferRow;
       const clampedRange: ExcerptRange = {

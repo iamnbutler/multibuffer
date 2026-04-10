@@ -1542,3 +1542,61 @@ describe("moveExcerpt", () => {
     expect(mb.lineCount).toBe(totalBefore);
   });
 });
+
+
+describe("MultiBuffer - _refreshExcerptsForBuffer row shift", () => {
+  test("inserting lines in first excerpt shifts rows of later excerpt from same buffer", () => {
+    // Two non-adjacent excerpts from the same buffer.
+    // Editing inside the first excerpt (inserting a line) must also shift
+    // the row range of the second excerpt so it continues to reference the
+    // same buffer content after the insert.
+    const buf = createBuffer(createBufferId(), "line0\nline1\nline2\nline3\nline4");
+    const mb = createMultiBuffer();
+    // Excerpt A: buffer rows [0, 2) → "line0", "line1"
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    // Excerpt B: buffer rows [3, 5) → "line3", "line4"
+    mb.addExcerpt(buf, excerptRange(3, 5));
+
+    expect(mb.lineCount).toBe(4);
+
+    // Insert a new line inside excerpt A (at mb row 1, col 5 → end of "line1")
+    mb.edit(mbPoint(1, 5), mbPoint(1, 5), "\nnew");
+
+    // After insert:
+    // Buffer is now: "line0\nline1\nnew\nline2\nline3\nline4" (6 lines)
+    // Excerpt A must cover buffer rows [0, 3) to include "line0", "line1", "new"
+    // Excerpt B must cover buffer rows [4, 6) to still show "line3", "line4"
+
+    const snap = mb.snapshot();
+    // Total lines = 3 (excerpt A) + 2 (excerpt B) = 5
+    expect(snap.lineCount).toBe(5);
+
+    // Last two multibuffer rows (excerpt B) should still be "line3" and "line4"
+    const lines = snap.lines(mbRow(3), mbRow(5));
+    expect(lines[0]).toBe("line3");
+    expect(lines[1]).toBe("line4");
+  });
+
+  test("deleting lines in first excerpt shifts rows of later excerpt from same buffer", () => {
+    const buf = createBuffer(createBufferId(), "a\nb\nc\nd\ne\nf");
+    const mb = createMultiBuffer();
+    // Excerpt A: buffer rows [0, 3) → "a", "b", "c"
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    // Excerpt B: buffer rows [4, 6) → "e", "f"
+    mb.addExcerpt(buf, excerptRange(4, 6));
+
+    // Delete line "b" by replacing mb row 1 content to empty and collapsing
+    // (delete "b\n" i.e., the newline at the end of row 1 and beginning of row 2)
+    mb.edit(mbPoint(1, 0), mbPoint(2, 0), "");
+
+    // Buffer is now: "a\nc\nd\ne\nf" (5 lines)
+    // Excerpt A covers [0, 2) → "a", "c"
+    // Excerpt B covers [3, 5) → "e", "f"
+    const snap = mb.snapshot();
+    expect(snap.lineCount).toBe(4);
+
+    const lines = snap.lines(mbRow(2), mbRow(4));
+    expect(lines[0]).toBe("e");
+    expect(lines[1]).toBe("f");
+  });
+});
