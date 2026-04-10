@@ -1,8 +1,7 @@
-# Test Improver Memory
-cmds: bun test/typecheck/lint/fuzz/test:e2e; CI: install->build:demo->typecheck->lint->test; no coverage; bun not in runner
-fw: bun:test; helpers.ts+property-helpers.ts; num() unwraps brands; biome-ignore for casts
-PRs (2026-04-09 clean): #312 #335 #357 #368; #373 unstable (maintainer's, Repo Assist pinged 2026-04-09)
-Backlog (blocked): #400 anchor bias; singleton opt unimplemented; edit-proxy cross-excerpt unimplemented
-Future: #375 #374 #376 #408 #412
-round-robin: last=2026-04-09/24185924743 tasks=3,4,5,7; next=1,2,6,7
-state: main=ce545ec/2026-03-23; #409 updated 2026-04-09; no TI merges since 2026-03-26; suite mature
+# TI Memory 2026-04-10
+cmds: bun test/typecheck/lint/fuzz/test:e2e; bun via bun.sh/install in runner; no CI coverage
+fw: bun:test; helpers.ts+property-helpers.ts; num() unwraps brands
+TI PRs (clean): #312 #335 #357 #368; #373 unstable (maintainer)
+blocked: #400 anchor bias; singleton unimplemented; edit-proxy cross-excerpt unimplemented
+rr: last=2026-04-10/24238873818 t=1,2,6,7; next=3,4,5,7
+state: main=ce545ec; #409 updated 2026-04-10; suite=2265 tests; RA trailing-newline PRs #418-#431 open
