@@ -206,6 +206,32 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FileDiffEntry
+
+A description of a single file supplied when creating a [MultiFileDiff](#multifilediff). Contains:
+- `filename` — display path shown in the file header.
+- `oldContent` — before text; empty string for new files.
+- `newContent` — after text; empty string for deleted files.
+- `previousFilename` — optional; set when the file was renamed.
+
+See: `src/diff/types.ts`
+
+### FileDiffState
+
+The read-only public view of a single file within a [MultiFileDiff](#multifilediff). Exposes `filename`, `previousFilename`, `stats` ([FileDiffStats](#fileDiffStats)), `collapsed`, `initialized` (whether the file's diff has been lazily rendered), and `isEqual`.
+
+See: `src/diff/types.ts`
+
+### FileDiffStats
+
+Per-file diff statistics within a [MultiFileDiff](#multifilediff): `additions` and `deletions` line counts for a single file.
+
+See: `src/diff/types.ts`
+
+---
+
 ## G
 
 ### Generational Arena
@@ -238,6 +264,14 @@ See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutte
 
 Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }` multibuffer position. Implemented by the renderer using fixed-height line measurements.
 
+### HunkHeader
+
+Metadata for a hunk separator line — the `@@ -X,Y +A,B @@` marker rendered between non-adjacent diff hunks. Carries `oldStart`, `oldCount`, `newStart`, `newCount` (1-based display line numbers) and an optional `context` string identifying the surrounding function or class.
+
+See also: [DiffHunk](#diffhunk)
+
+See: `src/diff/types.ts`
+
 ---
 
 ## I
@@ -263,6 +297,18 @@ See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
+
+### IntralineDiff
+
+Character-level diff result for a paired delete/insert line. Contains `deleteRanges` and `insertRanges` — each a list of [IntralineRange](#intralinerange) values identifying the exact column spans that changed within the line. Used to highlight individual changed character runs rather than entire lines.
+
+See: `src/diff/types.ts`, `src/diff/diff.ts`
+
+### IntralineRange
+
+A column range within a single line for intraline diff highlighting: `startColumn` (0-based, inclusive) and `endColumn` (0-based, exclusive). Used as elements of the `deleteRanges` and `insertRanges` arrays in [IntralineDiff](#intralinediff).
+
+See: `src/diff/types.ts`
 
 ---
 
@@ -308,6 +354,26 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 
 An immutable snapshot of the multibuffer's state. Carries a monotonically increasing `version` counter that increments on every mutation (shared globally across all `MultiBuffer` instances). Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns. The `version` field is used by the DOM renderer to skip `WrapMap` reconstruction when neither the snapshot content nor the wrap width has changed since the last render.
 
+### Multi-Cursor
+
+A mode in which the editor maintains multiple independent [selections](#selection) simultaneously. All edit commands (insert, delete, indent, etc.) are applied to every cursor in sequence. Activated by dispatching `addCursor` (at a specific point), `addCursorAbove`, or `addCursorBelow` commands. Most selection-resetting operations (mouse click, `Escape`) collapse all cursors to the [primary selection](#primary-selection). Internally tracked as an ordered `_selections` array; the last element is always the primary selection.
+
+See: `src/editor/editor.ts`, `src/editor/types.ts`
+
+### MultiFileDiff
+
+An orchestrator that composes multiple per-file [DiffController](#diffcontroller) instances into a single unified diff view. Created by `createMultiFileDiff(options: MultiFileDiffOptions)`. Supports per-file collapse/expand, scroll-to-file navigation, lazy rendering (only the first visible file is initialized by default to avoid upfront rendering cost), and aggregated change statistics.
+
+Key methods: `scrollToFile(filename)`, `collapseFile(filename)`, `expandFile(filename)`, `toggleFile(filename)`, `collapseAll()`, `expandAll()`, `dispose()`.
+
+See: `src/diff/multi-file.ts`, `src/diff/types.ts`
+
+### MultiFileDiffStats
+
+Aggregate statistics for a [MultiFileDiff](#multifilediff): `totalAdditions` and `totalDeletions` (line counts summed across all files) and `fileCount`.
+
+See: `src/diff/types.ts`
+
 ### Myers' Algorithm
 
 The O(ND) line-level diff algorithm used in `src/diff/diff.ts`, where N is the sum of line counts in both texts and D is the number of differing lines. Finds the shortest edit script by tracking the furthest-reaching path on each diagonal of an edit graph. The implementation stores the trace as active diagonal slices of size `2d+1` at each step `d`, reducing memory from O(max·D) to O(D²) — a significant win for large files with few changes.
@@ -331,6 +397,12 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### Primary Selection
+
+In [multi-cursor](#multi-cursor) mode, the most recently added selection — the last element of the internal `_selections` array. The `editor.cursor` getter and operations that require a single position always target the primary selection. Single-cursor operations (mouse click, `setCursor`) replace the primary selection and clear all others.
+
+See: `src/editor/editor.ts`
 
 ---
 
