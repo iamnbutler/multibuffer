@@ -1112,18 +1112,28 @@ class MultiBufferImpl implements MultiBuffer {
 
       let startRow = exc.range.context.start.row;
       let endRow = exc.range.context.end.row;
+      let primaryStartRow = exc.range.primary.start.row;
+      let primaryEndRow = exc.range.primary.end.row;
 
       if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
         if (editRow < exc.range.context.start.row) {
-          // Edit is before this excerpt — shift both start and end rows.
+          // Edit is before this excerpt — shift both context and primary start/end rows.
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           startRow = (startRow + lineDelta) as BufferRow;
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           endRow = (endRow + lineDelta) as BufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          primaryStartRow = (primaryStartRow + lineDelta) as BufferRow;
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+          primaryEndRow = (primaryEndRow + lineDelta) as BufferRow;
         } else if (editRow < exc.range.context.end.row) {
-          // Edit is within this excerpt — only the end row grows or shrinks.
+          // Edit is within this excerpt — only end rows grow or shrink.
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           endRow = (endRow + lineDelta) as BufferRow;
+          if (editRow < exc.range.primary.end.row) {
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
+            primaryEndRow = (primaryEndRow + lineDelta) as BufferRow;
+          }
         }
         // else: edit is at or after the excerpt's end — no adjustment needed.
       }
@@ -1136,12 +1146,22 @@ class MultiBufferImpl implements MultiBuffer {
         Math.max(0, startRow),
         clampedEndRow,
       ) as BufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
+      const clampedPrimaryEndRow = Math.min(primaryEndRow, clampedEndRow) as BufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
+      const clampedPrimaryStartRow = Math.min(
+        Math.max(clampedStartRow, primaryStartRow),
+        clampedPrimaryEndRow,
+      ) as BufferRow;
       const clampedRange: ExcerptRange = {
         context: {
           start: { row: clampedStartRow, column: exc.range.context.start.column },
           end: { row: clampedEndRow, column: exc.range.context.end.column },
         },
-        primary: exc.range.primary,
+        primary: {
+          start: { row: clampedPrimaryStartRow, column: exc.range.primary.start.column },
+          end: { row: clampedPrimaryEndRow, column: exc.range.primary.end.column },
+        },
       };
 
       const refreshed = createExcerpt(id, newSnap, clampedRange, exc.hasTrailingNewline, exc.editable, exc.metadata);

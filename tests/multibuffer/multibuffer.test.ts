@@ -1590,4 +1590,26 @@ describe("MultiBuffer - _refreshExcerptsForBuffer row shift", () => {
     expect(lines[0]).toBe("e");
     expect(lines[1]).toBe("f");
   });
+
+  test("inserting lines before excerpt shifts primary range rows of later excerpt", () => {
+    // Buffer: line0, line1, line2, line3, line4
+    // Excerpt A: context rows 0-2, primary rows 0-2
+    // Excerpt B: context rows 3-5, primary rows 4-5  (primary is a subset of context)
+    // Edit: insert a new line after line1 inside excerpt A (row 1)
+    // Expected: excerpt B primary range should shift from rows 4-5 to rows 5-6
+    const buf = createBuffer(createBufferId(), "line0\nline1\nline2\nline3\nline4");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    mb.addExcerpt(buf, excerptRange(3, 5, 4, 5));
+
+    // Insert "\nnew" at end of line1 (row 1, col 5)
+    mb.edit(mbPoint(1, 5), mbPoint(1, 5), "\nnew");
+
+    const snap = mb.snapshot();
+    const excerptB = snap.excerpts[1];
+    expect(excerptB).toBeDefined();
+    // Primary range should have been shifted by +1 row
+    expect(num(excerptB!.range.primary.start.row)).toBe(5);
+    expect(num(excerptB!.range.primary.end.row)).toBe(6);
+  });
 });
