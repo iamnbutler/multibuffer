@@ -562,6 +562,7 @@ class MultiBufferImpl implements MultiBuffer {
   private _excerpts = new SlotMap<Excerpt>();
   private _order: ExcerptId[] = [];
   private _cachedInfos: ExcerptInfo[] = [];
+  private _cachedExcerptData: Excerpt[] = [];
   private _cachedLineCount = 0;
   private _buffers = new Map<string, Buffer>();
   private _replacedExcerpts = new Map<string, ExcerptId>();
@@ -662,15 +663,9 @@ class MultiBufferImpl implements MultiBuffer {
 
   snapshot(): MultiBufferSnapshot {
     this._ensureCache();
-    // Copy excerpt data for immutability.
-    const excerptData: Excerpt[] = [];
-    for (const id of this._order) {
-      const exc = this._excerpts.get(id);
-      if (exc) excerptData.push(exc);
-    }
     return new MultiBufferSnapshotImpl(
       this._cachedInfos.slice(),
-      excerptData,
+      this._cachedExcerptData.slice(),
       this._buffers,
       this._replacedExcerpts,
       this._version,
@@ -1170,6 +1165,7 @@ class MultiBufferImpl implements MultiBuffer {
   /** Rebuild the cached ExcerptInfo array and line count. Called only by _ensureCache. */
   private _rebuildCache(): void {
     const infos: ExcerptInfo[] = [];
+    const excerptData: Excerpt[] = [];
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
     let currentRow = 0 as MultiBufferRow;
     for (const id of this._order) {
@@ -1177,10 +1173,12 @@ class MultiBufferImpl implements MultiBuffer {
       if (!exc) continue;
       const info = toExcerptInfo(exc, currentRow);
       infos.push(info);
+      excerptData.push(exc);
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       currentRow = info.endRow as MultiBufferRow;
     }
     this._cachedInfos = infos;
+    this._cachedExcerptData = excerptData;
     this._cachedLineCount = currentRow;
   }
 }
