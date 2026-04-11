@@ -3,7 +3,7 @@
  * and collapsing selections using anchors.
  */
 
-import { createAnchorRange, createSelection } from "../multibuffer/anchor.ts";
+import { createAnchorRange, createSelection, selectionAnchor, selectionHead } from "../multibuffer/anchor.ts";
 import type {
   Anchor,
   MultiBufferPoint,
@@ -40,8 +40,7 @@ export function extendSelection(
   granularity: Granularity,
 ): Selection | undefined {
   // Resolve the current head position
-  const headAnchor =
-    selection.head === "end" ? selection.range.end : selection.range.start;
+  const headAnchor = selectionHead(selection);
   const headPoint = snapshot.resolveAnchor(headAnchor);
   if (!headPoint) return undefined;
 
@@ -51,8 +50,7 @@ export function extendSelection(
   if (!newHeadAnchor) return undefined;
 
   // Keep the anchor end fixed
-  const anchorEnd =
-    selection.head === "end" ? selection.range.start : selection.range.end;
+  const anchorEnd = selectionAnchor(selection);
 
   // Determine ordering: start should be before end in the document
   const anchorPoint = snapshot.resolveAnchor(anchorEnd);

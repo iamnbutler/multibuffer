@@ -56,6 +56,22 @@ export function reverseSelection(selection: Selection): Selection {
   };
 }
 
+/**
+ * Return the head (moveable) anchor of a selection.
+ * The head is the end that moves during extend-selection operations.
+ */
+export function selectionHead(selection: Selection): Anchor {
+  return selection.head === "end" ? selection.range.end : selection.range.start;
+}
+
+/**
+ * Return the anchor (fixed) end of a selection — the opposite of the head.
+ * This end stays put during extend-selection operations.
+ */
+export function selectionAnchor(selection: Selection): Anchor {
+  return selection.head === "end" ? selection.range.start : selection.range.end;
+}
+
 export function resolveAnchorRange(
   snapshot: MultiBufferSnapshot,
   range: AnchorRange,
