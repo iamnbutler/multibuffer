@@ -14,23 +14,15 @@
 
 ## Issue Selection
 
-- **Scheduled runs:** Picks oldest issue labeled `agent:implement`
-- **Command runs:** Works on the issue where `/implement` was invoked
-- Agent removes `agent:implement` and adds `in-progress` when it starts
+Scheduled runs pick the oldest issue labeled `agent:implement`; command runs work on the issue where `/implement` was invoked. The agent swaps `agent:implement` → `in-progress` when starting.
 
 ## TDD Phases
 
 ### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
+Read CLAUDE.md for current constraints, the issue thoroughly, and check repo-memory for prior work or existing WIP branches to resume.
 
 ### Phase 1: Plan
-- Identify affected modules (buffer, multibuffer, editor, renderer, diff)
-- Identify types that need to change or be created
-- Comment implementation plan on the issue
-- If too large → decompose into sub-issues labeled `agent:implement`, exit
+Identify affected modules (buffer, multibuffer, editor, renderer, diff) and types that need to change, then comment the implementation plan on the issue. If too large, decompose into sub-issues labeled `agent:implement` and exit.
 
 ### Phase 2: Types
 - Create or modify type definitions
@@ -50,9 +42,7 @@
 - Commit: `feat(<module>): implement <feature>`
 
 ### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+Run the complete suite, then create a draft PR linking the issue. If nearing timeout, commit WIP and note progress in repo-memory.
 
 ## Safe Outputs
 
@@ -64,11 +54,7 @@
 
 ## Memory
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
+Repo-memory tracks in-progress issues with WIP branch names and current phase, failed attempts with reasons (no retry of same approach), and parent→child issue mappings for decompositions.
 
 ## State Transitions
 
@@ -79,29 +65,12 @@ Repo-memory tracks:
 
 ## PR Maintenance
 
-- Each run checks open `[Implementor]` PRs for CI failures
-- Auto-fixes failures caused by its own changes
-- Can invoke `/pr-fix` on its own PRs for complex CI issues
-- Leaves human review comments untouched
+Each run checks open `[Implementor]` PRs for CI failures, auto-fixing those caused by its own changes (or invoking `/pr-fix` for complex issues) while leaving human review comments untouched.
 
 ## Guardrails
 
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
+**Must do:** Read CLAUDE.md before every run, follow `biome-ignore expect:` convention, run full validation before PRs, identify as `[Implementor]`, and respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic).
 
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
+**Must not:** Add dependencies without a discussion issue, modify code beyond the issue scope, create non-draft PRs, re-attempt a failed approach, or skip types-first.
 
-**Escape hatches:**
-- Issue too vague → comment asking for clarification
-- Issue too large → decompose into sub-issues
-- Implementation breaks existing tests → investigate and fix; escalate if stuck after genuine attempt
-- Can't resolve within 2 runs → flag for human attention
+**Escape hatches:** Comment for clarification if too vague; decompose into sub-issues if too large; investigate and fix if existing tests break; flag for human attention if unresolvable after 2 runs.
