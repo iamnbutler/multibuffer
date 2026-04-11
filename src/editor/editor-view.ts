@@ -148,11 +148,18 @@ class EditorViewImpl implements EditorView {
     if (!skipInputHandler) {
       this.inputHandler = new InputHandler(
         (cmd) => {
-          // Intercept copy/cut to populate the clipboard before the state update
-          if (cmd.type === "copy" || cmd.type === "cut") {
-            const selected = this.editor.getSelectedText();
-            if (selected && typeof navigator !== "undefined") {
-              navigator.clipboard?.writeText(selected);
+          // Intercept copy/cut to populate the clipboard before the state update.
+          // copy always uses the selection text; cut also includes the whole line
+          // when the cursor is collapsed (no selection), matching VS Code behaviour.
+          if (cmd.type === "copy") {
+            const text = this.editor.getSelectedText();
+            if (text && typeof navigator !== "undefined") {
+              navigator.clipboard?.writeText(text);
+            }
+          } else if (cmd.type === "cut") {
+            const text = this.editor.getCutText();
+            if (text && typeof navigator !== "undefined") {
+              navigator.clipboard?.writeText(text);
             }
           }
           this.editor.dispatch(cmd);
