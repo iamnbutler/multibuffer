@@ -116,6 +116,10 @@ export function isCollapsed(
   snapshot: MultiBufferSnapshot,
   selection: Selection,
 ): boolean {
+  // Fast path: collapsed selections created via selectionAtPoint reuse the same
+  // anchor reference for both start and end. Identical references are definitively
+  // the same position, so we skip two resolveAnchor calls in the common case.
+  if (selection.range.start === selection.range.end) return true;
   const start = snapshot.resolveAnchor(selection.range.start);
   const end = snapshot.resolveAnchor(selection.range.end);
   if (!start || !end) return true;
