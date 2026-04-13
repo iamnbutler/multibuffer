@@ -1218,84 +1218,266 @@ export class Editor {
     }
   }
 
-private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
+  private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
+
+    // Collect unique cursor rows from all selections (cf. _deleteLine pattern)
+    const rowSet = new Set<number>();
+    const colMap = new Map<number, number>();
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const point = snap.resolveAnchor(headAnchor);
+      if (point) {
+        rowSet.add(point.row);
+        colMap.set(point.row, point.column);
+      }
+    }
+    if (rowSet.size === 0) {
+      rowSet.add(this.cursor.row);
+      colMap.set(this.cursor.row, this.cursor.column);
+    }
+
+    const allRows = [...rowSet].sort((a, b) => a - b);
+
+    // Group consecutive rows into blocks — consecutive rows move as a unit
+    const blocks: number[][] = [];
+    // biome-ignore lint/style/noNonNullAssertion: expect: allRows is non-empty (rowSet populated above)
+    let currentBlock: number[] = [allRows[0]!];
+    for (let i = 1; i < allRows.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: expect: i and i-1 are valid indices within allRows
+      if (allRows[i]! === allRows[i - 1]! + 1) {
+        // biome-ignore lint/style/noNonNullAssertion: expect: i is a valid index within allRows
+        currentBlock.push(allRows[i]!);
+      } else {
+        blocks.push(currentBlock);
+        // biome-ignore lint/style/noNonNullAssertion: expect: i is a valid index within allRows
+        currentBlock = [allRows[i]!];
+      }
+    }
+    blocks.push(currentBlock);
+
+    // Filter out blocks at the boundary in the given direction
     const lineCount = snap.lineCount;
+    const validBlocks = blocks.filter(
+      // biome-ignore lint/style/noNonNullAssertion: expect: block is non-empty by construction above
+      (block) => direction === "up" ? block[0]! > 0 : block[block.length - 1]! < lineCount - 1,
+    );
 
-    if (direction === "up" && row === 0) return;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const lastRow = (lineCount - 1) as MultiBufferRow;
-    if (direction === "down" && row >= lastRow) return;
+    if (validBlocks.length === 0) return;
 
-    if (direction === "down") {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const belowRow = (row + 1) as MultiBufferRow;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const twoRowsEnd = (row + 2) as MultiBufferRow;
-      // Fetch both lines in a single snap.lines() call instead of two.
-      // The knownRemovedText avoids a third call inside _getTextInRange.
-      const twoLines = snap.lines(row, twoRowsEnd);
-      const currentLineText = twoLines[0] ?? "";
-      const belowLineText = twoLines[1] ?? "";
-      const removedText = `${currentLineText}\n${belowLineText}`;
+    // Descend for "down", ascend for "up" (moves are size-neutral so order is not
+    // strictly required, but this matches natural visual ordering)
+    const orderedBlocks = direction === "down" ? [...validBlocks].reverse() : validBlocks;
 
-      const editStart: MultiBufferPoint = { row, column: 0 };
-      const editEnd: MultiBufferPoint = { row: belowRow, column: belowLineText.length };
-      if (!this._edit(snap, editStart, editEnd, `${belowLineText}\n${currentLineText}`, removedText)) return;
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    const movedRows = new Set<number>();
+    let currentSnap = snap;
 
-      const newCursor: MultiBufferPoint = { row: belowRow, column: cursor.column };
-      this._cursor = newCursor;
-      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-      this._selections = newSel ? [newSel] : [];
-    } else {
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const aboveRow = (row - 1) as MultiBufferRow;
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const nextRowEnd = (row + 1) as MultiBufferRow;
-      // Fetch both lines in a single snap.lines() call instead of two.
-      const twoLines = snap.lines(aboveRow, nextRowEnd);
-      const aboveLineText = twoLines[0] ?? "";
-      const currentLineText = twoLines[1] ?? "";
-      const removedText = `${aboveLineText}\n${currentLineText}`;
+    for (const block of orderedBlocks) {
+      // biome-ignore lint/style/noNonNullAssertion: expect: block is non-empty by construction
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const blockStart = block[0]! as MultiBufferRow;
+      // biome-ignore lint/style/noNonNullAssertion: expect: block is non-empty by construction
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const blockEnd = block[block.length - 1]! as MultiBufferRow;
 
-      const editStart: MultiBufferPoint = { row: aboveRow, column: 0 };
-      const editEnd: MultiBufferPoint = { row, column: currentLineText.length };
-      if (!this._edit(snap, editStart, editEnd, `${currentLineText}\n${aboveLineText}`, removedText)) return;
+      if (direction === "down") {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const belowRow = (blockEnd + 1) as MultiBufferRow;
+        if (belowRow >= currentSnap.lineCount) continue;
 
-      const newCursor: MultiBufferPoint = { row: aboveRow, column: cursor.column };
-      this._cursor = newCursor;
-      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-      this._selections = newSel ? [newSel] : [];
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const fetchEnd = (belowRow + 1) as MultiBufferRow;
+        const allLines = currentSnap.lines(blockStart, fetchEnd);
+        const blockLines = allLines.slice(0, block.length);
+        const belowLineText = allLines[block.length] ?? "";
+
+        const blockText = blockLines.join("\n");
+        const removedText = `${blockText}\n${belowLineText}`;
+        const insertedText = `${belowLineText}\n${blockText}`;
+
+        const editStart: MultiBufferPoint = { row: blockStart, column: 0 };
+        const editEnd: MultiBufferPoint = { row: belowRow, column: belowLineText.length };
+
+        const startBuf = currentSnap.toBufferPoint(editStart);
+        if (startBuf && !startBuf.excerpt.editable) continue;
+        const endBuf = currentSnap.toBufferPoint(editEnd);
+        if (endBuf && !endBuf.excerpt.editable) continue;
+
+        edits.push({ editStart, removedText, insertedText });
+        this.multiBuffer.edit(editStart, editEnd, insertedText);
+        currentSnap = this.multiBuffer.snapshot();
+
+        // New cursor positions: each block row shifts down by 1
+        for (const origRow of block) {
+          movedRows.add(origRow);
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+          const newRow = (origRow + 1) as MultiBufferRow;
+          const col = colMap.get(origRow) ?? 0;
+          const newCursor: MultiBufferPoint = { row: newRow, column: col };
+          const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+          if (newSel) newSelections.unshift(newSel);
+        }
+      } else {
+        // direction === "up"
+        if (blockStart <= 0) continue;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const aboveRow = (blockStart - 1) as MultiBufferRow;
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const fetchEnd = (blockEnd + 1) as MultiBufferRow;
+        const allLines = currentSnap.lines(aboveRow, fetchEnd);
+        const aboveLineText = allLines[0] ?? "";
+        const blockLines = allLines.slice(1);
+        const lastBlockLine = blockLines[blockLines.length - 1] ?? "";
+
+        const blockText = blockLines.join("\n");
+        const removedText = `${aboveLineText}\n${blockText}`;
+        const insertedText = `${blockText}\n${aboveLineText}`;
+
+        const editStart: MultiBufferPoint = { row: aboveRow, column: 0 };
+        const editEnd: MultiBufferPoint = { row: blockEnd, column: lastBlockLine.length };
+
+        const startBuf = currentSnap.toBufferPoint(editStart);
+        if (startBuf && !startBuf.excerpt.editable) continue;
+        const endBuf = currentSnap.toBufferPoint(editEnd);
+        if (endBuf && !endBuf.excerpt.editable) continue;
+
+        edits.push({ editStart, removedText, insertedText });
+        this.multiBuffer.edit(editStart, editEnd, insertedText);
+        currentSnap = this.multiBuffer.snapshot();
+
+        // New cursor positions: each block row shifts up by 1
+        for (const origRow of block) {
+          movedRows.add(origRow);
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+          const newRow = (origRow - 1) as MultiBufferRow;
+          const col = colMap.get(origRow) ?? 0;
+          const newCursor: MultiBufferPoint = { row: newRow, column: col };
+          const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+          if (newSel) newSelections.unshift(newSel);
+        }
+      }
+    }
+
+    if (edits.length === 0) return;
+
+    // Preserve cursors that couldn't move (at boundary or in non-editable excerpt)
+    for (const r of rowSet) {
+      if (!movedRows.has(r)) {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+        const stuckCursor: MultiBufferPoint = { row: r as MultiBufferRow, column: colMap.get(r) ?? 0 };
+        const stuckSel = selectionAtPoint(this.multiBuffer, stuckCursor);
+        if (stuckSel) newSelections.unshift(stuckSel);
+      }
+    }
+
+    this._undoStack.push({
+      edits,
+      cursorBefore: this._cursor,
+      selectionsBefore: this._selections,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
   private _duplicateLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const nextRowEnd = (row + 1) as MultiBufferRow;
-    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+    // Collect unique cursor rows from all selections (cf. _deleteLine pattern)
+    const rowSet = new Set<number>();
+    const colMap = new Map<number, number>();
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const point = snap.resolveAnchor(headAnchor);
+      if (point) {
+        rowSet.add(point.row);
+        colMap.set(point.row, point.column);
+      }
+    }
+    if (rowSet.size === 0) {
+      rowSet.add(this.cursor.row);
+      colMap.set(this.cursor.row, this.cursor.column);
+    }
 
-    if (direction === "down") {
-      const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-      if (!this._edit(snap, insertPoint, insertPoint, `\n${currentLineText}`)) return;
+    // Process descending (bottom-to-top) for both directions to avoid row-shift
+    // interference: inserts at lower rows don't affect higher rows yet to process.
+    const rows = [...rowSet].sort((a, b) => b - a);
 
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const origRow of rows) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const row = origRow as MultiBufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: cursor.column };
-      this._cursor = newCursor;
-      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-      this._selections = newSel ? [newSel] : [];
-    } else {
-      const insertPoint: MultiBufferPoint = { row, column: 0 };
-      if (!this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`)) return;
+      const nextRowEnd = (origRow + 1) as MultiBufferRow;
+      const lineText = currentSnap.lines(row, nextRowEnd)[0] ?? "";
+      const col = colMap.get(origRow) ?? 0;
 
-      this._cursor = { row, column: cursor.column };
-      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
-      this._selections = newSel ? [newSel] : [];
+      if (direction === "down") {
+        const insertPoint: MultiBufferPoint = { row, column: lineText.length };
+        const startBuf = currentSnap.toBufferPoint(insertPoint);
+        if (startBuf && !startBuf.excerpt.editable) continue;
+
+        const insertedText = `\n${lineText}`;
+        edits.push({ editStart: insertPoint, removedText: "", insertedText });
+        this.multiBuffer.edit(insertPoint, insertPoint, insertedText);
+        currentSnap = this.multiBuffer.snapshot();
+
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+        const newRow = (origRow + 1) as MultiBufferRow;
+        const newCursor: MultiBufferPoint = { row: newRow, column: col };
+        const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+        if (newSel) newSelections.unshift(newSel);
+      } else {
+        // direction === "up": insert copy above; cursor stays at row (the copy)
+        const insertPoint: MultiBufferPoint = { row, column: 0 };
+        const startBuf = currentSnap.toBufferPoint(insertPoint);
+        if (startBuf && !startBuf.excerpt.editable) continue;
+
+        const insertedText = `${lineText}\n`;
+        edits.push({ editStart: insertPoint, removedText: "", insertedText });
+        this.multiBuffer.edit(insertPoint, insertPoint, insertedText);
+        currentSnap = this.multiBuffer.snapshot();
+
+        const newCursor: MultiBufferPoint = { row, column: col };
+        const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+        if (newSel) newSelections.unshift(newSel);
+      }
+    }
+
+    if (edits.length === 0) return;
+
+    this._undoStack.push({
+      edits,
+      cursorBefore: this._cursor,
+      selectionsBefore: this._selections,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
     }
   }
 
