@@ -48,6 +48,12 @@ A hint controlling behavior at position boundaries — when text is inserted at 
 - `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
 - `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
 
+### BracketMatch
+
+A type (`src/editor/bracket-match.ts`) representing a matched bracket pair in the multibuffer. Contains `open` and `close` as [`MultiBufferPoint`](#multibufferpoint) values identifying the positions of the opening and closing brackets. Returned by the `Editor.bracketMatch` getter and emitted via the `bracketMatch` event. The scan is bounded to 1,000 lines in each direction to avoid scanning the entire document. Only computed when `bracketMatching: true` is set in `EditorOptions`.
+
+See: `src/editor/bracket-match.ts`
+
 ### Buffer
 
 A mutable object representing a single file's text content, backed by a [rope](#rope). Buffers support `insert`, `delete`, and `replace` operations and maintain a monotonically increasing `version` counter. Each edit is recorded in an edit log for [anchor](#anchor) resolution.
@@ -75,6 +81,12 @@ An immutable snapshot of a buffer's state at a point in time. Snapshots support 
 ---
 
 ## C
+
+### CanvasRenderer
+
+A high-performance canvas-based renderer (`src/renderer/canvas.ts`) that implements the [`Renderer`](#renderer) interface using an HTML `<canvas>` element. Text is drawn using a per-instance glyph atlas for efficient character caching and compositing. Uses a scroll container with a spacer element for native browser scrolling, and [`TileManager`](#tilemanager) for dirty-region tracking so only changed tiles are redrawn each frame. Supports soft wrapping via [`WrapMap`](#wrapmap) with lazy computation for large documents. Created by `createCanvasRenderer()`.
+
+See: `src/renderer/canvas.ts`
 
 ### Clipping
 
@@ -131,6 +143,12 @@ Key methods:
 - `dispose()` — cleans up timers and subscriptions.
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
+
+### DiffEditorView
+
+A high-level facade (`src/diff/diff-editor-view.ts`) that bundles [`DiffController`](#diffcontroller), [`Editor`](#editor), `DomRenderer`, and [`InputHandler`](#inputhandler) into a single component for inline (unified) diff views. Created by `createDiffEditorView(container, oldText, newText, options)` or `createDiffEditorViewFromBuffers()` for existing `Buffer` instances. Supports automatic re-diff on edit (debounced via `DiffController`), keyed decoration groups, CSS-variable theming, and read-only mode with optional cursor hiding.
+
+See: `src/diff/diff-editor-view.ts`, [`DiffController`](#diffcontroller)
 
 ### DiffHunk
 
@@ -206,11 +224,33 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FsAdapter
+
+A platform-portability interface (`src/project/types.ts`) for filesystem access used by [`ProjectTree`](#projecttree). Implementations provide `readdir(path)` for listing directory entries and an optional `stat(path)` for file metadata (size and modification time). The library ships `createFsAdapter()` for Bun/Node environments and `createMemoryFsAdapter()` for in-memory testing. A custom adapter can be passed via `ProjectTreeOptions.adapter` to use the browser File System Access API or any other virtual filesystem.
+
+See: `src/project/types.ts`, [`ProjectTree`](#projecttree)
+
+---
+
 ## G
 
 ### Generational Arena
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+
+### GlobMatcher
+
+A function type `(pattern: string, path: string) => boolean` used by [`ProjectTree`](#projecttree) to filter files against glob patterns. Consumers may inject a custom implementation via `ProjectTreeOptions.globMatcher`; the default is a minimal built-in matcher created by `createGlobMatcher()` in `src/project/glob.ts`.
+
+See: `src/project/types.ts`, [`ProjectTree`](#projecttree)
+
+### GlyphAtlas
+
+A texture atlas (`src/renderer/glyph-atlas.ts`) that caches pre-rendered character glyphs for GPU-accelerated text rendering. Glyphs are rasterized on first use into a fixed-cell grid (charWidth × lineHeight) on an offscreen canvas, producing a single-channel alpha texture for upload to WebGPU. The atlas grows when its current capacity is exhausted, up to a configurable `maxSize`. Exposes `GlyphInfo` (x, y, valid) per glyph for shader use.
+
+See: `src/renderer/glyph-atlas.ts`, `src/renderer/webgpu.ts`
 
 ### Goal Column
 
@@ -233,6 +273,12 @@ See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutte
 ---
 
 ## H
+
+### HighlightCategory
+
+A string union type (`src/renderer/queries/types.ts`) enumerating the syntax highlight categories that map to CSS custom properties (`--syntax-*`). Categories include `"keyword"`, `"string"`, `"number"`, `"comment"`, `"type"`, `"function"`, `"property"`, `"operator"`, `"punctuation"`, `"constant"`, `"variable_builtin"`, and `"default"`. Used in [`LanguageQuery`](#languagequery) to classify tree-sitter node types for per-language highlighting.
+
+See: `src/renderer/queries/types.ts`, [`LanguageQuery`](#languagequery)
 
 ### Hit Test
 
@@ -260,6 +306,12 @@ An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) w
 
 See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
 
+### InjectionHighlighter
+
+A tree-sitter–based syntax highlighter (`src/renderer/injection-highlighter.ts`) that extends the base `Highlighter` with support for [Language Injection](#language-injection). Maintains separate parse trees per injected language and builds a row → injection-range index for O(1) token lookup during rendering. Suitable for mixed-language files such as Markdown with YAML frontmatter.
+
+See: `src/renderer/injection-highlighter.ts`, [Language Injection](#language-injection), [Incremental Parsing](#incremental-parsing)
+
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
@@ -276,6 +328,24 @@ A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent`
 
 ## L
 
+### Language Injection
+
+A syntax highlighting technique where a region of text is highlighted using a different language grammar than the surrounding file — for example, parsing a YAML frontmatter block inside a Markdown file with the YAML grammar. Injection ranges carry a `rowOffset` to translate token positions back to buffer coordinates. Implemented by [`InjectionHighlighter`](#injectionhighlighter).
+
+See: `src/renderer/injection-highlighter.ts`
+
+### LanguageQuery
+
+A language-specific descriptor (`src/renderer/queries/types.ts`) providing the data needed to map tree-sitter node types to syntax highlight categories. Contains:
+
+- `nodeTypeCategory` — a `ReadonlyMap<string, HighlightCategory>` mapping node type strings to highlight categories.
+- `styledParents` (optional) — node types that propagate their styling to children (e.g., Markdown headings).
+- `skipChildren` (optional) — node types whose children should not be highlighted separately (e.g., code blocks handled by injection).
+
+Per-language modules in `src/renderer/queries/` export a `LanguageQuery`; the registry in `src/renderer/queries/index.ts` provides `nodeTypeToCategoryForLanguage(language, nodeType)` for O(1) lookup.
+
+See: `src/renderer/queries/types.ts`, [`HighlightCategory`](#highlightcategory)
+
 ### Line Pooling
 
 A DOM-renderer optimization that reuses existing line elements when scrolling, rather than creating and destroying DOM nodes for every visible row. Only the visible viewport's worth of nodes is kept alive.
@@ -287,6 +357,18 @@ A DOM-renderer optimization that reuses existing line elements when scrolling, r
 ### Measurements
 
 Fixed rendering constants: `lineHeight`, `charWidth`, `gutterWidth`, and optional `wrapWidth`. All lines have the same height, enabling O(1) pixel↔row conversion.
+
+### moveWordBoundary
+
+A cursor movement function (`src/editor/cursor.ts`) that advances one contiguous character-class run. Unlike `moveWord` (which skips two classes — e.g., whitespace then the following word — to reach the next word start), `moveWordBoundary` stops at the first class transition. Used for word-granularity deletion (`Opt+Backspace` / `Opt+Delete`) so that deleting forward from the end of a word removes only the whitespace, not the following word as well. Navigation commands (`Opt+Arrow`) still use `moveWord`.
+
+See: `src/editor/cursor.ts`
+
+### Multi-Cursor
+
+The ability to have multiple simultaneous cursor positions and selections in the [`Editor`](#editor). Each cursor maps to an entry in the internal `_selections` array. Multi-cursor commands include `addCursor`, `addCursorAbove`, `addCursorBelow`, and `clearExtraCursors`. All edit operations (insert, delete, indent) are applied bottom-to-top across all selections so that higher row indices remain valid after lower edits. Overlapping or adjacent selections are automatically merged. The primary selection (index 0) is accessible via the backward-compatible `editor.selection` getter.
+
+See also: [Primary Selection](#primary-selection), [Selection](#selection)
 
 ### MultiBuffer
 
@@ -318,10 +400,6 @@ See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
 ## P
 
-### Prefix Sum
-
-An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk byte offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
-
 ### Position Translation
 
 The three-layer coordinate conversion:
@@ -331,6 +409,40 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### Prefix Sum
+
+An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk byte offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
+
+### Primary Selection
+
+The first entry in the [`Editor`](#editor)'s selections array (`_selections[0]`). In [multi-cursor](#multi-cursor) mode there may be additional selections, but the primary selection is always the one exposed via the backward-compatible `editor.selection` getter. When selections are merged after overlapping edits, the merged result becomes the primary selection.
+
+See also: [Multi-Cursor](#multi-cursor), [Selection](#selection)
+
+### ProjectDirectoryEntry
+
+A directory entry returned by [`ProjectTree`](#projecttree). Has `type: "directory"`, `name`, `path` (absolute), and `relativePath` (relative to project root). Its `children()` method returns an `AsyncIterable<ProjectEntry>` that lazily walks the directory only when iterated, enabling efficient handling of large repositories.
+
+See: `src/project/types.ts`, [`ProjectTree`](#projecttree)
+
+### ProjectEntry
+
+A discriminated union type (`ProjectFileEntry | ProjectDirectoryEntry`) representing a single item in a [`ProjectTree`](#projecttree). Disambiguated by the `type` field (`"file"` or `"directory"`).
+
+See: `src/project/types.ts`
+
+### ProjectFileEntry
+
+A file entry returned by [`ProjectTree`](#projecttree). Has `type: "file"`, `name`, `path` (absolute), and `relativePath` (relative to project root). When `ProjectTreeOptions.includeMetadata` is `true`, also carries `size` (bytes) and `mtime` (Unix timestamp in ms).
+
+See: `src/project/types.ts`, [`ProjectTree`](#projecttree)
+
+### ProjectTree
+
+An API (`src/project/`) for lazily enumerating files in a directory tree. Created by `createProjectTree(root, options)`. Supports glob-based include/exclude filtering via [`GlobMatcher`](#globmatcher), a pluggable [`FsAdapter`](#fsadapter) for platform portability, and async iteration via `entries()` and `children()`. Individual entries are retrievable by path via `get()`. Designed for building file tree UIs on top of multibuffer while keeping the library focused on the data layer.
+
+See: `src/project/tree.ts`, [`FsAdapter`](#fsadapter), [`GlobMatcher`](#globmatcher)
 
 ---
 
@@ -431,6 +543,18 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 ### TextSummary
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
+
+### Tile
+
+A fixed-height chunk of rows used for dirty-region tracking in the [`CanvasRenderer`](#canvasrenderer). Each tile spans a configurable number of lines and carries a `dirty` flag indicating whether it needs to be redrawn. Tiles are identified by their start row. Multiple invalidations to the same tile in a single frame are coalesced automatically.
+
+See: `src/renderer/tile-map.ts`, [`TileManager`](#tilemanager)
+
+### TileManager
+
+A class (`src/renderer/tile-map.ts`) that manages [`Tile`](#tile)-based dirty-region tracking for efficient partial redraws. Tracks dirty tiles in a `Set` for O(1) lookup and insertion. Exposes `markDirty(row, reason)`, `getDirtyTiles()`, `clearDirty()`, and `setViewport(start, end)` (which marks newly visible tiles dirty on scroll). Used by [`CanvasRenderer`](#canvasrenderer) to skip redrawing unchanged tiles each frame. Invalidation reasons include `"edit"`, `"selection"`, `"scroll"`, `"theme"`, `"resize"`, and `"initial"`.
+
+See: `src/renderer/tile-map.ts`
 
 ### Trailing Newline (synthetic)
 
