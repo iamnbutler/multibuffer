@@ -1698,6 +1698,74 @@ describe("Editor - Line Operations", () => {
     expectPoint(editor.cursor, 1, 2);
   });
 
+  // ── Multi-cursor Move Line ──────────────────────────────────────
+
+  test("multi-cursor moveLine down: two independent rows", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC\nDDD");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("BBB\nAAA\nDDD\nCCC");
+    expectPoint(editor.cursor, 3, 1);
+  });
+
+  test("multi-cursor moveLine up: two independent rows", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC\nDDD");
+    editor.setCursor(mbPoint(1, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(3, 1) });
+    editor.dispatch({ type: "moveLine", direction: "up" });
+    expect(getText(mb)).toBe("BBB\nAAA\nDDD\nCCC");
+    expectPoint(editor.cursor, 2, 1);
+  });
+
+  test("multi-cursor moveLine down: consecutive rows move as block", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC\nDDD");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb)).toBe("AAA\nDDD\nBBB\nCCC");
+    expectPoint(editor.cursor, 3, 0);
+  });
+
+  test("multi-cursor moveLine up: consecutive rows move as block", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC\nDDD");
+    editor.setCursor(mbPoint(1, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
+    editor.dispatch({ type: "moveLine", direction: "up" });
+    expect(getText(mb)).toBe("BBB\nCCC\nAAA\nDDD");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  test("multi-cursor moveLine down: boundary cursor stays, other moves", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "moveLine", direction: "down" });
+    // row 2 is last — can't move down; row 0 moves
+    expect(getText(mb)).toBe("BBB\nAAA\nCCC");
+    expectPoint(editor.cursor, 2, 1);
+  });
+
+  // ── Multi-cursor Duplicate Line ─────────────────────────────────
+
+  test("multi-cursor duplicateLine down: two rows", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("AAA\nAAA\nBBB\nCCC\nCCC");
+    expectPoint(editor.cursor, 4, 1);
+  });
+
+  test("multi-cursor duplicateLine up: two rows", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "duplicateLine", direction: "up" });
+    expect(getText(mb)).toBe("AAA\nAAA\nBBB\nCCC\nCCC");
+    expectPoint(editor.cursor, 3, 1);
+  });
+
   // ── Insert Line ─────────────────────────────────────────────────
 
   test("insert line below", () => {
