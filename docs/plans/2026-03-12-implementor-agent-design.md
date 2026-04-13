@@ -21,38 +21,22 @@
 ## TDD Phases
 
 ### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
+Read CLAUDE.md and the issue thoroughly; check repo-memory for prior work and existing WIP branches/PRs to resume.
 
 ### Phase 1: Plan
-- Identify affected modules (buffer, multibuffer, editor, renderer, diff)
-- Identify types that need to change or be created
-- Comment implementation plan on the issue
-- If too large → decompose into sub-issues labeled `agent:implement`, exit
+Identify affected modules and types; comment the implementation plan on the issue. If too large → decompose into sub-issues labeled `agent:implement`, exit.
 
 ### Phase 2: Types
-- Create or modify type definitions
-- Run `bun run typecheck`
-- Commit: `feat(<module>): add types for <feature>`
+Create or modify type definitions; run `bun run typecheck`; commit: `feat(<module>): add types for <feature>`.
 
 ### Phase 3: Tests
-- Write failing tests that define expected behavior
-- Run `bun test` to confirm they fail for the right reasons
-- Commit: `test(<module>): add tests for <feature>`
+Write failing tests; run `bun test` to confirm they fail for the right reasons; commit: `test(<module>): add tests for <feature>`.
 
 ### Phase 4: Implementation
-- Write implementation to make tests pass
-- Run full validation: `bun run typecheck && bun run lint && bun test`
-- If existing tests break → investigate and fix the implementation
-- Iterate until green
-- Commit: `feat(<module>): implement <feature>`
+Write implementation to make tests pass; run `bun run typecheck && bun run lint && bun test` (investigate and fix regressions; iterate until green); commit: `feat(<module>): implement <feature>`.
 
 ### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+Run the complete suite one final time; create draft PR linking the issue. If timeout approaching → commit WIP, note progress in repo-memory.
 
 ## Safe Outputs
 
@@ -64,11 +48,7 @@
 
 ## Memory
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
+Repo-memory tracks issues in-progress, WIP branch names and phases, failed attempts (to prevent retrying the same approach), and parent→child issue mappings for decompositions.
 
 ## State Transitions
 
@@ -86,19 +66,9 @@ Repo-memory tracks:
 
 ## Guardrails
 
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
+**Required:** Read CLAUDE.md before every run; follow `biome-ignore` with `expect:` convention; run full validation before creating PRs; identify as `[Implementor]` in all outputs; respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic).
 
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
+**Prohibited:** Adding dependencies without a discussion issue; modifying code outside issue scope; creating non-draft PRs; retrying a previously failed approach; skipping the types-first phase.
 
 **Escape hatches:**
 - Issue too vague → comment asking for clarification
