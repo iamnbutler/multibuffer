@@ -1358,18 +1358,43 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
+
+    // Collect pre-edit cursor positions for all selections before modifying the multibuffer.
+    const preCursorPoints: MultiBufferPoint[] = [];
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const pt = snap.resolveAnchor(headAnchor);
+      if (pt) preCursorPoints.push(pt);
+    }
+    if (preCursorPoints.length === 0) preCursorPoints.push(this.cursor);
+
     // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
     // Safe: rangeStart.column === 0 and rangeEnd.column === lastLineLen (full line), so
     // lines.join("\n") matches exactly what _getTextInRange would return.
     if (!this._edit(snap, rangeStart, rangeEnd, indented.join("\n"), lines.join("\n"))) return;
 
-    // Place cursor at its shifted position
-    const cursor = this.cursor;
-    const newCursor: MultiBufferPoint = { row: cursor.row, column: cursor.column + 2 };
+    // After indent each cursor shifts right by 2 columns; preserve all active cursors.
     const newSnap = this.multiBuffer.snapshot();
-    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
-    this._selections = newSel ? [newSel] : [];
+    const newSelections: Selection[] = [];
+    for (const pt of preCursorPoints) {
+      const newPt = newSnap.clipPoint({ row: pt.row, column: pt.column + 2 }, Bias.Left);
+      const sel = selectionAtPoint(this.multiBuffer, newPt);
+      if (sel) newSelections.push(sel);
+    }
+    if (newSelections.length > 0) {
+      this._selections = this._mergeSelections(newSelections, newSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = newSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
+    } else {
+      const cursor = this.cursor;
+      this._cursor = newSnap.clipPoint({ row: cursor.row, column: cursor.column + 2 }, Bias.Left);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
+    }
   }
 
   /**
@@ -1403,28 +1428,61 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
 
-    // Figure out how many spaces were removed from the cursor's line
-    const cursor = this.cursor;
-    const cursorLineIndex = cursor.row - startRow;
-    const cursorLine = lines[cursorLineIndex] ?? "";
-    let spacesRemovedOnCursorLine = 0;
-    if (cursorLine.length > 0 && cursorLine[0] === " ") {
-      spacesRemovedOnCursorLine = 1;
-      if (cursorLine.length > 1 && cursorLine[1] === " ") {
-        spacesRemovedOnCursorLine = 2;
-      }
+    // Collect pre-edit cursor positions for all selections before modifying the multibuffer.
+    const preCursorPoints: MultiBufferPoint[] = [];
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const pt = snap.resolveAnchor(headAnchor);
+      if (pt) preCursorPoints.push(pt);
     }
+    if (preCursorPoints.length === 0) preCursorPoints.push(this.cursor);
 
     // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
     if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"), lines.join("\n"))) return;
 
-    // Adjust cursor column
-    const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
-    const newCursor: MultiBufferPoint = { row: cursor.row, column: newCol };
+    // After dedent adjust each cursor by the spaces removed from its specific line;
+    // preserve all active cursors.
     const newSnap = this.multiBuffer.snapshot();
-    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
-    this._selections = newSel ? [newSel] : [];
+    const newSelections: Selection[] = [];
+    for (const pt of preCursorPoints) {
+      const lineIdx = pt.row - startRow;
+      const line = lines[lineIdx] ?? "";
+      let spacesRemoved = 0;
+      if (line.length > 0 && line[0] === " ") {
+        spacesRemoved = 1;
+        if (line.length > 1 && line[1] === " ") {
+          spacesRemoved = 2;
+        }
+      }
+      const newCol = Math.max(0, pt.column - spacesRemoved);
+      const newPt = newSnap.clipPoint({ row: pt.row, column: newCol }, Bias.Left);
+      const sel = selectionAtPoint(this.multiBuffer, newPt);
+      if (sel) newSelections.push(sel);
+    }
+    if (newSelections.length > 0) {
+      this._selections = this._mergeSelections(newSelections, newSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = newSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
+    } else {
+      const cursor = this.cursor;
+      const cursorLineIndex = cursor.row - startRow;
+      const cursorLine = lines[cursorLineIndex] ?? "";
+      let spacesRemovedOnCursorLine = 0;
+      if (cursorLine.length > 0 && cursorLine[0] === " ") {
+        spacesRemovedOnCursorLine = 1;
+        if (cursorLine.length > 1 && cursorLine[1] === " ") {
+          spacesRemovedOnCursorLine = 2;
+        }
+      }
+      const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
+      this._cursor = newSnap.clipPoint({ row: cursor.row, column: newCol }, Bias.Left);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
+    }
   }
 
   /**
