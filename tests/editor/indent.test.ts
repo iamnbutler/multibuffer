@@ -120,6 +120,25 @@ describe("indentLines", () => {
     expect(getText(mb)).toBe("  aaa\n  bbb\n  ccc");
   });
 
+  test("multi-cursor: all cursors shift right by 2 after indent", () => {
+    const { editor } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "indentLines" });
+    // Primary cursor should be at (2, 3) — row 2, col 1+2
+    expectPoint(editor.cursor, 2, 3);
+    // All active selections should survive (2 cursors preserved)
+    expect(editor.selections.length).toBe(2);
+    // Both cursors should have shifted right by 2
+    const snap = editor.multiBuffer.snapshot();
+    const resolved = editor.selections.map((sel) => {
+      const head = sel.head === "end" ? sel.range.end : sel.range.start;
+      return snap.resolveAnchor(head);
+    });
+    expect(resolved[0]?.column).toBe(3);
+    expect(resolved[1]?.column).toBe(3);
+  });
+
   test("indenting in one excerpt does not affect other excerpts", () => {
     // Set up two excerpts in a multibuffer
     const buf1 = createBuffer(createBufferId(), "alpha\nbeta");
@@ -214,5 +233,28 @@ describe("dedentLines", () => {
     editor.dispatch({ type: "dedentLines" });
     // Lines 0 and 2 should be dedented; line 1 (no leading spaces) untouched
     expect(getText(mb)).toBe("aaa\nbbb\nccc");
+  });
+
+  test("multi-cursor: each cursor shifts left by its line's removed spaces", () => {
+    const { editor } = setup("  aaa\nbbb\n ccc");
+    // Row 0 has 2 leading spaces; row 2 has 1 leading space
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 2) });
+    editor.dispatch({ type: "dedentLines" });
+    // Primary cursor (row 2, originally col 2, 1 space removed) → col 1
+    expectPoint(editor.cursor, 2, 1);
+    // Both cursors should survive
+    expect(editor.selections.length).toBe(2);
+    const snap = editor.multiBuffer.snapshot();
+    const resolved = editor.selections.map((sel) => {
+      const head = sel.head === "end" ? sel.range.end : sel.range.start;
+      return snap.resolveAnchor(head);
+    });
+    // Row 0 cursor: col 3 - 2 spaces = col 1
+    const row0 = resolved.find((p) => p?.row === 0);
+    expect(row0?.column).toBe(1);
+    // Row 2 cursor: col 2 - 1 space = col 1
+    const row2 = resolved.find((p) => p?.row === 2);
+    expect(row2?.column).toBe(1);
   });
 });
