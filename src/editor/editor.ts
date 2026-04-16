@@ -1301,46 +1301,132 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
   private _insertLineBelow(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const nextRowEnd = (row + 1) as MultiBufferRow;
-    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+    // Collect unique cursor rows from all selections (cf. _deleteLine / _duplicateLine pattern)
+    const rowSet = new Set<number>();
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const point = snap.resolveAnchor(headAnchor);
+      if (point) rowSet.add(point.row);
+    }
+    if (rowSet.size === 0) rowSet.add(this.cursor.row);
 
-    // Inherit the current line's leading whitespace (matches Enter auto-indent)
-    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+    // Process bottom-to-top so inserts at higher rows don't shift pending positions
+    const rows = [...rowSet].sort((a, b) => b - a);
 
-    const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-    if (!this._edit(snap, insertPoint, insertPoint, `\n${indent}`)) return;
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
 
-    // Move cursor to the new line after any indentation
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: indent.length };
-    this._cursor = newCursor;
-    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-    this._selections = newSel ? [newSel] : [];
+    for (const origRow of rows) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const row = origRow as MultiBufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const nextRowEnd = (origRow + 1) as MultiBufferRow;
+      const currentLineText = currentSnap.lines(row, nextRowEnd)[0] ?? "";
+      const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+
+      const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
+      const startBuf = currentSnap.toBufferPoint(insertPoint);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const insertedText = `\n${indent}`;
+      edits.push({ editStart: insertPoint, removedText: "", insertedText });
+      this.multiBuffer.edit(insertPoint, insertPoint, insertedText);
+      currentSnap = this.multiBuffer.snapshot();
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const newRow = (origRow + 1) as MultiBufferRow;
+      const newCursor: MultiBufferPoint = { row: newRow, column: indent.length };
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      if (newSel) newSelections.unshift(newSel);
+    }
+
+    if (edits.length === 0) return;
+
+    this._undoStack.push({
+      edits,
+      cursorBefore: this._cursor,
+      selectionsBefore: this._selections,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    }
   }
 
   private _insertLineAbove(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
 
-    // Inherit the current line's leading whitespace (consistent with Enter and insertLineBelow)
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const currentLineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
-    const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+    // Collect unique cursor rows from all selections (cf. _deleteLine / _duplicateLine pattern)
+    const rowSet = new Set<number>();
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const point = snap.resolveAnchor(headAnchor);
+      if (point) rowSet.add(point.row);
+    }
+    if (rowSet.size === 0) rowSet.add(this.cursor.row);
 
-    // Insert the indented blank line before the current line
-    const insertPoint: MultiBufferPoint = { row, column: 0 };
-    if (!this._edit(snap, insertPoint, insertPoint, `${indent}\n`)) return;
+    // Process bottom-to-top so inserts at lower rows don't shift pending positions
+    const rows = [...rowSet].sort((a, b) => b - a);
 
-    // Cursor moves to the new blank line after any indentation
-    const newCursor: MultiBufferPoint = { row, column: indent.length };
-    this._cursor = newCursor;
-    const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-    this._selections = newSel ? [newSel] : [];
+    const edits: EditOp[] = [];
+    const newSelections: Selection[] = [];
+    let currentSnap = snap;
+
+    for (const origRow of rows) {
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction from sorted row
+      const row = origRow as MultiBufferRow;
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
+      const nextRowEnd = (origRow + 1) as MultiBufferRow;
+      const currentLineText = currentSnap.lines(row, nextRowEnd)[0] ?? "";
+      const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
+
+      // Insert the indented blank line before the current line
+      const insertPoint: MultiBufferPoint = { row, column: 0 };
+      const startBuf = currentSnap.toBufferPoint(insertPoint);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const insertedText = `${indent}\n`;
+      edits.push({ editStart: insertPoint, removedText: "", insertedText });
+      this.multiBuffer.edit(insertPoint, insertPoint, insertedText);
+      currentSnap = this.multiBuffer.snapshot();
+
+      // Cursor moves to the new blank line (at the original row, now the new blank line)
+      const newCursor: MultiBufferPoint = { row, column: indent.length };
+      const newSel = selectionAtPoint(this.multiBuffer, newCursor);
+      if (newSel) newSelections.unshift(newSel);
+    }
+
+    if (edits.length === 0) return;
+
+    this._undoStack.push({
+      edits,
+      cursorBefore: this._cursor,
+      selectionsBefore: this._selections,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    this._selections = this._mergeSelections(newSelections, currentSnap);
+    const primarySel = this._selections[this._selections.length - 1];
+    if (primarySel) {
+      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const resolved = currentSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    }
   }
 
   /**

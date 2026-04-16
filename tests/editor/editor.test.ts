@@ -1740,6 +1740,37 @@ describe("Editor - Line Operations", () => {
     expectPoint(editor.cursor, 1, 0);
   });
 
+  // ── Multi-cursor Insert Line ────────────────────────────────────
+
+  test("multi-cursor: insertLineBelow inserts below all cursors", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("AAA\n\nBBB\nCCC\n");
+    expect(editor.selections.length).toBe(2);
+    expectPoint(editor.cursor, 4, 0);
+  });
+
+  test("multi-cursor: insertLineAbove inserts above all cursors", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("\nAAA\nBBB\n\nCCC");
+    expect(editor.selections.length).toBe(2);
+    expectPoint(editor.cursor, 3, 0);
+  });
+
+  test("multi-cursor: insertLineBelow preserves secondary cursor after undo", () => {
+    const { mb, editor } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "insertLineBelow" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("AAA\nBBB\nCCC");
+  });
+
   // ── Undo/Redo ───────────────────────────────────────────────────
 
   test("undo reverses moveLine", () => {
