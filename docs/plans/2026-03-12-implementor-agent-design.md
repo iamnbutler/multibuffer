@@ -14,17 +14,12 @@
 
 ## Issue Selection
 
-- **Scheduled runs:** Picks oldest issue labeled `agent:implement`
-- **Command runs:** Works on the issue where `/implement` was invoked
-- Agent removes `agent:implement` and adds `in-progress` when it starts
+Scheduled runs pick the oldest `agent:implement`-labeled issue; command runs work on the issue where `/implement` was invoked. On start, the agent swaps `agent:implement` for `in-progress`.
 
 ## TDD Phases
 
 ### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
+Read CLAUDE.md and the issue thoroughly; check repo-memory for prior work and existing WIP branches to resume.
 
 ### Phase 1: Plan
 - Identify affected modules (buffer, multibuffer, editor, renderer, diff)
@@ -50,9 +45,7 @@
 - Commit: `feat(<module>): implement <feature>`
 
 ### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+Run the full suite, then create a draft PR linking the issue. On timeout, commit WIP and note progress in repo-memory.
 
 ## Safe Outputs
 
@@ -64,11 +57,7 @@
 
 ## Memory
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
+Repo-memory tracks issues in-progress (branch and phase), failed attempts (to avoid retrying the same approach), and parent→child decomposition mappings.
 
 ## State Transitions
 
@@ -79,29 +68,12 @@ Repo-memory tracks:
 
 ## PR Maintenance
 
-- Each run checks open `[Implementor]` PRs for CI failures
-- Auto-fixes failures caused by its own changes
-- Can invoke `/pr-fix` on its own PRs for complex CI issues
-- Leaves human review comments untouched
+Each run checks open `[Implementor]` PRs for CI failures, auto-fixing failures caused by its own changes (invoking `/pr-fix` for complex cases). Human review comments are left untouched.
 
 ## Guardrails
 
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
+**Must do:** Read CLAUDE.md before every run; follow `biome-ignore`+`expect:` convention; run full validation before PRs; identify as `[Implementor]`; respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic).
 
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
+**Must not:** add dependencies without a discussion issue; touch code outside scope; create non-draft PRs; retry failed approaches; skip types-first phase.
 
-**Escape hatches:**
-- Issue too vague → comment asking for clarification
-- Issue too large → decompose into sub-issues
-- Implementation breaks existing tests → investigate and fix; escalate if stuck after genuine attempt
-- Can't resolve within 2 runs → flag for human attention
+**Escape hatches:** vague issue → ask for clarification; too large → decompose into sub-issues; broken tests → fix and escalate if stuck after genuine attempt; unresolved after 2 runs → flag for human attention.
