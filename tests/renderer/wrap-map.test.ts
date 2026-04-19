@@ -546,6 +546,30 @@ describe("lazy construction", () => {
     expect(lazyResult.segment).toBe(eagerResult.segment);
   });
 
+  test("amortized growth: large lazy WrapMap computed in small chunks matches eager", () => {
+    // 3000 rows forces many doubling rounds; verifies correctness and avoids O(n²) regression
+    const text = generateText(3_000);
+    const snap = makeSnapshot(text);
+    const eagerWm = new WrapMap(snap, 80);
+
+    resetCounters();
+    const snap2 = makeSnapshot(text);
+    const lazyWm = new WrapMap(snap2, 80, { lazy: true });
+
+    // Use chunk size of 50 to exercise the growth path ~60 times
+    while (!lazyWm.computeChunk(50)) {
+      // keep going
+    }
+
+    expect(lazyWm.totalVisualRows).toBe(eagerWm.totalVisualRows);
+    for (let vr = 0; vr < eagerWm.totalVisualRows; vr++) {
+      const eagerResult = eagerWm.visualRowToBufferRow(vr);
+      const lazyResult = lazyWm.visualRowToBufferRow(vr);
+      expect(num(lazyResult.mbRow)).toBe(num(eagerResult.mbRow));
+      expect(lazyResult.segment).toBe(eagerResult.segment);
+    }
+  });
+
   test("totalVisualRows returns estimate when not complete", () => {
     const text = generateText(100);
     const snap = makeSnapshot(text);
