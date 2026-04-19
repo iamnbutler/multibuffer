@@ -222,6 +222,7 @@ export class WrapMap {
    * eliminating `wrapLine()` recomputation in the hit-test and cursor hot paths.
    */
   private _segCharStart: Uint32Array;
+  private _segCharStartLen = 0;
   private _wrapWidth: number;
   private _snapshot: MultiBufferSnapshot;
   private _lineCount: number;
@@ -271,15 +272,18 @@ export class WrapMap {
       }
     }
 
-    // Append new segment offsets to the existing _segCharStart array.
+    // Append new segment offsets using amortized doubling to avoid O(n²) copies in lazy mode.
     if (segCharStartArr.length > 0) {
-      const prev = this._segCharStart;
-      const merged = new Uint32Array(prev.length + segCharStartArr.length);
-      merged.set(prev);
-      for (let j = 0; j < segCharStartArr.length; j++) {
-        merged[prev.length + j] = segCharStartArr[j] ?? 0;
+      const newLen = this._segCharStartLen + segCharStartArr.length;
+      if (newLen > this._segCharStart.length) {
+        let cap = Math.max(this._segCharStart.length * 2, 16);
+        while (cap < newLen) cap *= 2;
+        const expanded = new Uint32Array(cap);
+        expanded.set(this._segCharStart.subarray(0, this._segCharStartLen));
+        this._segCharStart = expanded;
       }
-      this._segCharStart = merged;
+      this._segCharStart.set(segCharStartArr, this._segCharStartLen);
+      this._segCharStartLen += segCharStartArr.length;
     }
 
     this._computedUpTo = target;
