@@ -22,12 +22,7 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### adjustOffset
 
-A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
-
-- Offsets before the edit pass through unchanged.
-- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
-- Offsets at the edit start with `Bias.Right` jump past inserted text.
-- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries. Offsets before the edit pass through unchanged; offsets after are shifted by `insertedLength − deletedLength`. Offsets at the edit start with `Bias.Right` jump past inserted text; with `Bias.Left` (or within the deleted range) they clamp to the edit start.
 
 Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
 
@@ -43,10 +38,7 @@ A behavior of the `insertNewline` command: the new line automatically receives t
 
 ### Bias
 
-A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds.
-
-- `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
-- `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
+A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds. `Bias.Left` stays left of inserted text (clips before the boundary); `Bias.Right` advances past it (clips to or after the boundary).
 
 ### Buffer
 
@@ -82,13 +74,7 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 ### Closer
 
-An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
-
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted; applies `ready-to-merge` when CI is green with no blocking reviews, `needs-review` when issues remain, or closes PRs that are duplicate, spam, or broken. Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on code and review state alone.
 
 See: `.github/workflows/closer.md`
 
@@ -140,11 +126,7 @@ See: `src/diff/types.ts`
 
 ### DiffKind
 
-The type of change a [DiffLine](#diffline) represents:
-
-- `"equal"` — the line is unchanged between old and new.
-- `"insert"` — the line was added in the new version (has no `oldRow`).
-- `"delete"` — the line was removed from the old version (has no `newRow`).
+The type of change a [DiffLine](#diffline) represents. Three values: `"equal"` (unchanged), `"insert"` (added in new, no `oldRow`), `"delete"` (removed from old, no `newRow`).
 
 ### DiffLine
 
@@ -200,9 +182,7 @@ The public view of an excerpt, exposed to consumers. Contains the excerpt's `id`
 
 ### ExcerptRange
 
-The specification for creating an excerpt. Contains:
-- `context` — the full `BufferRange` to display (including any surrounding context lines).
-- `primary` — the highlighted sub-range within `context`.
+The specification for creating an excerpt: `context` is the full `BufferRange` to display (including surrounding context lines) and `primary` is the highlighted sub-range within `context`.
 
 ---
 
@@ -415,12 +395,7 @@ Displaying a single logical line across multiple visual rows when it exceeds the
 
 ### Surrogate Pair Snapping
 
-The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
-
-- `Bias.Left` — steps back to the high surrogate (the position *before* the supplementary character).
-- `Bias.Right` — steps past the low surrogate (the position *after* the supplementary character).
-
-This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
+The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); `Bias.Left` steps back to the high surrogate (before the character), `Bias.Right` steps past it (after). This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
 
 See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
