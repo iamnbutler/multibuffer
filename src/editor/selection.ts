@@ -40,8 +40,7 @@ export function extendSelection(
   granularity: Granularity,
 ): Selection | undefined {
   // Resolve the current head position
-  const headAnchor =
-    selection.head === "end" ? selection.range.end : selection.range.start;
+  const headAnchor = selectionHead(selection);
   const headPoint = snapshot.resolveAnchor(headAnchor);
   if (!headPoint) return undefined;
 
@@ -107,6 +106,11 @@ export function selectAll(
   if (!startAnchor || !endAnchor) return undefined;
 
   return createSelection(createAnchorRange(startAnchor, endAnchor), "end");
+}
+
+/** Return the anchor at the moving (head) end of a selection. */
+export function selectionHead(selection: Selection): Anchor {
+  return selection.head === "end" ? selection.range.end : selection.range.start;
 }
 
 /**

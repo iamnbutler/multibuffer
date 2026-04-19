@@ -25,6 +25,7 @@ import {
   isCollapsed,
   selectAll,
   selectionAtPoint,
+  selectionHead,
 } from "./selection.ts";
 import type { Direction, EditorCommand, EditorEventMap, EditorOptions, Granularity } from "./types.ts";
 
@@ -690,7 +691,7 @@ export class Editor {
     this._selections = this._mergeSelections(newSelections, currentSnap);
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = selectionHead(primarySel);
       const resolvedHead = currentSnap.resolveAnchor(headAnchor);
       if (resolvedHead) this._cursor = resolvedHead;
     }
@@ -752,7 +753,7 @@ export class Editor {
           deleteRanges.push({ start: range.start, end: range.end, index: i });
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = selectionHead(sel);
         const cursor = snap.resolveAnchor(headAnchor);
         if (cursor) {
           // Line-join: deleteBackward("line") at column 0 should join with previous line
@@ -818,7 +819,7 @@ export class Editor {
       this._selections = this._mergeSelections(newSelections, currentSnap);
       const primarySel = this._selections[this._selections.length - 1];
       if (primarySel) {
-        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const headAnchor = selectionHead(primarySel);
         const resolved = currentSnap.resolveAnchor(headAnchor);
         if (resolved) this._cursor = resolved;
       }
@@ -869,7 +870,7 @@ export class Editor {
           deleteRanges.push({ start: range.start, end: range.end, index: i });
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = selectionHead(sel);
         const cursor = snap.resolveAnchor(headAnchor);
         if (cursor) {
           const target =
@@ -926,7 +927,7 @@ export class Editor {
     this._selections = this._mergeSelections(newSelections, currentSnap);
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = selectionHead(primarySel);
       const resolved = currentSnap.resolveAnchor(headAnchor);
       if (resolved) this._cursor = resolved;
     }
@@ -962,7 +963,7 @@ export class Editor {
         continue;
       }
 
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = selectionHead(sel);
       const cursor = snap.resolveAnchor(headAnchor);
       if (!cursor) continue;
 
@@ -1000,7 +1001,7 @@ export class Editor {
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = selectionHead(primarySel);
       const resolved = snap.resolveAnchor(headAnchor);
       if (resolved) this._cursor = resolved;
     }
@@ -1022,7 +1023,7 @@ export class Editor {
     }
 
     for (const sel of this._selections) {
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = selectionHead(sel);
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) continue;
 
@@ -1071,7 +1072,7 @@ export class Editor {
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = selectionHead(primarySel);
       const resolved = snap.resolveAnchor(headAnchor);
       if (resolved) this._cursor = resolved;
     }
@@ -1083,7 +1084,7 @@ export class Editor {
     if (sel) {
       // Select all clears multi-cursor to a single selection
       this._selections = [sel];
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = selectionHead(sel);
       const resolved = snap.resolveAnchor(headAnchor);
       if (resolved) this._cursor = resolved;
     }
@@ -1117,7 +1118,7 @@ export class Editor {
     // Collect unique rows from all selections
     const rowSet = new Set<number>();
     for (const sel of this._selections) {
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = selectionHead(sel);
       const point = snap.resolveAnchor(headAnchor);
       if (point) rowSet.add(point.row);
     }
@@ -1211,7 +1212,7 @@ export class Editor {
       this._selections = this._mergeSelections(newSelections, currentSnap);
       const primarySel = this._selections[this._selections.length - 1];
       if (primarySel) {
-        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const headAnchor = selectionHead(primarySel);
         const resolved = currentSnap.resolveAnchor(headAnchor);
         if (resolved) this._cursor = resolved;
       }
@@ -1448,7 +1449,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
           maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = selectionHead(sel);
         const resolved = snap.resolveAnchor(headAnchor);
         if (resolved) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
@@ -1744,7 +1745,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const newSelections: Selection[] = [...this._selections];
 
     for (const sel of this._selections) {
-      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const headAnchor = selectionHead(sel);
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) continue;
 
@@ -1761,7 +1762,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._selections = this._mergeSelections(newSelections, snap);
     const primarySel = this._selections[this._selections.length - 1];
     if (primarySel) {
-      const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+      const headAnchor = selectionHead(primarySel);
       const resolved = snap.resolveAnchor(headAnchor);
       if (resolved) this._cursor = resolved;
     }
@@ -1797,7 +1798,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
           resolved.push({ start: range.start, end: range.end, index: i });
         }
       } else {
-        const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+        const headAnchor = selectionHead(sel);
         const point = snap.resolveAnchor(headAnchor);
         if (point) {
           resolved.push({ start: point, end: point, index: i });
