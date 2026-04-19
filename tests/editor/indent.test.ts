@@ -110,14 +110,21 @@ describe("indentLines", () => {
     expect(getText(mb)).toBe("  one\n  two\nthree");
   });
 
-  test("with multi-cursor on different lines, indents all", () => {
+  test("with non-adjacent multi-cursor, only touched rows are indented", () => {
     const { mb, editor } = setup("aaa\nbbb\nccc");
     editor.setCursor(mbPoint(0, 0));
     editor.dispatch({ type: "addCursor", at: mbPoint(2, 0) });
     editor.dispatch({ type: "indentLines" });
-    // _affectedRows computes the min/max row across all cursors,
-    // so all lines in the range [0, 2] are indented — including row 1.
-    expect(getText(mb)).toBe("  aaa\n  bbb\n  ccc");
+    // Only rows 0 and 2 have cursors; row 1 must not be indented
+    expect(getText(mb)).toBe("  aaa\nbbb\n  ccc");
+  });
+
+  test("non-adjacent multi-cursor: all cursor positions shift right by 2", () => {
+    const { editor } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
+    editor.dispatch({ type: "indentLines" });
+    expectPoint(editor.cursor, 2, 3);
   });
 
   test("indenting in one excerpt does not affect other excerpts", () => {
@@ -214,5 +221,22 @@ describe("dedentLines", () => {
     editor.dispatch({ type: "dedentLines" });
     // Lines 0 and 2 should be dedented; line 1 (no leading spaces) untouched
     expect(getText(mb)).toBe("aaa\nbbb\nccc");
+  });
+
+  test("non-adjacent multi-cursor skips indented rows with no cursor", () => {
+    const { mb, editor } = setup("  aaa\n  bbb\n  ccc");
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 2) });
+    editor.dispatch({ type: "dedentLines" });
+    // Row 1 has leading spaces but no cursor — must remain indented
+    expect(getText(mb)).toBe("aaa\n  bbb\nccc");
+  });
+
+  test("non-adjacent multi-cursor: each cursor shifts left by its line's removed spaces", () => {
+    const { editor } = setup("  aaa\nbbb\n  ccc");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "addCursor", at: mbPoint(2, 3) });
+    editor.dispatch({ type: "dedentLines" });
+    expectPoint(editor.cursor, 2, 1);
   });
 });

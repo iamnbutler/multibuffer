@@ -1345,121 +1345,215 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
   /**
    * Indent all lines touched by the current selection (or just the cursor line)
-   * by prepending 2 spaces to each. Uses a single _edit() for atomic undo.
+   * by prepending 2 spaces to each. Applies one edit per contiguous group of
+   * affected rows so non-adjacent multi-cursor gaps are left untouched.
+   * All group edits share one undo entry for atomic undo.
    */
   private _indentLines(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const { startRow, endRow } = this._affectedRows(snap);
+    const groups = this._affectedRowGroups(snap);
+    if (groups.length === 0) return;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
-    const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
-    const indented = lines.map((line) => `  ${line}`);
+    // Capture pre-edit head positions for all selections (for post-edit cursor shift)
+    const preCursors: MultiBufferPoint[] = [];
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) preCursors.push(resolved);
+    }
+    if (preCursors.length === 0) preCursors.push(this.cursor);
 
-    const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
-    const lastLineLen = lines[lines.length - 1]?.length ?? 0;
-    const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
-    // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
-    // Safe: rangeStart.column === 0 and rangeEnd.column === lastLineLen (full line), so
-    // lines.join("\n") matches exactly what _getTextInRange would return.
-    if (!this._edit(snap, rangeStart, rangeEnd, indented.join("\n"), lines.join("\n"))) return;
+    const editOps: EditOp[] = [];
+    let currentSnap = snap;
 
-    // Place cursor at its shifted position
-    const cursor = this.cursor;
-    const newCursor: MultiBufferPoint = { row: cursor.row, column: cursor.column + 2 };
+    // Apply bottom-to-top so upper-group row numbers stay valid
+    for (const { startRow, endRow } of groups) {
+      const startBuf = currentSnap.toBufferPoint({ row: startRow, column: 0 });
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lines = currentSnap.lines(startRow, (endRow + 1) as MultiBufferRow);
+      const indented = lines.map((line) => `  ${line}`);
+      const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
+      const lastLineLen = lines[lines.length - 1]?.length ?? 0;
+      const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
+
+      editOps.push({ editStart: rangeStart, removedText: lines.join("\n"), insertedText: indented.join("\n") });
+      this.multiBuffer.edit(rangeStart, rangeEnd, indented.join("\n"));
+      currentSnap = this.multiBuffer.snapshot();
+    }
+
+    if (editOps.length === 0) return;
+
+    this._undoStack.push({ edits: editOps, cursorBefore: this._cursor, selectionsBefore: this._selections });
+    if (this._undoStack.length > Editor._MAX_HISTORY) this._undoStack.shift();
+    this._redoStack = [];
+    this._textVersion++;
+
+    // Rebuild all selections, shifting each cursor right by 2
     const newSnap = this.multiBuffer.snapshot();
-    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
-    this._selections = newSel ? [newSel] : [];
+    const newSelections: Selection[] = [];
+    for (const pre of preCursors) {
+      const shifted: MultiBufferPoint = { row: pre.row, column: pre.column + 2 };
+      const clipped = newSnap.clipPoint(shifted, Bias.Left);
+      const sel = selectionAtPoint(this.multiBuffer, clipped);
+      if (sel) newSelections.push(sel);
+    }
+
+    if (newSelections.length > 0) {
+      this._selections = newSelections;
+      // biome-ignore lint/style/noNonNullAssertion: expect: guarded by newSelections.length > 0
+      const last = newSelections[newSelections.length - 1]!;
+      const headAnchor = last.head === "end" ? last.range.end : last.range.start;
+      const resolved = newSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    } else {
+      const shifted: MultiBufferPoint = { row: this.cursor.row, column: this.cursor.column + 2 };
+      this._cursor = newSnap.clipPoint(shifted, Bias.Left);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
+    }
   }
 
   /**
    * Dedent all lines touched by the current selection (or just the cursor line)
-   * by removing up to 2 leading spaces from each. Uses a single _edit() for atomic undo.
+   * by removing up to 2 leading spaces from each. Applies one edit per contiguous
+   * group of affected rows so non-adjacent multi-cursor gaps are left untouched.
+   * All group edits share one undo entry for atomic undo.
    */
   private _dedentLines(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const { startRow, endRow } = this._affectedRows(snap);
+    const groups = this._affectedRowGroups(snap);
+    if (groups.length === 0) return;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
-    const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
+    // Capture pre-edit head positions for all selections (for post-edit cursor shift)
+    const preCursors: MultiBufferPoint[] = [];
+    for (const sel of this._selections) {
+      const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
+      const resolved = snap.resolveAnchor(headAnchor);
+      if (resolved) preCursors.push(resolved);
+    }
+    if (preCursors.length === 0) preCursors.push(this.cursor);
 
-    // Check if any line actually has leading spaces to remove
+    // Track per-row space removal for precise cursor column adjustment
+    const spacesRemovedByRow = new Map<number, number>();
+    const editOps: EditOp[] = [];
+    let currentSnap = snap;
     let anyChange = false;
-    const dedented = lines.map((line) => {
-      let spacesToRemove = 0;
-      if (line.length > 0 && line[0] === " ") {
-        spacesToRemove = 1;
-        if (line.length > 1 && line[1] === " ") {
-          spacesToRemove = 2;
+
+    for (const { startRow, endRow } of groups) {
+      const startBuf = currentSnap.toBufferPoint({ row: startRow, column: 0 });
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+      const lines = currentSnap.lines(startRow, (endRow + 1) as MultiBufferRow);
+      let groupChanged = false;
+      const dedented = lines.map((line, i) => {
+        let n = 0;
+        if (line.length > 0 && line[0] === " ") {
+          n = line.length > 1 && line[1] === " " ? 2 : 1;
         }
-      }
-      if (spacesToRemove > 0) anyChange = true;
-      return line.slice(spacesToRemove);
-    });
+        if (n > 0) {
+          groupChanged = true;
+          anyChange = true;
+          spacesRemovedByRow.set(startRow + i, n);
+        }
+        return line.slice(n);
+      });
+      if (!groupChanged) continue;
 
-    if (!anyChange) return;
+      const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
+      const lastLineLen = lines[lines.length - 1]?.length ?? 0;
+      const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
 
-    const rangeStart: MultiBufferPoint = { row: startRow, column: 0 };
-    const lastLineLen = lines[lines.length - 1]?.length ?? 0;
-    const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
-
-    // Figure out how many spaces were removed from the cursor's line
-    const cursor = this.cursor;
-    const cursorLineIndex = cursor.row - startRow;
-    const cursorLine = lines[cursorLineIndex] ?? "";
-    let spacesRemovedOnCursorLine = 0;
-    if (cursorLine.length > 0 && cursorLine[0] === " ") {
-      spacesRemovedOnCursorLine = 1;
-      if (cursorLine.length > 1 && cursorLine[1] === " ") {
-        spacesRemovedOnCursorLine = 2;
-      }
+      editOps.push({ editStart: rangeStart, removedText: lines.join("\n"), insertedText: dedented.join("\n") });
+      this.multiBuffer.edit(rangeStart, rangeEnd, dedented.join("\n"));
+      currentSnap = this.multiBuffer.snapshot();
     }
 
-    // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
-    if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"), lines.join("\n"))) return;
+    if (!anyChange || editOps.length === 0) return;
 
-    // Adjust cursor column
-    const newCol = Math.max(0, cursor.column - spacesRemovedOnCursorLine);
-    const newCursor: MultiBufferPoint = { row: cursor.row, column: newCol };
+    this._undoStack.push({ edits: editOps, cursorBefore: this._cursor, selectionsBefore: this._selections });
+    if (this._undoStack.length > Editor._MAX_HISTORY) this._undoStack.shift();
+    this._redoStack = [];
+    this._textVersion++;
+
+    // Rebuild all selections, adjusting each cursor by its line's removed spaces
     const newSnap = this.multiBuffer.snapshot();
-    this._cursor = newSnap.clipPoint(newCursor, Bias.Left);
-    const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
-    this._selections = newSel ? [newSel] : [];
+    const newSelections: Selection[] = [];
+    for (const pre of preCursors) {
+      const removed = spacesRemovedByRow.get(pre.row) ?? 0;
+      const newPoint: MultiBufferPoint = { row: pre.row, column: Math.max(0, pre.column - removed) };
+      const clipped = newSnap.clipPoint(newPoint, Bias.Left);
+      const sel = selectionAtPoint(this.multiBuffer, clipped);
+      if (sel) newSelections.push(sel);
+    }
+
+    if (newSelections.length > 0) {
+      this._selections = newSelections;
+      // biome-ignore lint/style/noNonNullAssertion: expect: guarded by newSelections.length > 0
+      const last = newSelections[newSelections.length - 1]!;
+      const headAnchor = last.head === "end" ? last.range.end : last.range.start;
+      const resolved = newSnap.resolveAnchor(headAnchor);
+      if (resolved) this._cursor = resolved;
+    } else {
+      const removed = spacesRemovedByRow.get(this.cursor.row) ?? 0;
+      const newPoint: MultiBufferPoint = { row: this.cursor.row, column: Math.max(0, this.cursor.column - removed) };
+      this._cursor = newSnap.clipPoint(newPoint, Bias.Left);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
+    }
   }
 
   /**
-   * Determine the range of rows affected by the current selection or cursor.
-   * Returns inclusive start and end rows.
+   * Compute discrete row groups touched by any cursor or selection, returned
+   * as contiguous ranges sorted bottom-to-top for safe multi-edit application.
+   * Unlike a simple min..max span, this excludes rows between non-adjacent cursors.
    */
-  private _affectedRows(snap: MultiBufferSnapshot): {
+  private _affectedRowGroups(snap: MultiBufferSnapshot): Array<{
     startRow: MultiBufferRow;
     endRow: MultiBufferRow;
-  } {
-    // Collect all rows touched by any selection
-    let minRow = this.cursor.row;
-    let maxRow = this.cursor.row;
+  }> {
+    const rowSet = new Set<number>();
+    rowSet.add(this.cursor.row);
     for (const sel of this._selections) {
       if (!isCollapsed(snap, sel)) {
         const range = resolveAnchorRange(snap, sel.range);
         if (range) {
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          minRow = Math.min(minRow, range.start.row) as MultiBufferRow;
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          maxRow = Math.max(maxRow, range.end.row) as MultiBufferRow;
+          for (let r = range.start.row; r <= range.end.row; r++) rowSet.add(r);
         }
       } else {
         const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
         const resolved = snap.resolveAnchor(headAnchor);
-        if (resolved) {
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          minRow = Math.min(minRow, resolved.row) as MultiBufferRow;
-          // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — Math.min/max strips the brand
-          maxRow = Math.max(maxRow, resolved.row) as MultiBufferRow;
-        }
+        if (resolved) rowSet.add(resolved.row);
       }
     }
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    return { startRow: minRow as MultiBufferRow, endRow: maxRow as MultiBufferRow };
+
+    const sorted = Array.from(rowSet).sort((a, b) => a - b);
+    if (sorted.length === 0) return [];
+
+    const groups: Array<{ startRow: MultiBufferRow; endRow: MultiBufferRow }> = [];
+    // biome-ignore lint/style/noNonNullAssertion: expect: guarded by sorted.length === 0 check above
+    let gStart = sorted[0]!;
+    // biome-ignore lint/style/noNonNullAssertion: expect: guarded by sorted.length === 0 check above
+    let gEnd = sorted[0]!;
+    for (let i = 1; i < sorted.length; i++) {
+      // biome-ignore lint/style/noNonNullAssertion: expect: i is within bounds by loop condition
+      const r = sorted[i]!;
+      if (r === gEnd + 1) {
+        gEnd = r;
+      } else {
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — values come from MultiBufferRow arithmetic
+        groups.push({ startRow: gStart as MultiBufferRow, endRow: gEnd as MultiBufferRow });
+        gStart = r;
+        gEnd = r;
+      }
+    }
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic — values come from MultiBufferRow arithmetic
+    groups.push({ startRow: gStart as MultiBufferRow, endRow: gEnd as MultiBufferRow });
+
+    // Highest rows first so edits applied bottom-to-top preserve upper row numbers
+    return groups.reverse();
   }
 
   private _cut(snap: MultiBufferSnapshot): void {
