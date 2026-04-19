@@ -404,3 +404,66 @@ describe("Editor events - ordering and independence", () => {
     expect(b).toBe(1);
   });
 });
+
+// ─── Multi-cursor events ──────────────────────────────────────────
+
+describe("Editor events - multi-cursor operations", () => {
+  test("addCursor fires cursorChange to new position", () => {
+    const { editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 0));
+    let newCursor: MultiBufferPoint | undefined;
+    editor.on("cursorChange", (cur) => { newCursor = cur; });
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 2) });
+    expect(newCursor).toBeDefined();
+    if (newCursor) expectPoint(newCursor, 1, 2);
+  });
+
+  test("addCursor fires selectionChange with two selections", () => {
+    const { editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 0));
+    let sels: readonly Selection[] | undefined;
+    editor.on("selectionChange", (s) => { sels = s; });
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 0) });
+    expect(sels?.length).toBe(2);
+  });
+
+  test("addCursorBelow fires cursorChange to next line", () => {
+    const { editor } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(0, 1));
+    let newCursor: MultiBufferPoint | undefined;
+    editor.on("cursorChange", (cur) => { newCursor = cur; });
+    editor.dispatch({ type: "addCursorBelow" });
+    expect(newCursor).toBeDefined();
+    if (newCursor) expectPoint(newCursor, 1, 1);
+  });
+
+  test("addCursorBelow fires selectionChange", () => {
+    const { editor } = setup("aaa\nbbb");
+    editor.setCursor(mbPoint(0, 0));
+    let fired = false;
+    editor.on("selectionChange", () => { fired = true; });
+    editor.dispatch({ type: "addCursorBelow" });
+    expect(fired).toBe(true);
+  });
+
+  test("clearExtraCursors fires selectionChange", () => {
+    const { editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 0) });
+    let fired = false;
+    editor.on("selectionChange", () => { fired = true; });
+    editor.dispatch({ type: "clearExtraCursors" });
+    expect(fired).toBe(true);
+  });
+
+  test("clearExtraCursors does NOT fire cursorChange when primary cursor is unchanged", () => {
+    const { editor } = setup("hello\nworld");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 0) });
+    // After addCursor, _cursor == (1,0); clearExtraCursors keeps primary (last) selection
+    let cursorFired = false;
+    editor.on("cursorChange", () => { cursorFired = true; });
+    editor.dispatch({ type: "clearExtraCursors" });
+    expect(cursorFired).toBe(false);
+  });
+});
