@@ -675,15 +675,7 @@ export class Editor {
     }
 
     if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo(edits);
       this._textVersion++;
     }
 
@@ -802,15 +794,7 @@ export class Editor {
     }
 
     if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo(edits);
       this._textVersion++;
     }
 
@@ -911,15 +895,7 @@ export class Editor {
     }
 
     if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo(edits);
       this._textVersion++;
     }
 
@@ -1195,15 +1171,7 @@ export class Editor {
     }
 
     if (edits.length > 0) {
-      this._undoStack.push({
-        edits,
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo(edits);
       this._textVersion++;
     }
 
@@ -1522,15 +1490,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       startBuf.excerpt.id.index === endBuf.excerpt.id.index
     ) {
       const removedText = knownRemovedText ?? this._getTextInRange(snap, start, end);
-      this._undoStack.push({
-        edits: [{ editStart: start, removedText, insertedText: newText }],
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo([{ editStart: start, removedText, insertedText: newText }]);
       this.multiBuffer.edit(start, end, newText);
       this._textVersion++;
       return true;
@@ -1546,15 +1506,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // Cross-excerpt within same buffer: edit directly (handles boundary newlines)
     if (startBuf.excerpt.bufferId === endBuf.excerpt.bufferId) {
       const removedText = knownRemovedText ?? this._getTextInRange(snap, start, end);
-      this._undoStack.push({
-        edits: [{ editStart: start, removedText, insertedText: newText }],
-        cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
-      });
-      if (this._undoStack.length > Editor._MAX_HISTORY) {
-        this._undoStack.shift();
-      }
-      this._redoStack = [];
+      this._pushUndo([{ editStart: start, removedText, insertedText: newText }]);
       this.multiBuffer.edit(start, end, newText);
       this._textVersion++;
       return true;
@@ -1576,15 +1528,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this.multiBuffer.edit(sub.start, sub.end, sub.text);
     }
 
-    this._undoStack.push({
-      edits: editOps,
-      cursorBefore: this._cursor,
-      selectionsBefore: this._selections,
-    });
-    if (this._undoStack.length > Editor._MAX_HISTORY) {
-      this._undoStack.shift();
-    }
-    this._redoStack = [];
+    this._pushUndo(editOps);
     this._textVersion++;
     return true;
   }
@@ -1651,6 +1595,19 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     }
 
     return result;
+  }
+
+  /** Push edits onto the undo stack, cap at MAX_HISTORY, and clear the redo stack. */
+  private _pushUndo(edits: ReadonlyArray<EditOp>): void {
+    this._undoStack.push({
+      edits,
+      cursorBefore: this._cursor,
+      selectionsBefore: this._selections,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
   }
 
   /**
