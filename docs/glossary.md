@@ -48,6 +48,18 @@ A hint controlling behavior at position boundaries — when text is inserted at 
 - `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
 - `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
 
+### BracketMatch
+
+An interface (`src/editor/bracket-match.ts`) describing a matched bracket pair: `open` and `close`, each as a [MultiBufferPoint](#multibufferpoint). Returned by `findMatchingBracket()` when the cursor rests on a bracket character. `null` is returned when no bracket is found at the cursor or no matching partner exists within the scan limit.
+
+See: `src/editor/bracket-match.ts`
+
+### Bracket Matching
+
+An opt-in editor feature (enabled via `bracketMatching: true` in `EditorOptions`) that emits a `bracketMatch` event whenever the cursor moves onto a bracket character (`(`, `)`, `[`, `]`, `{`, `}`). The event payload is a [BracketMatch](#bracketmatch) or `null`. Consumers typically respond by adding [decorations](#decoration) to highlight the paired brackets.
+
+See: `src/editor/bracket-match.ts`, `src/editor/editor.ts`
+
 ### Buffer
 
 A mutable object representing a single file's text content, backed by a [rope](#rope). Buffers support `insert`, `delete`, and `replace` operations and maintain a monotonically increasing `version` counter. Each edit is recorded in an edit log for [anchor](#anchor) resolution.
@@ -75,6 +87,12 @@ An immutable snapshot of a buffer's state at a point in time. Snapshots support 
 ---
 
 ## C
+
+### CanvasRenderer
+
+A [Renderer](#renderer) implementation (`src/renderer/canvas.ts`) that draws text into an HTML `<canvas>` element using a [GlyphAtlas](#glyphatlas) for high-performance text rendering. Composites syntax-highlighted text by applying color to single-channel grayscale glyph textures per row. Uses native scroll containers for scrolling and supports soft wrapping via [WrapMap](#wrapmap) and partial redraws via [TileManager](#tilemanager).
+
+See: `src/renderer/canvas.ts`
 
 ### Clipping
 
@@ -178,6 +196,12 @@ The command-dispatcher layer (`src/editor/`) that sits above the multibuffer dat
 
 A discriminated union type representing a user action the editor can execute. Examples: `insertText`, `moveCursor`, `extendSelection`, `deleteLine`, `indentLines`, `dedentLines`, `undo`.
 
+### EditorView
+
+A high-level facade (`src/editor/editor-view.ts`) that bundles an [Editor](#editor), a [Renderer](#renderer), and an [InputHandler](#inputhandler) into a single unit. Created with `createEditorView(container, text, options)`. Provides the primary imperative API for mounting an editor into a DOM container, updating decorations, synchronizing theme, and reading or writing editor state.
+
+See: `src/editor/editor-view.ts`
+
 ### Excerpt
 
 A contiguous range of lines from a single [buffer](#buffer), displayed within the [multibuffer](#multibuffer). Each excerpt has a context range (all lines shown) and a primary range (the highlighted portion). Excerpts are identified by an [ExcerptId](#excerptid).
@@ -206,11 +230,51 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FileDiffEntry
+
+A specification for a single file in a multi-file diff: `filename`, `oldContent`, `newContent`, and an optional `previousFilename` for renames. Passed to `createMultiFileDiff()`. An empty string for `oldContent` indicates a newly added file; an empty string for `newContent` indicates a deleted file.
+
+See: `src/diff/types.ts`
+
+### FileDiffState
+
+A read-only snapshot of one file's state within a [MultiFileDiff](#multifilediff): `filename`, per-file [FileDiffStats](#fileddiffstats), and boolean flags — `collapsed` (diff panel is hidden), `initialized` (lazy rendering has run), and `isEqual` (old and new content are identical). Accessible as elements of `MultiFileDiff.files`.
+
+See: `src/diff/types.ts`
+
+### FileDiffStats
+
+Per-file diff statistics: `additions` (lines inserted) and `deletions` (lines removed). Carried by each [FileDiffState](#fileddiffstate) and aggregated into [MultiFileDiffStats](#multifilediffstats).
+
+See: `src/diff/types.ts`
+
+### FsAdapter
+
+A filesystem abstraction interface (`src/project/types.ts`) that [ProjectTree](#projecttree) uses for platform portability. Requires a `readdir(path)` method returning `FsDirEntry[]` and supports an optional `stat(path)` for file metadata. Bun/Node and in-memory testing adapters are provided by the project; browser environments can implement it using the File System Access API.
+
+See: `src/project/types.ts`
+
+---
+
 ## G
 
 ### Generational Arena
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+
+### GlobMatcher
+
+A function type `(pattern: string, path: string) => boolean` that tests whether a file path matches a glob pattern. Injected into [ProjectTree](#projecttree) via `ProjectTreeOptions.globMatcher`; when omitted, the built-in minimal matcher is used. Replace with a full-featured library such as `micromatch` for advanced glob syntax (e.g., negation patterns, brace expansion).
+
+See: `src/project/types.ts`
+
+### GlyphAtlas
+
+A glyph rasterization cache (`src/renderer/glyph-atlas.ts`) used by [CanvasRenderer](#canvasrenderer) and the WebGPU renderer. Rasterizes characters to an offscreen canvas as a single-channel alpha texture; glyphs are added lazily on first use and packed into rows. The atlas grows automatically up to `maxSize` when full, and a `version` counter increments on each change so renderers know when to re-upload the texture to the GPU.
+
+See: `src/renderer/glyph-atlas.ts`
 
 ### Goal Column
 
@@ -238,6 +302,12 @@ See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutte
 
 Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }` multibuffer position. Implemented by the renderer using fixed-height line measurements.
 
+### HunkHeader
+
+Metadata for the separator line rendered between two non-adjacent diff hunks, analogous to the `@@ -X,Y +A,B @@` line in unified diff output. Contains 1-based `oldStart`/`newStart` line numbers, line counts, and an optional `context` string (e.g., the enclosing function name extracted from the surrounding source). Produced by the diff renderer when consecutive [DiffHunk](#diffhunk) entries are not adjacent.
+
+See: `src/diff/types.ts`
+
 ---
 
 ## I
@@ -260,9 +330,27 @@ An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) w
 
 See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
 
+### InjectionHighlighter
+
+A [SyntaxHighlighter](#syntaxhighlighter) implementation (`src/renderer/injection-highlighter.ts`) that extends tree-sitter parsing with embedded-language support. Parses a primary language and, for detected injection ranges (e.g., YAML frontmatter in Markdown), maintains a separate parse tree for each injected language. Row lookups route to the correct injected tree via an O(1) row index, enabling accurate per-token highlighting across language boundaries.
+
+See: `src/renderer/injection-highlighter.ts`, [Incremental Parsing](#incremental-parsing)
+
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
+
+### IntralineDiff
+
+Character-level diff result for a paired delete/insert line. Contains `deleteRanges` (column ranges that changed in the deleted line) and `insertRanges` (column ranges that changed in the inserted line). Used by the diff renderer to highlight the exact characters that changed within a line, complementing the line-level [DiffResult](#diffresult).
+
+See: `src/diff/types.ts`
+
+### IntralineRange
+
+A `{ startColumn, endColumn }` pair (0-based, end exclusive) marking a sub-range within a line that changed at the character level. Carried by [IntralineDiff](#intralinediff) in both `deleteRanges` and `insertRanges` arrays.
+
+See: `src/diff/types.ts`
 
 ---
 
@@ -271,6 +359,18 @@ A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidde
 ### keyEventToCommand
 
 A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent` into an [EditorCommand](#editorcommand). Handles platform-specific shortcuts such as `Mod+Z` for undo and `Mod+Y` / `Mod+Shift+Z` for redo. Returns `undefined` for events that do not map to a recognized command, allowing the [InputHandler](#inputhandler) to fall through to normal text-input handling via the `input` event.
+
+### KeyBinding
+
+A single entry in a [Keymap](#keymap): either an [EditorCommand](#editorcommand) to execute when the key is pressed, or `null` to explicitly disable a default command for that key combination.
+
+See: `src/editor/types.ts`
+
+### Keymap
+
+A `Record<string, KeyBinding>` mapping key combination strings (e.g., `"Ctrl+s"`, `"Mod+Shift+Z"`) to [EditorCommand](#editorcommand) values. Passed as `options.keymap` to `createEditorView()` or the React hooks. Entries are merged on top of the built-in default keymap, so only bindings that differ need to be specified.
+
+See: `src/editor/types.ts`
 
 ---
 
@@ -287,6 +387,12 @@ A DOM-renderer optimization that reuses existing line elements when scrolling, r
 ### Measurements
 
 Fixed rendering constants: `lineHeight`, `charWidth`, `gutterWidth`, and optional `wrapWidth`. All lines have the same height, enabling O(1) pixel↔row conversion.
+
+### Multi-Cursor
+
+An editor state in which multiple simultaneous selections are active. New cursors are added via `addCursorAtPoint`, `addCursorAbove`, or `addCursorBelow`; all secondary cursors are removed by `clearSecondaryCursors`. While active, every non-movement command (insert, delete, indent, etc.) is applied atomically to each cursor. The last entry in `editor.selections` is always the [Primary Selection](#primary-selection).
+
+See: `src/editor/editor.ts`
 
 ### MultiBuffer
 
@@ -308,6 +414,18 @@ A branded zero-based line number within the multibuffer's unified view. Distinct
 
 An immutable snapshot of the multibuffer's state. Carries a monotonically increasing `version` counter that increments on every mutation (shared globally across all `MultiBuffer` instances). Supports read operations (`lines`, `excerptAt`, `toBufferPoint`, `toMultiBufferPoint`, `resolveAnchor`, `resolveAnchors`, `clipPoint`, `excerptBoundaries`) without mutation concerns. The `version` field is used by the DOM renderer to skip `WrapMap` reconstruction when neither the snapshot content nor the wrap width has changed since the last render.
 
+### MultiFileDiff
+
+A controller interface for displaying diffs across multiple files. Created by `createMultiFileDiff(options)`. Exposes aggregate [MultiFileDiffStats](#multifilediffstats), per-file [FileDiffState](#fileddiffstate) entries, and methods to collapse, expand, toggle, or scroll to individual files. Supports lazy rendering (files are initialized only when they scroll into view) and optional file-toggle callbacks.
+
+See: `src/diff/types.ts`, `src/diff/multi-file.ts`
+
+### MultiFileDiffStats
+
+Aggregate statistics for a [MultiFileDiff](#multifilediff): `totalAdditions` (lines added across all files), `totalDeletions` (lines removed), and `fileCount`. Accessible as `MultiFileDiff.stats`.
+
+See: `src/diff/types.ts`
+
 ### Myers' Algorithm
 
 The O(ND) line-level diff algorithm used in `src/diff/diff.ts`, where N is the sum of line counts in both texts and D is the number of differing lines. Finds the shortest edit script by tracking the furthest-reaching path on each diagonal of an edit graph. The implementation stores the trace as active diagonal slices of size `2d+1` at each step `d`, reducing memory from O(max·D) to O(D²) — a significant win for large files with few changes.
@@ -318,9 +436,41 @@ See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
 ## P
 
-### Prefix Sum
+### ParsedPatch
 
-An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk byte offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
+The complete output of parsing a unified diff string: an array of [PatchFile](#patchfile) entries, one per file described in the patch. Created by `parsePatch()` in `src/diff/patch.ts`.
+
+See: `src/diff/types.ts`
+
+### PatchFile
+
+A single file's diff within a [ParsedPatch](#parsedpatch). Contains `oldPath`, `newPath`, a [PatchFileStatus](#patchfilestatus), an optional `similarity` percentage (for renames/copies), an `isBinary` flag, and an array of [PatchHunk](#patchhunk) entries. `oldPath` or `newPath` may be `/dev/null` for added or deleted files.
+
+See: `src/diff/types.ts`
+
+### PatchFileStatus
+
+A string union describing the state of a file within a patch: `"modified"`, `"added"`, `"deleted"`, `"renamed"`, `"copied"`, or `"binary"`.
+
+See: `src/diff/types.ts`
+
+### PatchHunk
+
+A parsed hunk within a [PatchFile](#patchfile), corresponding to an `@@ -a,b +c,d @@` block in a unified diff. Carries 1-based start/count values for both old and new files, an optional `header` context string (e.g., the enclosing function name), and an array of [PatchLine](#patchline) entries.
+
+See: `src/diff/types.ts`
+
+### PatchLine
+
+A single line in a [PatchHunk](#patchhunk). The `kind` field is `"context"`, `"add"`, or `"delete"`. `content` holds the line text without the leading `+`/`-`/space prefix. `oldLineNumber` is `undefined` for additions; `newLineNumber` is `undefined` for deletions.
+
+See: `src/diff/types.ts`
+
+### PatchMultiBufferResult
+
+The result of converting a [PatchFile](#patchfile) into a renderable diff view. Contains a [MultiBuffer](#multibuffer) populated with the diff content, [decorations](#decoration) for styling added/deleted lines, the resolved `filename` and optional `oldFilename` (for renames), and flags for file `status` and `isBinary`. Created by `patchFileToMultiBuffer()`.
+
+See: `src/diff/types.ts`
 
 ### Position Translation
 
@@ -331,6 +481,40 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### Prefix Sum
+
+An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk byte offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
+
+### Primary Selection
+
+The "active" selection in a multi-cursor editor state — always the last element of `editor.selections`. Commands that target a single cursor position (e.g., `selectWordAt`, scroll-to-cursor) operate on the primary selection. See also: [Multi-Cursor](#multi-cursor).
+
+See: `src/editor/editor.ts`
+
+### ProjectDirectoryEntry
+
+A directory entry in the [ProjectTree](#projecttree). Has a `name`, `path`, and `relativePath`, plus a lazy `children()` async iterator that only walks the directory when iterated. This deferred traversal keeps startup fast on large repositories.
+
+See: `src/project/types.ts`
+
+### ProjectEntry
+
+A discriminated union of [ProjectFileEntry](#projectfileentry) and [ProjectDirectoryEntry](#projectdirectoryentry), discriminated by the `type` field (`"file"` or `"directory"`). The element type of [ProjectTree](#projecttree)'s `entries()` and `children()` iterators.
+
+See: `src/project/types.ts`
+
+### ProjectFileEntry
+
+A file entry in the [ProjectTree](#projecttree). Carries `name`, `path`, `relativePath`, and optionally `size` and `mtime` (populated only when `includeMetadata: true` is set in `ProjectTreeOptions`).
+
+See: `src/project/types.ts`
+
+### ProjectTree
+
+A platform-agnostic interface (`src/project/types.ts`) for lazily discovering files in a directory. Created via `createProjectTree(root, options)`. Supports include/exclude glob patterns, a configurable [FsAdapter](#fsadapter), and `entries()` / `children()` / `get()` / `has()` for traversal and lookup.
+
+See: `src/project/types.ts`, `src/project/tree.ts`
 
 ---
 
@@ -413,6 +597,12 @@ Both `Buffer` and `MultiBuffer` expose a `snapshot()` method that returns an imm
 
 Displaying a single logical line across multiple visual rows when it exceeds the available column width. Managed by [WrapMap](#wrapmap).
 
+### SyntaxHighlighter
+
+An interface (`src/renderer/highlighter.ts`) that syntax highlighting backends implement. Exposes `ready` (initialization state), `init(...)` for async setup, and `parseBuffer(id, text, edit?)` to produce an array of per-line `Token[]` arrays. The DOM renderer's `Highlighter` implements this interface using tree-sitter; [InjectionHighlighter](#injectionhighlighter) extends it with embedded-language support.
+
+See: `src/renderer/highlighter.ts`
+
 ### Surrogate Pair Snapping
 
 The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
@@ -431,6 +621,18 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 ### TextSummary
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
+
+### Tile
+
+A fixed-height chunk of `N` rows in the viewport, used as the unit of dirty-region tracking by [TileManager](#tilemanager). Each tile is identified by its `startRow`, which is always a multiple of `linesPerTile`.
+
+See: `src/renderer/tile-map.ts`
+
+### TileManager
+
+A dirty-region tracker (`src/renderer/tile-map.ts`) that divides the viewport into fixed-height [tiles](#tile) and records which tiles need redrawing via a `Set` for O(1) insert and lookup. Multiple invalidations for the same tile within a frame are automatically coalesced. Exposes `markDirty(range, reason)`, `getDirtyTiles()`, and `clearDirty()`. Used by [CanvasRenderer](#canvasrenderer) to skip unchanged regions during redraws.
+
+See: `src/renderer/tile-map.ts`
 
 ### Trailing Newline (synthetic)
 
@@ -456,6 +658,18 @@ See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 A bounded list of `HistoryEntry` values recording buffer and cursor state before each edit. Limited to `Editor._MAX_HISTORY = 100` entries; when the limit is exceeded, the oldest entry is dropped (shifted off). The complementary **redo stack** is cleared on any new edit and populated when `undo` is dispatched. Both stacks are managed inside `Editor` and are not exposed publicly.
 
 See also: [EditorCommand](#editorcommand)
+
+### useDiffView
+
+A React hook (`src/react/use-diff-view.ts`) that creates and manages a [DiffController](#diffcontroller) and [EditorView](#editorview) bound to a pair of text strings (`oldText`, `newText`). Re-diffs automatically when the strings change. Returns `containerRef` (attach to a `<div>`), the `isEqual` boolean, and imperative `setDecorations` / `setTheme` handles.
+
+See: `src/react/use-diff-view.ts`
+
+### useEditorView
+
+A React hook (`src/react/use-editor-view.ts`) that creates and manages an [EditorView](#editorview) within a `<div>` container. Follows the uncontrolled pattern: `text` initializes the buffer once on mount, and subsequent edits go through `view.editor`. Returns `containerRef`, the live `view` instance, and imperative `setDecorations` / `setTheme` handles.
+
+See: `src/react/use-editor-view.ts`
 
 ---
 
