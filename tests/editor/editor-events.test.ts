@@ -404,3 +404,76 @@ describe("Editor events - ordering and independence", () => {
     expect(b).toBe(1);
   });
 });
+
+// ─── addCursorAbove events ────────────────────────────────────────
+
+describe("Editor events - addCursorAbove", () => {
+  test("fires selectionChange when a new cursor is added above", () => {
+    const { editor } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(1, 1));
+    let sels: readonly Selection[] | undefined;
+    editor.on("selectionChange", (s) => { sels = s; });
+    editor.dispatch({ type: "addCursorAbove" });
+    expect(sels).toBeDefined();
+    expect(sels?.length).toBe(2);
+  });
+
+  test("does NOT fire cursorChange — primary cursor stays at original row", () => {
+    // After addCursorAbove the merged selections are sorted; primary (last) stays
+    // at the original bottom row, so _cursor does not change.
+    const { editor } = setup("aaa\nbbb\nccc");
+    editor.setCursor(mbPoint(1, 1));
+    let cursorFired = false;
+    editor.on("cursorChange", () => { cursorFired = true; });
+    editor.dispatch({ type: "addCursorAbove" });
+    expect(cursorFired).toBe(false);
+  });
+
+  test("fires change event", () => {
+    const { editor } = setup("aaa\nbbb");
+    editor.setCursor(mbPoint(1, 0));
+    let fired = false;
+    editor.on("change", () => { fired = true; });
+    editor.dispatch({ type: "addCursorAbove" });
+    expect(fired).toBe(true);
+  });
+
+  test("at row 0 is a no-op — no events fire", () => {
+    const { editor } = setup("aaa\nbbb");
+    editor.setCursor(mbPoint(0, 0));
+    let selFired = false;
+    let curFired = false;
+    let changeFired = false;
+    editor.on("selectionChange", () => { selFired = true; });
+    editor.on("cursorChange", () => { curFired = true; });
+    editor.on("change", () => { changeFired = true; });
+    editor.dispatch({ type: "addCursorAbove" });
+    expect(selFired).toBe(false);
+    expect(curFired).toBe(false);
+    expect(changeFired).toBe(false);
+  });
+
+  test("addCursorBelow at last row is a no-op — no events fire", () => {
+    const { editor } = setup("aaa\nbbb");
+    editor.setCursor(mbPoint(1, 0));
+    let selFired = false;
+    let changeFired = false;
+    editor.on("selectionChange", () => { selFired = true; });
+    editor.on("change", () => { changeFired = true; });
+    editor.dispatch({ type: "addCursorBelow" });
+    expect(selFired).toBe(false);
+    expect(changeFired).toBe(false);
+  });
+
+  test("repeated addCursorAbove accumulates cursors and fires selectionChange each time", () => {
+    const { editor } = setup("aaa\nbbb\nccc\nddd");
+    editor.setCursor(mbPoint(3, 0));
+    let count = 0;
+    editor.on("selectionChange", () => { count++; });
+    editor.dispatch({ type: "addCursorAbove" });
+    editor.dispatch({ type: "addCursorAbove" });
+    editor.dispatch({ type: "addCursorAbove" });
+    expect(count).toBe(3);
+    expect(editor.selections.length).toBe(4);
+  });
+});
