@@ -1821,13 +1821,10 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   private _mergeSelections(selections: Selection[], snap: MultiBufferSnapshot): Selection[] {
     if (selections.length <= 1) return selections;
 
-    // Resolve all selections to points
-    const resolved: Array<{
-      sel: Selection;
-      start: MultiBufferPoint;
-      end: MultiBufferPoint;
-    }> = [];
+    type Resolved = { sel: Selection; start: MultiBufferPoint; end: MultiBufferPoint };
 
+    // Resolve all selections to points
+    const resolved: Resolved[] = [];
     for (const sel of selections) {
       const range = resolveAnchorRange(snap, sel.range);
       if (range) {
@@ -1841,54 +1838,49 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       return a.start.column - b.start.column;
     });
 
-    // Merge overlapping
-    const merged: Selection[] = [];
+    // Merge overlapping — carry resolved points to avoid re-resolving in the inner loop
+    const merged: Resolved[] = [];
     for (const r of resolved) {
       if (merged.length === 0) {
-        merged.push(r.sel);
+        merged.push(r);
         continue;
       }
 
-      const lastSel = merged[merged.length - 1];
-      if (!lastSel) {
-        merged.push(r.sel);
-        continue;
-      }
-
-      const lastRange = resolveAnchorRange(snap, lastSel.range);
-      if (!lastRange) {
-        merged.push(r.sel);
+      const last = merged[merged.length - 1];
+      if (!last) {
+        merged.push(r);
         continue;
       }
 
       // Check overlap: new start <= last end
       if (
-        r.start.row < lastRange.end.row ||
-        (r.start.row === lastRange.end.row && r.start.column <= lastRange.end.column)
+        r.start.row < last.end.row ||
+        (r.start.row === last.end.row && r.start.column <= last.end.column)
       ) {
         // Merge: use the selection that extends further
         if (
-          r.end.row > lastRange.end.row ||
-          (r.end.row === lastRange.end.row && r.end.column > lastRange.end.column)
+          r.end.row > last.end.row ||
+          (r.end.row === last.end.row && r.end.column > last.end.column)
         ) {
           // New selection extends further - create merged selection
-          const mergedStart = this.multiBuffer.createAnchor(lastRange.start, Bias.Left);
+          const mergedStart = this.multiBuffer.createAnchor(last.start, Bias.Left);
           const mergedEnd = this.multiBuffer.createAnchor(r.end, Bias.Right);
           if (mergedStart && mergedEnd) {
-            merged[merged.length - 1] = createSelection(
-              createAnchorRange(mergedStart, mergedEnd),
-              "end",
-            );
+            merged[merged.length - 1] = {
+              sel: createSelection(createAnchorRange(mergedStart, mergedEnd), "end"),
+              start: last.start,
+              end: r.end,
+            };
           }
         }
         // Otherwise keep the existing one
       } else {
         // No overlap, add as new
-        merged.push(r.sel);
+        merged.push(r);
       }
     }
 
-    return merged;
+    return merged.map((m) => m.sel);
   }
 }
 
