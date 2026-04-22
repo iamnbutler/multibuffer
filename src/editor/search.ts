@@ -390,16 +390,25 @@ export class SearchController {
   private _performSearch(): void {
     const snap = this._editor.multiBuffer.snapshot();
     const mb = this._editor.multiBuffer;
-    const fullText = this._getFullText(snap);
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
+    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
 
-    if (!fullText || !this._query) {
+    if (!this._query || lines.length === 0) {
+      this._results = [];
+      this._activeIndex = -1;
+      return;
+    }
+
+    const fullText = lines.join("\n");
+
+    if (!fullText) {
       this._results = [];
       this._activeIndex = -1;
       return;
     }
 
     const matches = this._findMatches(fullText);
-    const lineOffsets = this._computeLineOffsets(fullText);
+    const lineOffsets = this._computeLineOffsets(lines);
 
     const results: SearchResult[] = [];
     for (const match of matches) {
@@ -424,12 +433,6 @@ export class SearchController {
 
     this._results = results;
     this._activeIndex = results.length > 0 ? 0 : -1;
-  }
-
-  private _getFullText(snap: MultiBufferSnapshot): string {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
-    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
-    return lines.join("\n");
   }
 
   private _findMatches(text: string): Array<{ start: number; end: number; text: string }> {
@@ -474,12 +477,11 @@ export class SearchController {
     return matches;
   }
 
-  private _computeLineOffsets(text: string): number[] {
-    const offsets: number[] = [0];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === "\n") {
-        offsets.push(i + 1);
-      }
+  private _computeLineOffsets(lines: readonly string[]): number[] {
+    const offsets = new Array<number>(lines.length);
+    offsets[0] = 0;
+    for (let i = 1; i < lines.length; i++) {
+      offsets[i] = (offsets[i - 1] ?? 0) + (lines[i - 1]?.length ?? 0) + 1;
     }
     return offsets;
   }
