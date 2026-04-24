@@ -27,12 +27,6 @@ Standard GitHub Actions workflow (not `gh aw`).
 
 The PR goes through normal CI (typecheck, lint, test) and review. No special labels or automation needed — the release-deploy workflow identifies it by branch name.
 
-### What it does NOT do
-
-- Run tests (CI handles that on the PR)
-- Create tags (release-deploy handles that)
-- Generate release notes (release-deploy handles that)
-
 ## 2. Release / Deploy (`release-deploy.yml`)
 
 Standard GitHub Actions workflow.
@@ -79,47 +73,21 @@ Rendered from `bun run bench --json` output (which returns `SuiteResult[]`):
 
 ## 3. Release Notes Template (`.github/release-notes-template.md`)
 
-```markdown
-## What's Changed
-
-{{changes}}
-
-## Benchmarks
-
-{{benchmarks}}
-
-**Full Changelog**: {{compare_url}}
-```
-
-The release-deploy workflow reads this template and substitutes the placeholders. Keeping it as a separate file so it's easy to tweak the format without touching workflow YAML.
+The release-deploy workflow substitutes `{{changes}}` (categorized PR list), `{{benchmarks}}` (formatted table), and `{{compare_url}}` (GitHub compare link). The template lives in a separate file for easy tweaking without touching workflow YAML.
 
 ## 4. Docs / Update (`docs-update.md`)
 
 A `gh aw` agentic workflow following the same pattern as `code-simplifier.md`.
 
-**Triggers:**
-- `schedule: weekly` (compiles to something like `0 7 * * 3` — Wednesday 7am UTC)
-- `workflow_dispatch`
-- Dispatched by release-deploy workflow after creating a release
+**Triggers:** weekly schedule (`0 7 * * 3` — Wednesday 7am UTC), `workflow_dispatch`, and release-deploy dispatch.
 
-**Scope — files to update:**
-- `README.md` — architecture, status, test/bench counts, demo instructions
-- `CLAUDE.md` — file tree, architecture section, subpath exports, constraints
-- `docs/*.md` — glossary, bindings, any other docs that drifted
+**Scope:** `README.md` (architecture, status, counts, demo), `CLAUDE.md` (file tree, exports, constraints), `docs/*.md` (glossary, bindings, drifted docs).
 
-**Principles:**
-- Read the actual codebase to determine truth (file tree, test count, bench count, exports)
-- Keep docs terse and focused — trim bloat, remove stale sections
-- Don't invent content — only reflect what exists in the code
-- Skip if nothing changed (no PR created)
+**Principles:** Read the codebase to determine truth; keep docs terse; don't invent content; skip if nothing changed.
 
-**Safe outputs:**
-- `create-pull-request` with title prefix `[docs-update]`, labels `[docs, automation]`, expires `1d`
-- `skip-if-match: 'is:pr is:open in:title "[docs-update]"'`
+**Safe outputs:** `create-pull-request` with prefix `[docs-update]`, labels `[docs, automation]`; skips if a matching open PR exists.
 
-**Tools:** `github` toolset (repos, pull_requests) + file read/write.
-
-**Permissions:** `read-all` for codebase inspection, write for PR creation.
+**Tools/Permissions:** `github` toolset + file read/write; `read-all` for inspection, write for PR creation.
 
 ## 5. package.json change
 
@@ -136,11 +104,7 @@ New files:
 | `.github/release-notes-template.md` | Release notes template |
 | `.github/workflows/docs-update.md` | `gh aw` workflow definition |
 
-Modified files:
-
-| File | Change |
-|------|--------|
-| `package.json` | Remove `"private": true` |
+*Also removes `"private": true` from `package.json`.*
 
 ## Sequencing
 
