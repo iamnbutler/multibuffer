@@ -292,6 +292,48 @@ describe("Mixed editable and non-editable excerpts", () => {
   });
 });
 
+describe("Multi-cursor operations on non-editable excerpts preserve selections", () => {
+  test("deleteForward with multiple cursors in non-editable excerpt preserves selections", () => {
+    const buf = createBuffer(bid("a.ts"), "hello\nworld\nfoo");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, range(0, 3), { editable: false });
+    const editor = new Editor(mb);
+
+    editor.setCursor({ row: mbRow(0), column: 2 });
+    editor.dispatch({ type: "addCursor", at: { row: mbRow(1), column: 2 } });
+    expect(editor.selections.length).toBe(2);
+
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+
+    // Text must be unchanged
+    const lines = mb.snapshot().lines(mbRow(0), mbRow(3));
+    expect(lines[0]).toBe("hello");
+    expect(lines[1]).toBe("world");
+    // Selections must be preserved (not cleared by missing guard)
+    expect(editor.selections.length).toBe(2);
+  });
+
+  test("insertText with multiple cursors in non-editable excerpt preserves selections", () => {
+    const buf = createBuffer(bid("a.ts"), "hello\nworld\nfoo");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, range(0, 3), { editable: false });
+    const editor = new Editor(mb);
+
+    editor.setCursor({ row: mbRow(0), column: 2 });
+    editor.dispatch({ type: "addCursor", at: { row: mbRow(1), column: 2 } });
+    expect(editor.selections.length).toBe(2);
+
+    editor.dispatch({ type: "insertText", text: "X" });
+
+    // Text must be unchanged
+    const lines = mb.snapshot().lines(mbRow(0), mbRow(3));
+    expect(lines[0]).toBe("hello");
+    expect(lines[1]).toBe("world");
+    // Selections must be preserved (not cleared by missing guard)
+    expect(editor.selections.length).toBe(2);
+  });
+});
+
 describe("Non-editable with trailing newline excerpts", () => {
   test("editable flag preserved through trailing newline boundary", () => {
     const oldBuf = createBuffer(bid("old.ts"), "old line 1\nold line 2");
