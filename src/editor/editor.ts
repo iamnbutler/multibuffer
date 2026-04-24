@@ -191,14 +191,7 @@ export class Editor {
     this._cursor = clipped;
     const newSel = selectionAtPoint(this.multiBuffer, clipped);
     this._selections = newSel ? [newSel] : [];
-    if (!_pointsEqual(this._cursor, prevCursor)) {
-      this._emit("cursorChange", this._cursor, prevCursor);
-      this._emitBracketMatch(snap);
-    }
-    if (!_selectionsEqual(this._selections, prevSelections)) {
-      this._emit("selectionChange", this._selections);
-    }
-    this._emit("change", { cursor: this._cursor, selections: this._selections });
+    this._emitNavigationChanges(snap, prevCursor, prevSelections);
   }
 
   /** Extend selection from current anchor to a new point (for mouse drag). */
@@ -245,14 +238,7 @@ export class Editor {
     // Replace primary selection, keep others
     this._selections = [...this._selections.slice(0, -1), newSelection];
     this._cursor = clipped;
-    if (!_pointsEqual(this._cursor, prevCursor)) {
-      this._emit("cursorChange", this._cursor, prevCursor);
-      this._emitBracketMatch(snap);
-    }
-    if (!_selectionsEqual(this._selections, prevSelections)) {
-      this._emit("selectionChange", this._selections);
-    }
-    this._emit("change", { cursor: this._cursor, selections: this._selections });
+    this._emitNavigationChanges(snap, prevCursor, prevSelections);
   }
 
   /** Select the word at a point (for double-click). Clears multi-cursor. */
@@ -321,14 +307,7 @@ export class Editor {
     );
     this._selections = [newSel];
     this._cursor = endPoint;
-    if (!_pointsEqual(this._cursor, prevCursor)) {
-      this._emit("cursorChange", this._cursor, prevCursor);
-      this._emitBracketMatch(snap);
-    }
-    if (!_selectionsEqual(this._selections, prevSelections)) {
-      this._emit("selectionChange", this._selections);
-    }
-    this._emit("change", { cursor: this._cursor, selections: this._selections });
+    this._emitNavigationChanges(snap, prevCursor, prevSelections);
   }
 
   /** Select the entire line at a point (for triple-click). Clears multi-cursor. */
@@ -354,14 +333,7 @@ export class Editor {
     );
     this._selections = [newSel];
     this._cursor = endPoint;
-    if (!_pointsEqual(this._cursor, prevCursor)) {
-      this._emit("cursorChange", this._cursor, prevCursor);
-      this._emitBracketMatch(snap);
-    }
-    if (!_selectionsEqual(this._selections, prevSelections)) {
-      this._emit("selectionChange", this._selections);
-    }
-    this._emit("change", { cursor: this._cursor, selections: this._selections });
+    this._emitNavigationChanges(snap, prevCursor, prevSelections);
   }
 
   /** Subscribe to a granular editor event. */
@@ -395,6 +367,26 @@ export class Editor {
     if (!this._bracketMatching) return;
     const match = findMatchingBracket(snap, this._cursor);
     this._emit("bracketMatch", match);
+  }
+
+  /**
+   * Emit cursorChange, bracketMatch, selectionChange, and change events after a
+   * navigation operation (setCursor, extendSelectionTo, selectWordAt, selectLineAt).
+   * Skips each event when the relevant state has not changed.
+   */
+  private _emitNavigationChanges(
+    snap: MultiBufferSnapshot,
+    prevCursor: MultiBufferPoint,
+    prevSelections: readonly Selection[],
+  ): void {
+    if (!_pointsEqual(this._cursor, prevCursor)) {
+      this._emit("cursorChange", this._cursor, prevCursor);
+      this._emitBracketMatch(snap);
+    }
+    if (!_selectionsEqual(this._selections, prevSelections)) {
+      this._emit("selectionChange", this._selections);
+    }
+    this._emit("change", { cursor: this._cursor, selections: this._selections });
   }
 
   /** Set a callback to be notified when a custom command is dispatched. Pass null to remove. */
