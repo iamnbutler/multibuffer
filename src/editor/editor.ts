@@ -1286,6 +1286,9 @@ export class Editor {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const belowRow = (blockEnd + 1) as MultiBufferRow;
         if (belowRow >= currentSnap.lineCount) continue;
+        // Don't swap across a trailing-newline separator row (excerpt boundary).
+        const belowExcerpt = currentSnap.excerptAt(belowRow);
+        if (belowExcerpt?.hasTrailingNewline && belowRow === belowExcerpt.endRow - 1) continue;
 
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const fetchEnd = (belowRow + 1) as MultiBufferRow;
@@ -1324,6 +1327,9 @@ export class Editor {
         if (blockStart <= 0) continue;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const aboveRow = (blockStart - 1) as MultiBufferRow;
+        // Don't swap across a trailing-newline separator row (excerpt boundary).
+        const aboveExcerpt = currentSnap.excerptAt(aboveRow);
+        if (aboveExcerpt?.hasTrailingNewline && aboveRow === aboveExcerpt.endRow - 1) continue;
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         const fetchEnd = (blockEnd + 1) as MultiBufferRow;
         const allLines = currentSnap.lines(aboveRow, fetchEnd);

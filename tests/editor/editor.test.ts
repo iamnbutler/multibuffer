@@ -1746,6 +1746,34 @@ describe("Editor - Line Operations", () => {
     expectPoint(editor.cursor, 2, 1);
   });
 
+  test("moveLine down: no-op when below row is trailing-newline separator", () => {
+    const buf1 = createBuffer(createBufferId(), "AAA\nBBB\nCCC");
+    const buf2 = createBuffer(createBufferId(), "XXX\nYYY");
+    const mb2 = createMultiBuffer();
+    mb2.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb2.addExcerpt(buf2, excerptRange(0, 2));
+    const editor2 = new Editor(mb2);
+    // Row 2 = "CCC" (last content row of excerpt 1); row 3 = separator
+    editor2.setCursor(mbPoint(2, 1));
+    editor2.dispatch({ type: "moveLine", direction: "down" });
+    expect(getText(mb2)).toBe("AAA\nBBB\nCCC\n\nXXX\nYYY");
+    expectPoint(editor2.cursor, 2, 1);
+  });
+
+  test("moveLine up: no-op when above row is trailing-newline separator", () => {
+    const buf1 = createBuffer(createBufferId(), "AAA\nBBB\nCCC");
+    const buf2 = createBuffer(createBufferId(), "XXX\nYYY");
+    const mb2 = createMultiBuffer();
+    mb2.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb2.addExcerpt(buf2, excerptRange(0, 2));
+    const editor2 = new Editor(mb2);
+    // Row 4 = "XXX" (first content row of excerpt 2); row 3 = separator
+    editor2.setCursor(mbPoint(4, 1));
+    editor2.dispatch({ type: "moveLine", direction: "up" });
+    expect(getText(mb2)).toBe("AAA\nBBB\nCCC\n\nXXX\nYYY");
+    expectPoint(editor2.cursor, 4, 1);
+  });
+
   // ── Multi-cursor Duplicate Line ─────────────────────────────────
 
   test("multi-cursor duplicateLine down: two rows", () => {
