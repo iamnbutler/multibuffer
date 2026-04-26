@@ -419,7 +419,8 @@ function movePage(
 
   if (direction === "down") {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newRow = Math.min(current.row + pageSize, lineCount - 1) as MultiBufferRow;
+    const rawRow = Math.min(current.row + pageSize, lineCount - 1) as MultiBufferRow;
+    const newRow = skipTrailingNewlineRow(snapshot, rawRow, "down", lineCount);
     const lineText = snapshot.lines(newRow, nextRow(newRow, lineCount));
     const lineLen = lineText[0]?.length ?? 0;
     return { row: newRow, column: Math.min(current.column, lineLen) };
@@ -427,7 +428,8 @@ function movePage(
 
   if (direction === "up") {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newRow = Math.max(current.row - pageSize, 0) as MultiBufferRow;
+    const rawRow = Math.max(current.row - pageSize, 0) as MultiBufferRow;
+    const newRow = skipTrailingNewlineRow(snapshot, rawRow, "up", lineCount);
     const lineText = snapshot.lines(newRow, nextRow(newRow, lineCount));
     const lineLen = lineText[0]?.length ?? 0;
     return { row: newRow, column: Math.min(current.column, lineLen) };

@@ -354,6 +354,30 @@ describe("Cursor - Page Granularity", () => {
     const snap = setup("Hello World").snapshot();
     expectPoint(moveCursor(snap, mbPoint(0, 3), "right", "page"), 0, 11);
   });
+
+  test("page down skips trailing-newline separator row", () => {
+    // Excerpt 1: 31 content lines (rows 0-30) + separator at row 31; Excerpt 2 starts at row 32.
+    // Cursor at row 1, page down: rawRow = 1+30 = 31 (separator) → skips to row 32.
+    const buf1 = createBuffer(createBufferId(), Array.from({ length: 31 }, (_, i) => `a${i}`).join("\n"));
+    const buf2 = createBuffer(createBufferId(), "b0\nb1\nb2\nb3\nb4");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 31), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 5));
+    const snap = mb.snapshot();
+    expectPoint(moveCursor(snap, mbPoint(1, 0), "down", "page"), 32, 0);
+  });
+
+  test("page up skips trailing-newline separator row", () => {
+    // Excerpt 1: 5 content lines (rows 0-4) + separator at row 5; Excerpt 2: rows 6-36.
+    // Cursor at row 35, page up: rawRow = 35-30 = 5 (separator) → skips to row 4.
+    const buf1 = createBuffer(createBufferId(), "a0\na1\na2\na3\na4");
+    const buf2 = createBuffer(createBufferId(), Array.from({ length: 31 }, (_, i) => `b${i}`).join("\n"));
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 5), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 31));
+    const snap = mb.snapshot();
+    expectPoint(moveCursor(snap, mbPoint(35, 0), "up", "page"), 4, 0);
+  });
 });
 
 describe("Cursor - Visual Line Movement (Wrapped Lines)", () => {
