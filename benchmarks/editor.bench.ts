@@ -75,6 +75,19 @@ let editorMoveLine1k: Editor;
 let editorDuplicate1k: Editor;
 let editorInsertBelow1k: Editor;
 let editorInsertAbove1k: Editor;
+let editorInsert2cursor: Editor;
+let editorInsert4cursor: Editor;
+let editorInsert8cursor: Editor;
+let editorDelete8cursor: Editor;
+let editorIndent8cursor: Editor;
+
+function addCursors(editor: Editor, n: number): void {
+  // addCursorBelow adds one cursor below the lowest existing cursor per call
+  // (earlier cursors' "below" positions merge with existing ones via _mergeSelections).
+  for (let i = 1; i < n; i++) {
+    editor.dispatch({ type: "addCursorBelow" });
+  }
+}
 
 export const editorBenchmarks: BenchmarkSuite = {
   name: "Editor dispatch (keypress latency)",
@@ -284,6 +297,85 @@ export const editorBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         editorInsertAbove1k.dispatch({ type: "insertLineAbove" });
+      },
+    },
+    {
+      // Multi-cursor insertText: 2 cursors — measures _resolveSelectionsBottomUp
+      // with minimal cursor overhead relative to single-cursor baseline.
+      name: "insertText - 2 cursors (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorInsert2cursor = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert2cursor.setCursor({ row: 400 as MultiBufferRow, column: 10 });
+        addCursors(editorInsert2cursor, 2);
+      },
+      fn: () => {
+        editorInsert2cursor.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Multi-cursor insertText: 4 cursors — midpoint in the 1→8 scaling curve.
+      name: "insertText - 4 cursors (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorInsert4cursor = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert4cursor.setCursor({ row: 400 as MultiBufferRow, column: 10 });
+        addCursors(editorInsert4cursor, 4);
+      },
+      fn: () => {
+        editorInsert4cursor.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Multi-cursor insertText: 8 cursors — upper bound of realistic column-edit
+      // scenarios (find-all-replace). Isolates `_resolveSelectionsBottomUp` cost.
+      name: "insertText - 8 cursors (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorInsert8cursor = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorInsert8cursor.setCursor({ row: 400 as MultiBufferRow, column: 10 });
+        addCursors(editorInsert8cursor, 8);
+      },
+      fn: () => {
+        editorInsert8cursor.dispatch({ type: "insertText", text: "a" });
+      },
+    },
+    {
+      // Multi-cursor deleteBackward: 8 cursors — same `_resolveSelectionsBottomUp`
+      // hot path as insertText, delete direction.
+      name: "deleteBackward - 8 cursors (1K buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        editorDelete8cursor = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorDelete8cursor.setCursor({ row: 400 as MultiBufferRow, column: 32 });
+        addCursors(editorDelete8cursor, 8);
+      },
+      fn: () => {
+        editorDelete8cursor.dispatch({ type: "deleteBackward", granularity: "character" });
+      },
+    },
+    {
+      // Multi-cursor indentLines: 8 cursors — measures `_affectedRows` row-grouping
+      // with N non-adjacent cursors. Buffer grows (2 spaces × 8 per iteration).
+      name: "indentLines - 8 cursors (1K buffer)",
+      iterations: 100,
+      targetMs: 1,
+      setup: () => {
+        editorIndent8cursor = makeEditor(1000);
+        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in benchmarks
+        editorIndent8cursor.setCursor({ row: 400 as MultiBufferRow, column: 0 });
+        addCursors(editorIndent8cursor, 8);
+      },
+      fn: () => {
+        editorIndent8cursor.dispatch({ type: "indentLines" });
       },
     },
   ],
