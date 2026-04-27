@@ -26,6 +26,7 @@ const id = "bench-buffer" as BufferId;
 let snapshot10k: BufferSnapshot;
 let mutableBuf1k: Buffer;
 let mutableBuf10k: Buffer;
+let bytesSnap10k: BufferSnapshot;
 
 export const bufferBenchmarks: BenchmarkSuite = {
   name: "Buffer Operations",
@@ -156,6 +157,7 @@ export const bufferBenchmarks: BenchmarkSuite = {
     },
     {
       // Buffer creation excluded — measures insert + computeTextSummary only.
+      // bytes is lazily computed; insert no longer pays the O(n) byteLength() scan.
       // Critical path: called on every keystroke. Target: <0.2ms for 1K-line file.
       name: "Insert character - 1K buf (isolated)",
       iterations: 1000,
@@ -180,6 +182,30 @@ export const bufferBenchmarks: BenchmarkSuite = {
       fn: () => {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         mutableBuf10k.insert(500 as BufferOffset, "X");
+      },
+    },
+    {
+      // textSummary.bytes is lazily computed on first access, then cached.
+      // Cold access triggers O(n) byteLength() scan; warm is O(1) getter.
+      name: "textSummary.bytes - cold (first access, triggers byteLength)",
+      iterations: 200,
+      targetMs: 1,
+      fn: () => {
+        // Fresh snapshot each iteration so byteLength() cache is cold per call.
+        const snap = createBuffer(id, generateText(1000)).snapshot();
+        snap.textSummary.bytes;
+      },
+    },
+    {
+      name: "textSummary.bytes - warm (cached, O(1))",
+      iterations: 100000,
+      targetMs: 0.001,
+      setup: () => {
+        bytesSnap10k = createBuffer(id, generateText(10_000)).snapshot();
+        bytesSnap10k.textSummary.bytes; // prime the cache
+      },
+      fn: () => {
+        bytesSnap10k.textSummary.bytes;
       },
     },
     {
