@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { diff } from "../../src/diff/diff.ts";
+import { diff, diffLines } from "../../src/diff/diff.ts";
 import { formatHunkHeader } from "../../src/diff/helpers.ts";
 
 describe("diff", () => {
@@ -121,6 +121,121 @@ describe("diff", () => {
       (l, i) => l.kind === "equal" && i < hunk.lines.findIndex((x) => x.kind !== "equal"),
     );
     expect(equalBefore.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("diffLines", () => {
+  test("same reference returns isEqual immediately (fast path)", () => {
+    const lines = ["a", "b", "c"];
+    const result = diffLines(lines, lines);
+    expect(result.isEqual).toBe(true);
+    expect(result.hunks).toEqual([]);
+  });
+
+  test("identical content but different references returns isEqual", () => {
+    const oldLines = ["hello", "world"];
+    const newLines = ["hello", "world"];
+    const result = diffLines(oldLines, newLines);
+    expect(result.isEqual).toBe(true);
+    expect(result.hunks).toEqual([]);
+  });
+
+  test("both empty arrays are equal", () => {
+    const result = diffLines([], []);
+    expect(result.isEqual).toBe(true);
+    expect(result.hunks).toEqual([]);
+  });
+
+  test("empty to non-empty is all inserts", () => {
+    const result = diffLines([], ["a", "b"]);
+    expect(result.isEqual).toBe(false);
+    expect(result.hunks.length).toBe(1);
+    const hunk = result.hunks[0];
+    if (!hunk) throw new Error("expected hunk");
+    expect(hunk.lines[0]).toEqual({ kind: "insert", text: "a", oldRow: undefined, newRow: 0 });
+    expect(hunk.lines[1]).toEqual({ kind: "insert", text: "b", oldRow: undefined, newRow: 1 });
+  });
+
+  test("non-empty to empty is all deletes", () => {
+    const result = diffLines(["a", "b"], []);
+    expect(result.isEqual).toBe(false);
+    expect(result.hunks.length).toBe(1);
+    const hunk = result.hunks[0];
+    if (!hunk) throw new Error("expected hunk");
+    expect(hunk.lines[0]).toEqual({ kind: "delete", text: "a", oldRow: 0, newRow: undefined });
+    expect(hunk.lines[1]).toEqual({ kind: "delete", text: "b", oldRow: 1, newRow: undefined });
+  });
+
+  test("single line change produces one hunk", () => {
+    const result = diffLines(["hello", "world"], ["hello", "earth"]);
+    expect(result.isEqual).toBe(false);
+    expect(result.hunks.length).toBe(1);
+    const allLines = result.hunks.flatMap((h) => h.lines);
+    expect(allLines.some((l) => l.kind === "delete" && l.text === "world")).toBe(true);
+    expect(allLines.some((l) => l.kind === "insert" && l.text === "earth")).toBe(true);
+  });
+
+  test("row numbers match positions in original arrays", () => {
+    const old = ["a", "b", "c"];
+    const next = ["a", "x", "c"];
+    const result = diffLines(old, next);
+    const allLines = result.hunks.flatMap((h) => h.lines);
+    const del = allLines.find((l) => l.kind === "delete");
+    const ins = allLines.find((l) => l.kind === "insert");
+    if (!del || !ins) throw new Error("expected delete and insert");
+    expect(del.oldRow).toBe(1);
+    expect(del.newRow).toBeUndefined();
+    expect(ins.newRow).toBe(1);
+    expect(ins.oldRow).toBeUndefined();
+  });
+
+  test("multiple separate changes produce separate hunks", () => {
+    const oldLines = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+    const newLines = [...oldLines];
+    newLines[1] = "changed 1";
+    newLines[18] = "changed 18";
+    const result = diffLines(oldLines, newLines);
+    expect(result.hunks.length).toBe(2);
+  });
+
+  test("hunk oldCount/newCount match actual lines", () => {
+    const result = diffLines(["a", "b", "c", "d"], ["a", "x", "c", "y"]);
+    for (const hunk of result.hunks) {
+      const oldCount = hunk.lines.filter((l) => l.kind !== "insert").length;
+      const newCount = hunk.lines.filter((l) => l.kind !== "delete").length;
+      expect(oldCount).toBe(hunk.oldCount);
+      expect(newCount).toBe(hunk.newCount);
+    }
+  });
+
+  test("custom context lines", () => {
+    const oldLines = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+    const newLines = [...oldLines];
+    newLines[10] = "changed";
+    const result = diffLines(oldLines, newLines, { context: 1 });
+    const hunk = result.hunks[0];
+    if (!hunk) throw new Error("expected hunk");
+    const changeIdx = hunk.lines.findIndex((l) => l.kind !== "equal");
+    const equalBefore = hunk.lines.filter((l, i) => l.kind === "equal" && i < changeIdx);
+    expect(equalBefore.length).toBeLessThanOrEqual(1);
+  });
+
+  test("produces same result as diff() on equivalent inputs", () => {
+    const oldLines = ["a", "b", "c", "d"];
+    const newLines = ["a", "x", "c", "y"];
+    const fromDiff = diff(oldLines.join("\n"), newLines.join("\n"));
+    const fromDiffLines = diffLines(oldLines, newLines);
+    expect(fromDiffLines.isEqual).toBe(fromDiff.isEqual);
+    expect(fromDiffLines.hunks.length).toBe(fromDiff.hunks.length);
+    for (let i = 0; i < fromDiff.hunks.length; i++) {
+      const dh = fromDiff.hunks[i];
+      const dlh = fromDiffLines.hunks[i];
+      if (!dh || !dlh) throw new Error("expected hunk");
+      expect(dlh.oldStart).toBe(dh.oldStart);
+      expect(dlh.oldCount).toBe(dh.oldCount);
+      expect(dlh.newStart).toBe(dh.newStart);
+      expect(dlh.newCount).toBe(dh.newCount);
+    }
   });
 });
 
