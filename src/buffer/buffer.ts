@@ -24,9 +24,18 @@ function computeTextSummary(rope: Rope): TextSummary {
   const chars = rope.length;
   // biome-ignore lint/plugin/no-type-assertion: expect: BufferRow brand for last-row index
   const lastLineLength = rope.line((lines - 1) as BufferRow).length;
-  // byteLength() scans chunks in-place — no full-text allocation.
-  const bytes = rope.byteLength();
-  return { lines, bytes, lastLineLength, chars };
+  // bytes deferred: byteLength() is O(n) but only needed for display (never in hot-path
+  // position arithmetic). Compute lazily on first access to avoid O(n) scan on every edit.
+  let cachedBytes: number | null = null;
+  return {
+    lines,
+    lastLineLength,
+    chars,
+    get bytes(): number {
+      if (cachedBytes === null) cachedBytes = rope.byteLength();
+      return cachedBytes;
+    },
+  };
 }
 
 class BufferSnapshotImpl implements BufferSnapshot {
