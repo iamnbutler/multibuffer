@@ -3,9 +3,10 @@
  * View benchmark history from the bench-data branch.
  *
  * Usage:
- *   bun scripts/bench-history.ts          # Last 20 results (summary)
- *   bun scripts/bench-history.ts --sha <sha>  # Specific commit's results
- *   bun scripts/bench-history.ts -n 50    # Last 50 results
+ *   bun scripts/bench-history.ts                   # Last 20 results (summary)
+ *   bun scripts/bench-history.ts --sha <sha>        # Specific commit's results
+ *   bun scripts/bench-history.ts -n 50             # Last 50 results
+ *   bun scripts/bench-history.ts --compare <a> <b> # Compare two commits (regression check)
  */
 
 interface BenchmarkResult {
@@ -121,6 +122,105 @@ function showDetails(entry: HistoryEntry): void {
   }
 }
 
+/** Build a flat map of benchmark name → avgMs for an entry. */
+function buildBenchMap(entry: HistoryEntry): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const suite of entry.suites) {
+    for (const result of suite.results) {
+      map.set(`${suite.suite}/${result.name}`, result.avgMs);
+    }
+  }
+  return map;
+}
+
+/** Format a percent change with sign, e.g. "+12.3%" or "-5.1%". */
+function fmtPct(pct: number): string {
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
+/**
+ * Compare two benchmark entries and print a regression/improvement report.
+ *
+ * A benchmark is a regression when avgMs increases by more than 5%.
+ * A benchmark is an improvement when avgMs decreases by more than 5%.
+ * Benchmarks within ±5% are considered unchanged (noise floor).
+ */
+function showComparison(baseEntry: HistoryEntry, headEntry: HistoryEntry): void {
+  const NOISE_THRESHOLD = 0.05; // 5% noise floor
+
+  const baseMap = buildBenchMap(baseEntry);
+  const headMap = buildBenchMap(headEntry);
+
+  const regressions: string[] = [];
+  const improvements: string[] = [];
+  const unchanged: string[] = [];
+  const newBenches: string[] = [];
+  const removedBenches: string[] = [];
+
+  for (const [key, headMs] of headMap) {
+    const baseMs = baseMap.get(key);
+    if (baseMs === undefined) {
+      newBenches.push(key);
+      continue;
+    }
+    const pct = (headMs - baseMs) / baseMs;
+    if (pct > NOISE_THRESHOLD) {
+      regressions.push(`  ✗ ${key}\n    ${formatMs(baseMs)} → ${formatMs(headMs)} (${fmtPct(pct * 100)})`);
+    } else if (pct < -NOISE_THRESHOLD) {
+      improvements.push(`  ✓ ${key}\n    ${formatMs(baseMs)} → ${formatMs(headMs)} (${fmtPct(pct * 100)})`);
+    } else {
+      unchanged.push(`    ${key}`);
+    }
+  }
+
+  for (const key of baseMap.keys()) {
+    if (!headMap.has(key)) {
+      removedBenches.push(key);
+    }
+  }
+
+  console.log(`\nBenchmark Comparison`);
+  console.log(`  base: ${baseEntry.sha.slice(0, 8)} (${baseEntry.timestamp.split("T")[0]})`);
+  console.log(`  head: ${headEntry.sha.slice(0, 8)} (${headEntry.timestamp.split("T")[0]})`);
+  console.log(`  noise floor: ±${(NOISE_THRESHOLD * 100).toFixed(0)}%\n`);
+
+  if (regressions.length > 0) {
+    console.log(`Regressions (${regressions.length}):`);
+    for (const r of regressions) console.log(r);
+    console.log("");
+  }
+
+  if (improvements.length > 0) {
+    console.log(`Improvements (${improvements.length}):`);
+    for (const imp of improvements) console.log(imp);
+    console.log("");
+  }
+
+  if (newBenches.length > 0) {
+    console.log(`New benchmarks (${newBenches.length}):`);
+    for (const b of newBenches) console.log(`  + ${b}`);
+    console.log("");
+  }
+
+  if (removedBenches.length > 0) {
+    console.log(`Removed benchmarks (${removedBenches.length}):`);
+    for (const b of removedBenches) console.log(`  - ${b}`);
+    console.log("");
+  }
+
+  if (regressions.length === 0 && improvements.length === 0) {
+    console.log(`No significant changes (all within ±${(NOISE_THRESHOLD * 100).toFixed(0)}% noise floor).`);
+  }
+
+  console.log(`Unchanged: ${unchanged.length} benchmarks`);
+  console.log("");
+
+  if (regressions.length > 0) {
+    process.exit(1); // Signal regression to caller (e.g. CI)
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -135,6 +235,29 @@ async function main(): Promise<void> {
 
   if (entries.length === 0) {
     console.log("No benchmark history found.");
+    return;
+  }
+
+  // --compare sha1 sha2: show diff between two commits
+  const compareIndex = args.indexOf("--compare");
+  if (compareIndex !== -1) {
+    const baseSha = args[compareIndex + 1];
+    const headSha = args[compareIndex + 2];
+    if (!baseSha || !headSha) {
+      console.error("Usage: --compare <base-sha> <head-sha>");
+      process.exit(1);
+    }
+    const baseEntry = entries.find((e) => e.sha.startsWith(baseSha));
+    const headEntry = entries.find((e) => e.sha.startsWith(headSha));
+    if (!baseEntry) {
+      console.error(`No benchmark found for base SHA: ${baseSha}`);
+      process.exit(1);
+    }
+    if (!headEntry) {
+      console.error(`No benchmark found for head SHA: ${headSha}`);
+      process.exit(1);
+    }
+    showComparison(baseEntry, headEntry);
     return;
   }
 
