@@ -52,6 +52,11 @@ export function diffLines(
   newLines: readonly string[],
   options?: DiffOptions,
 ): DiffResult {
+  // Fast path: same reference skips Myers entirely (mirrors diff() string fast path).
+  if (oldLines === newLines) {
+    return { hunks: [], isEqual: true };
+  }
+
   const ctx = options?.context ?? 3;
   const edits = myersDiff(oldLines, newLines);
 
