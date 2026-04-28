@@ -76,6 +76,14 @@ An immutable snapshot of a buffer's state at a point in time. Snapshots support 
 
 ## C
 
+### CanvasRenderer
+
+A canvas-based renderer (`src/renderer/canvas.ts`) that implements the [Renderer](#renderer) interface using the HTML Canvas 2D API. Uses a [GlyphAtlas](#glyphatlas) for efficient character rendering: glyphs are pre-rasterized as white-on-transparent images in the atlas, then composited onto the canvas with the desired color via `source-atop` composite operations.
+
+For documents exceeding 5,000 lines, [WrapMap](#wrapmap) construction is deferred across animation frames in chunks of 500 rows to avoid blocking the main thread (lazy WrapMap).
+
+See also: [WebGpuRenderer](#webgpurenderer), [GlyphAtlas](#glyphatlas), [Renderer](#renderer), `src/renderer/canvas.ts`
+
 ### Clipping
 
 The operation of clamping an out-of-bounds point or offset to the nearest valid position within a buffer or multibuffer. Clipping respects [bias](#bias): `Bias.Right` keeps the position at the end of a line rather than beyond it; `Bias.Left` keeps it before the boundary.
@@ -206,11 +214,29 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FsAdapter
+
+A filesystem adapter interface (`src/project/types.ts`) for platform portability. Implement `readdir` (and optionally `stat`) to back [ProjectTree](#projecttree) with any filesystem: Bun/Node.js, the browser File System Access API, or an in-memory virtual FS for testing.
+
+See: `src/project/types.ts`, [ProjectTree](#projecttree)
+
+---
+
 ## G
 
 ### Generational Arena
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+
+### GlyphAtlas
+
+A texture atlas that pre-rasterizes character glyphs into an offscreen canvas for efficient text rendering (`src/renderer/glyph-atlas.ts`). Glyphs are added lazily on first use and packed left-to-right, top-to-bottom in fixed-size cells (`charWidth × lineHeight`). The canvas starts at a configurable size and doubles (width first, then height) up to `maxSize` when full.
+
+Used by [CanvasRenderer](#canvasrenderer) and [WebGpuRenderer](#webgpurenderer): the Canvas renderer composites the grayscale atlas onto the canvas with color via `source-atop`; the WebGPU renderer uploads the single-channel alpha data as a GPU texture and applies color in the fragment shader.
+
+See: `src/renderer/glyph-atlas.ts`
 
 ### Goal Column
 
@@ -233,6 +259,12 @@ See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutte
 ---
 
 ## H
+
+### HighlightClient
+
+The main-thread client for the highlight web worker (`src/worker/highlight-client.ts`). Implements the `SyntaxHighlighter` interface and adds async methods (`parseBufferAsync`, `getTokensAsync`) for offloading tree-sitter parsing and token lookup to a background thread. Maintains a token cache keyed by `bufferId` and row. Stale responses are rejected via monotonic request IDs; tokens are not cached while a parse is in-flight to prevent storing intermediate parse state.
+
+See: `src/worker/highlight-client.ts`, [Incremental Parsing](#incremental-parsing)
 
 ### Hit Test
 
@@ -260,6 +292,12 @@ An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) w
 
 See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
 
+### InjectionHighlighter
+
+A tree-sitter-based syntax highlighter (`src/renderer/injection-highlighter.ts`) that extends the base highlighter with [language injection](#language-injection) support. Maintains a primary parse tree for the host language and separate sub-trees for each injection range. During `getLineTokens()`, a pre-built row index provides O(1) lookup of the active injection; rows inside an injection use sub-tree tokens, while rows outside use the primary tree's tokens (skipping injection container nodes).
+
+See: `src/renderer/injection-highlighter.ts`, [Language Injection](#language-injection)
+
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
@@ -276,6 +314,12 @@ A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent`
 
 ## L
 
+### Language Injection
+
+A syntax-highlighting technique where a range of text within one language (the host) is re-parsed and highlighted using a different embedded language. `InjectionHighlighter` detects injection ranges — YAML/TOML frontmatter delimiters and fenced code blocks in Markdown — builds a separate parse sub-tree for each, and serves tokens from the appropriate sub-tree during `getLineTokens()`.
+
+See: [InjectionHighlighter](#injectionhighlighter), `src/renderer/injection-highlighter.ts`
+
 ### Line Pooling
 
 A DOM-renderer optimization that reuses existing line elements when scrolling, rather than creating and destroying DOM nodes for every visible row. Only the visible viewport's worth of nodes is kept alive.
@@ -286,7 +330,7 @@ A DOM-renderer optimization that reuses existing line elements when scrolling, r
 
 ### Measurements
 
-Fixed rendering constants: `lineHeight`, `charWidth`, `gutterWidth`, and optional `wrapWidth`. All lines have the same height, enabling O(1) pixel↔row conversion.
+Fixed rendering constants: `lineHeight`, `charWidth`, `gutterWidth`, and optional `wrapWidth`. All lines have the same height, enabling O(1) pixel↔row conversion. The optional `gutterMode` field switches the gutter layout: `"diff"` replaces the standard line-number gutter with a pair of old/new line-number columns plus a change-sign column (used by [DiffController](#diffcontroller)).
 
 ### MultiBuffer
 
@@ -331,6 +375,12 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### ProjectTree
+
+An interface (`src/project/types.ts`) for discovering files in a directory. Walks directories lazily via async iteration so large repositories are never fully enumerated upfront. Supports include/exclude glob patterns, configurable depth limits, and optional file metadata (size, mtime). Requires an [FsAdapter](#fsadapter) for filesystem access; the `createFsAdapter()` factory provides a Bun/Node.js implementation.
+
+See: `src/project/types.ts`, `src/project/tree.ts`, [FsAdapter](#fsadapter)
 
 ---
 
@@ -432,6 +482,14 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
 
+### TileManager
+
+A dirty-region tracker (`src/renderer/tile-map.ts`) used by canvas-based renderers to minimize per-frame redraw work. Divides the viewport into fixed-height tiles (default 10 lines each). `markDirty(startRow, endRow)` marks all overlapping tiles dirty; `getDirtyTiles()` returns only the dirty tiles within the current viewport. Multiple invalidations of the same tile within a frame are automatically coalesced. Newly visible tiles are marked dirty automatically on `setViewport()`.
+
+`InvalidationReason` (`"edit"` | `"selection"` | `"scroll"` | `"theme"` | `"resize"` | `"initial"`) identifies the cause of a dirty-mark for debugging.
+
+See: `src/renderer/tile-map.ts`
+
 ### Trailing Newline (synthetic)
 
 An artificial newline appended after an excerpt's last line to visually separate it from the next excerpt. Tracked by `Excerpt.hasTrailingNewline`. Position calculations must account for this: the excerpt's effective line count is one greater than its buffer range, but the extra line contains no editable content.
@@ -457,6 +515,12 @@ A bounded list of `HistoryEntry` values recording buffer and cursor state before
 
 See also: [EditorCommand](#editorcommand)
 
+### useEditorView
+
+A React hook (`src/react/use-editor-view.ts`) that creates and manages an [EditorView](#editor) lifecycle. Mounts the editor into a container `<div>` on first render and destroys it on unmount. The `text` prop sets initial content only (uncontrolled pattern); subsequent text changes are ignored. `readOnly`, `theme`, and `decorations` props are synchronized to the live view without a full teardown on re-render.
+
+See: `src/react/use-editor-view.ts`, [Renderer](#renderer)
+
 ---
 
 ## V
@@ -468,6 +532,14 @@ The currently visible rectangular window into the multibuffer: `startRow`, `endR
 ---
 
 ## W
+
+### WebGpuRenderer
+
+A GPU-accelerated renderer (`src/renderer/webgpu.ts`) that implements the [Renderer](#renderer) interface using the WebGPU API. Encodes all visible glyphs as instanced quads in a single draw call, sampling from a [GlyphAtlas](#glyphatlas) texture uploaded as a single-channel `r8unorm` GPU texture. Color is applied per-glyph in the WGSL fragment shader. A second instanced pipeline renders selection and cursor rectangles behind the text. Targets ~10× throughput over [CanvasRenderer](#canvasrenderer) for 100K+ line files.
+
+Requires WebGPU support in the browser; check availability with `isWebGpuAvailable()`.
+
+See: `src/renderer/webgpu.ts`, [CanvasRenderer](#canvasrenderer), [GlyphAtlas](#glyphatlas)
 
 ### WrapMap
 
