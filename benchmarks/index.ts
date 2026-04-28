@@ -13,6 +13,7 @@
 import { bufferBenchmarks } from "./buffer.bench.ts";
 import { diffBenchmarks } from "./diff.bench.ts";
 import { diffControllerBenchmarks } from "./diff-controller.bench.ts";
+import { multiFileDiffBenchmarks } from "./multi-file.bench.ts";
 import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { highlighterBenchmarks } from "./highlighter.bench.ts";
@@ -34,6 +35,7 @@ const suites: BenchmarkSuite[] = [
   editorBenchmarks,
   diffBenchmarks,
   diffControllerBenchmarks,
+  multiFileDiffBenchmarks,
   highlighterBenchmarks,
 ];
 
