@@ -1383,18 +1383,21 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
     const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
 
-    // Check if any line actually has leading spaces to remove
+    // Single pass: compute dedented lines and per-line removal counts together.
+    // The counts are reused below for cursor adjustment, avoiding a second pass.
     let anyChange = false;
+    const removedCounts: number[] = [];
     const dedented = lines.map((line) => {
-      let spacesToRemove = 0;
+      let spaces = 0;
       if (line.length > 0 && line[0] === " ") {
-        spacesToRemove = 1;
+        spaces = 1;
         if (line.length > 1 && line[1] === " ") {
-          spacesToRemove = 2;
+          spaces = 2;
         }
       }
-      if (spacesToRemove > 0) anyChange = true;
-      return line.slice(spacesToRemove);
+      if (spaces > 0) anyChange = true;
+      removedCounts.push(spaces);
+      return line.slice(spaces);
     });
 
     if (!anyChange) return;
@@ -1403,17 +1406,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLineLen = lines[lines.length - 1]?.length ?? 0;
     const rangeEnd: MultiBufferPoint = { row: endRow, column: lastLineLen };
 
-    // Figure out how many spaces were removed from the cursor's line
     const cursor = this.cursor;
     const cursorLineIndex = cursor.row - startRow;
-    const cursorLine = lines[cursorLineIndex] ?? "";
-    let spacesRemovedOnCursorLine = 0;
-    if (cursorLine.length > 0 && cursorLine[0] === " ") {
-      spacesRemovedOnCursorLine = 1;
-      if (cursorLine.length > 1 && cursorLine[1] === " ") {
-        spacesRemovedOnCursorLine = 2;
-      }
-    }
+    const spacesRemovedOnCursorLine = removedCounts[cursorLineIndex] ?? 0;
 
     // Pass pre-fetched text to skip redundant snap.lines() call inside _getTextInRange.
     if (!this._edit(snap, rangeStart, rangeEnd, dedented.join("\n"), lines.join("\n"))) return;
