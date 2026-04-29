@@ -1465,8 +1465,59 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   private _cut(snap: MultiBufferSnapshot): void {
     const hasNonCollapsed = this._selections.some((sel) => !isCollapsed(snap, sel));
     if (hasNonCollapsed) {
-      // Cut all non-collapsed selections, similar to delete
-      this._deleteBackward(snap, "character");
+      if (this._selections.every((sel) => !isCollapsed(snap, sel))) {
+        // All selections are non-collapsed: delegate to _deleteBackward (existing behaviour).
+        this._deleteBackward(snap, "character");
+        return;
+      }
+      // Mixed: some collapsed, some non-collapsed. Only delete the non-collapsed ranges;
+      // collapsed cursors remain in place. Their anchors are auto-adjusted by the multiBuffer.
+      const nonCollapsed = this._selections.filter((sel) => !isCollapsed(snap, sel));
+      const collapsed = this._selections.filter((sel) => isCollapsed(snap, sel));
+
+      const deleteRanges: Array<{ start: MultiBufferPoint; end: MultiBufferPoint }> = [];
+      for (const sel of nonCollapsed) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) deleteRanges.push({ start: range.start, end: range.end });
+      }
+
+      deleteRanges.sort((a, b) =>
+        b.start.row !== a.start.row ? b.start.row - a.start.row : b.start.column - a.start.column,
+      );
+
+      const edits: EditOp[] = [];
+      const newSelections: Selection[] = [];
+      let currentSnap = snap;
+
+      for (const { start, end } of deleteRanges) {
+        const startBuf = currentSnap.toBufferPoint(start);
+        if (startBuf && !startBuf.excerpt.editable) continue;
+        const removedText = this._getTextInRange(currentSnap, start, end);
+        edits.push({ editStart: start, removedText, insertedText: "" });
+        this.multiBuffer.edit(start, end, "");
+        currentSnap = this.multiBuffer.snapshot();
+        const newSel = selectionAtPoint(this.multiBuffer, start);
+        if (newSel) newSelections.unshift(newSel);
+      }
+
+      if (edits.length > 0) {
+        this._undoStack.push({
+          edits,
+          cursorBefore: this._cursor,
+          selectionsBefore: this._selections,
+        });
+        if (this._undoStack.length > Editor._MAX_HISTORY) this._undoStack.shift();
+        this._redoStack = [];
+        this._textVersion++;
+      }
+
+      this._selections = this._mergeSelections([...newSelections, ...collapsed], currentSnap);
+      const primarySel = this._selections[this._selections.length - 1];
+      if (primarySel) {
+        const headAnchor = primarySel.head === "end" ? primarySel.range.end : primarySel.range.start;
+        const resolved = currentSnap.resolveAnchor(headAnchor);
+        if (resolved) this._cursor = resolved;
+      }
       return;
     }
     // No non-collapsed selections — cut the entire line (same behavior as Cmd+X in VS Code)
