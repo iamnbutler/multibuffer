@@ -526,3 +526,227 @@ describe("Editor fuzz: empty buffer handling", () => {
     expect(textAfter).toBe(textBefore);
   });
 });
+
+// ── Multi-cursor fuzz ─────────────────────────────────────────────────────────
+
+/** Multi-cursor state-mutation commands that don't modify text. */
+const addCursorAboveArb: fc.Arbitrary<EditorCommand> = fc.constant({
+  type: "addCursorAbove" as const,
+});
+const addCursorBelowArb: fc.Arbitrary<EditorCommand> = fc.constant({
+  type: "addCursorBelow" as const,
+});
+const clearExtraCursorsArb: fc.Arbitrary<EditorCommand> = fc.constant({
+  type: "clearExtraCursors" as const,
+});
+const deleteLineArb: fc.Arbitrary<EditorCommand> = fc.constant({
+  type: "deleteLine" as const,
+});
+
+/** Commands that include multi-cursor manipulation mixed with basic operations. */
+const multiCursorCommandArb: fc.Arbitrary<EditorCommand> = fc.oneof(
+  { weight: 6, arbitrary: insertTextArb },
+  { weight: 2, arbitrary: insertNewlineArb },
+  { weight: 2, arbitrary: deleteBackwardArb },
+  { weight: 2, arbitrary: deleteForwardArb },
+  { weight: 4, arbitrary: moveCursorArb },
+  { weight: 3, arbitrary: addCursorAboveArb },
+  { weight: 3, arbitrary: addCursorBelowArb },
+  { weight: 2, arbitrary: clearExtraCursorsArb },
+  { weight: 2, arbitrary: deleteLineArb },
+  { weight: 1, arbitrary: undoArb },
+  { weight: 1, arbitrary: redoArb },
+);
+
+describe("Editor fuzz: multi-cursor cursor bounds", () => {
+  test("all cursor rows stay in-bounds across multi-cursor operations", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 5, maxLength: 80 }).filter((s) => s.includes("\n") || s.length > 3),
+        fc.array(multiCursorCommandArb, { minLength: 1, maxLength: 30 }),
+        (initialText, commands) => {
+          const editor = createSingleBufferEditor(initialText);
+
+          for (const cmd of commands) {
+            editor.dispatch(cmd);
+
+            const lineCount = editor.multiBuffer.lineCount;
+            for (const sel of editor.selections) {
+              const snap = editor.multiBuffer.snapshot();
+              const start = snap.resolveAnchor(sel.range.start);
+              const end = snap.resolveAnchor(sel.range.end);
+
+              if (start) {
+                if (num(start.row) < 0) return false;
+                if (lineCount > 0 && num(start.row) >= lineCount) return false;
+                if (start.column < 0) return false;
+              }
+              if (end) {
+                if (num(end.row) < 0) return false;
+                if (lineCount > 0 && num(end.row) >= lineCount) return false;
+                if (end.column < 0) return false;
+              }
+            }
+          }
+
+          return true;
+        },
+      ),
+      fcParams,
+    );
+  });
+
+  test("primary cursor always has valid row/column across multi-cursor operations", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 3, maxLength: 80 }),
+        fc.array(multiCursorCommandArb, { minLength: 1, maxLength: 30 }),
+        (initialText, commands) => {
+          const editor = createSingleBufferEditor(initialText);
+
+          for (const cmd of commands) {
+            editor.dispatch(cmd);
+
+            const cursor = editor.cursor;
+            const lineCount = editor.multiBuffer.lineCount;
+
+            if (num(cursor.row) < 0) return false;
+            if (lineCount > 0 && num(cursor.row) >= lineCount) return false;
+            if (cursor.column < 0) return false;
+
+            const snap = editor.multiBuffer.snapshot();
+            // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+            const lineLen = snap.lines(cursor.row, (num(cursor.row) + 1) as MultiBufferRow)[0]?.length ?? 0;
+            if (cursor.column > lineLen) return false;
+          }
+
+          return true;
+        },
+      ),
+      fcParams,
+    );
+  });
+});
+
+describe("Editor fuzz: multi-cursor selection invariants", () => {
+  test("all selections maintain start <= end ordering", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 5, maxLength: 80 }).filter((s) => s.includes("\n") || s.length > 3),
+        fc.array(multiCursorCommandArb, { minLength: 1, maxLength: 30 }),
+        (initialText, commands) => {
+          const editor = createSingleBufferEditor(initialText);
+
+          for (const cmd of commands) {
+            editor.dispatch(cmd);
+
+            const snap = editor.multiBuffer.snapshot();
+            for (const sel of editor.selections) {
+              const start = snap.resolveAnchor(sel.range.start);
+              const end = snap.resolveAnchor(sel.range.end);
+
+              if (!start || !end) continue;
+
+              if (num(start.row) > num(end.row)) return false;
+              if (num(start.row) === num(end.row) && start.column > end.column) return false;
+            }
+          }
+
+          return true;
+        },
+      ),
+      fcParams,
+    );
+  });
+
+  test("editor always has at least one selection", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 80 }),
+        fc.array(multiCursorCommandArb, { minLength: 1, maxLength: 30 }),
+        (initialText, commands) => {
+          const editor = createSingleBufferEditor(initialText);
+
+          for (const cmd of commands) {
+            editor.dispatch(cmd);
+            if (editor.selections.length === 0) return false;
+          }
+
+          return true;
+        },
+      ),
+      fcParams,
+    );
+  });
+
+  test("clearExtraCursors leaves exactly one selection", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 3, maxLength: 80 }),
+        fc.array(
+          fc.oneof(addCursorAboveArb, addCursorBelowArb, moveCursorArb),
+          { minLength: 1, maxLength: 10 },
+        ),
+        (initialText, setupCommands) => {
+          const editor = createSingleBufferEditor(initialText);
+
+          // Apply some multi-cursor setup commands
+          for (const cmd of setupCommands) {
+            editor.dispatch(cmd);
+          }
+
+          // Clear all extra cursors
+          editor.dispatch({ type: "clearExtraCursors" });
+
+          return editor.selections.length === 1;
+        },
+      ),
+      fcParams,
+    );
+  });
+});
+
+describe("Editor fuzz: multi-cursor text-mutation undo", () => {
+  test("text edits with multiple cursors are fully undoable", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 5, maxLength: 60 }).filter((s) => s.includes("\n") || s.length > 4),
+        fc.array(
+          fc.oneof(
+            { weight: 3, arbitrary: addCursorAboveArb },
+            { weight: 3, arbitrary: addCursorBelowArb },
+          ),
+          { minLength: 1, maxLength: 4 },
+        ),
+        fc.array(editingCommandArb, { minLength: 1, maxLength: 5 }),
+        (initialText, cursorSetup, edits) => {
+          const editor = createSingleBufferEditor(initialText);
+          const snap0 = editor.multiBuffer.snapshot();
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
+          const originalText = snap0.lines(mbRow(0), snap0.lineCount as MultiBufferRow).join("\n");
+
+          // Add extra cursors
+          for (const cmd of cursorSetup) {
+            editor.dispatch(cmd);
+          }
+
+          // Apply edits with multiple cursors active
+          for (const cmd of edits) {
+            editor.dispatch(cmd);
+          }
+
+          // Undo all edits
+          for (let i = 0; i < edits.length; i++) {
+            editor.dispatch({ type: "undo" });
+          }
+
+          const snapAfter = editor.multiBuffer.snapshot();
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
+          const textAfterUndo = snapAfter.lines(mbRow(0), snapAfter.lineCount as MultiBufferRow).join("\n");
+          return textAfterUndo === originalText;
+        },
+      ),
+      fcParams,
+    );
+  });
+});
