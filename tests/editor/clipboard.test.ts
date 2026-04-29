@@ -80,6 +80,36 @@ describe("Clipboard - cut", () => {
     expect(text).not.toContain("ccc");
   });
 
+  test("cut with mixed cursors only deletes selected regions, not collapsed cursors", () => {
+    // cursor 1: non-collapsed selection covering "Hello" on row 0
+    // cursor 2: collapsed cursor at (1, 3) — no selection
+    const editor = setup("Hello\nWorld");
+    editor.setCursor(mbPoint(0, 0));
+    for (let i = 0; i < 5; i++) {
+      editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
+    }
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 3) });
+
+    editor.dispatch({ type: "cut" });
+    // "Hello" should be deleted; collapsed cursor should not delete anything
+    expect(getText(editor)).toBe("\nWorld");
+    // Both cursors are preserved (cursor 2 stays in place, now collapsed at (1,3))
+    expect(editor.selections).toHaveLength(2);
+  });
+
+  test("cut with mixed cursors leaves collapsed cursor at correct position", () => {
+    // Non-collapsed selection on row 0; collapsed cursor on row 1 (after the affected row).
+    const editor = setup("abc\nxyz");
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "extendSelection", direction: "right", granularity: "line" });
+    editor.dispatch({ type: "addCursor", at: mbPoint(1, 2) });
+
+    editor.dispatch({ type: "cut" });
+    // "abc" deleted from row 0; collapsed cursor was on row 1 which is unaffected
+    expect(getText(editor)).toBe("\nxyz");
+    expect(editor.selections).toHaveLength(2);
+  });
+
   test("cut in read-only mode is no-op", () => {
     const editor = setupReadOnly("Hello World");
     editor.setCursor(mbPoint(0, 0));
