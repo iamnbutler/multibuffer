@@ -243,6 +243,36 @@ describe("SearchController - Navigation", () => {
     // Should select the third "foo" (nearest after cursor)
     expect(search.state.activeIndex).toBe(2);
   });
+
+  test("findNearest returns false when there are no results", () => {
+    const { search } = setup("hello world");
+    search.find("xyz");
+    expect(search.findNearest()).toBe(false);
+  });
+
+  test("findNearest wraps to first result when cursor is after all results", () => {
+    const { editor, search } = setup("foo bar foo");
+    search.find("foo");
+
+    // Move cursor to end of text (after both "foo" matches at col 0 and col 8)
+    editor.setCursor(mbPoint(0, 11));
+
+    search.findNearest();
+    // Should wrap around to first result
+    expect(search.state.activeIndex).toBe(0);
+  });
+
+  test("findNearest activates first result when cursor is before all results", () => {
+    const { editor, search } = setup("baz baz foo qux foo");
+    search.find("foo"); // matches at col 8 (index 0) and col 16 (index 1)
+
+    // Move cursor before all matches
+    editor.setCursor(mbPoint(0, 0));
+
+    search.findNearest();
+    // First result (col 8) is at/after cursor, so it is activated
+    expect(search.state.activeIndex).toBe(0);
+  });
 });
 
 // ─── Replace ────────────────────────────────────────────────────────
