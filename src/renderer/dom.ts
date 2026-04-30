@@ -510,8 +510,8 @@ export class DomRenderer implements Renderer {
       if (!dec.style) continue;
       const isColumnDecoration =
         dec.range.start.row === dec.range.end.row &&
-        dec.range.start.column !== 0 ||
-        dec.range.end.column !== Number.MAX_SAFE_INTEGER;
+        (dec.range.start.column !== 0 ||
+          dec.range.end.column !== Number.MAX_SAFE_INTEGER);
 
       if (isColumnDecoration && dec.range.start.row === dec.range.end.row) {
         // Column-level (intraline) decoration
