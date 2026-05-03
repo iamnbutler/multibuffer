@@ -10,6 +10,7 @@
  * - 100 excerpts: <10ms initialization
  */
 
+import { bracketMatchBenchmarks } from "./bracket-match.bench.ts";
 import { bufferBenchmarks } from "./buffer.bench.ts";
 import { diffBenchmarks } from "./diff.bench.ts";
 import { diffControllerBenchmarks } from "./diff-controller.bench.ts";
@@ -35,6 +36,7 @@ const suites: BenchmarkSuite[] = [
   diffBenchmarks,
   diffControllerBenchmarks,
   highlighterBenchmarks,
+  bracketMatchBenchmarks,
 ];
 
 if (!jsonMode) {
