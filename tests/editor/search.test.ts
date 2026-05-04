@@ -296,6 +296,37 @@ describe("SearchController - Replace", () => {
     expect(count).toBe(3);
     expect(getText(mb)).toBe("line bar one\nline bar two\nline bar three");
   });
+
+  test("replaceAll is undoable as a single step", () => {
+    const { mb, editor, search } = setup("foo bar foo baz foo");
+    search.find("foo");
+    search.replaceAll("qux");
+    expect(getText(mb)).toBe("qux bar qux baz qux");
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo bar foo baz foo");
+  });
+
+  test("replaceAll undo does not affect earlier history", () => {
+    const { mb, editor, search } = setup("foo hello foo");
+    // First edit: insert something via the editor
+    editor.setCursor(mbPoint(0, 13));
+    editor.dispatch({ type: "insertText", text: " world" });
+    expect(getText(mb)).toBe("foo hello foo world");
+
+    // Now replace all foo → bar
+    search.find("foo");
+    search.replaceAll("bar");
+    expect(getText(mb)).toBe("bar hello bar world");
+
+    // Undo replaceAll
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo hello foo world");
+
+    // Undo earlier insert
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo hello foo");
+  });
 });
 
 // ─── Anchor Stability ───────────────────────────────────────────────

@@ -279,17 +279,9 @@ export class SearchController {
     this._ensureNotDisposed();
     if (this._results.length === 0) return 0;
 
-    // Temporarily unsubscribe to avoid repeated refresh during batch replace
-    this._unsubscribeFromTextChanges();
-
-    const snap = this._editor.multiBuffer.snapshot();
-    const mb = this._editor.multiBuffer;
-
     // Resolve all anchor ranges to current positions
-    const resolved: Array<{
-      start: MultiBufferPoint;
-      end: MultiBufferPoint;
-    }> = [];
+    const snap = this._editor.multiBuffer.snapshot();
+    const resolved: Array<{ start: MultiBufferPoint; end: MultiBufferPoint }> = [];
     for (const result of this._results) {
       const range = resolveAnchorRange(snap, result.range);
       if (range) {
@@ -297,16 +289,10 @@ export class SearchController {
       }
     }
 
-    // Sort bottom-to-top so edits don't shift later positions
-    resolved.sort((a, b) => {
-      if (a.start.row !== b.start.row) return b.start.row - a.start.row;
-      return b.start.column - a.start.column;
-    });
+    if (resolved.length === 0) return 0;
 
-    // Apply each replacement
-    for (const range of resolved) {
-      mb.edit(range.start, range.end, replacement);
-    }
+    // Delegate to editor so the batch is recorded on the undo stack
+    this._editor.replaceRanges(resolved, replacement);
 
     const count = resolved.length;
 
