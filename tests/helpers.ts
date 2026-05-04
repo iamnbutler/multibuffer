@@ -2,6 +2,7 @@
  * Test helpers and utilities.
  */
 
+import type { Editor } from "../src/editor/editor.ts";
 import {
   type Anchor,
   Bias,
@@ -13,6 +14,7 @@ import {
   type BufferRow,
   type ExcerptId,
   type ExcerptRange,
+  type MultiBuffer,
   type MultiBufferOffset,
   type MultiBufferPoint,
   type MultiBufferRange,
@@ -295,6 +297,17 @@ export function expectOffset(
 export function resetCounters(): void {
   bufferIdCounter = 0;
   excerptIdCounter = 0;
+}
+
+/** Return the full text content of a multibuffer as a single newline-joined string. */
+export function getMultiBufferText(mb: MultiBuffer): string {
+  const snap = mb.snapshot();
+  return snap.lines(mbRow(0), mbRow(snap.lineCount)).join("\n");
+}
+
+/** Return the full text content of an editor's multibuffer as a single newline-joined string. */
+export function getEditorText(editor: Editor): string {
+  return getMultiBufferText(editor.multiBuffer);
 }
 
 // Re-export Bias for convenience
