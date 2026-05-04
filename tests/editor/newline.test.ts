@@ -8,14 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Editor } from "../../src/editor/editor.ts";
 import { createSingleBufferEditor } from "../../src/editor/factories.ts";
-import { expectPoint, mbPoint, mbRow, } from "../helpers.ts";
-
-// Helper to get text from editor
-function getText(editor: Editor): string {
-  const snap = editor.multiBuffer.snapshot();
-  const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
-  return lines.join("\n");
-}
+import { expectPoint, getEditorText, mbPoint } from "../helpers.ts";
 
 // Helper to create an editor with text
 function setup(text: string): Editor {
@@ -34,21 +27,21 @@ describe("Newline insertion", () => {
     const editor = setup("HelloWorld");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("Hello\nWorld");
+    expect(getEditorText(editor)).toBe("Hello\nWorld");
   });
 
   test("at beginning of line, inserts empty line above", () => {
     const editor = setup("Hello");
     editor.setCursor(mbPoint(0, 0));
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("\nHello");
+    expect(getEditorText(editor)).toBe("\nHello");
   });
 
   test("at end of line, inserts empty line below", () => {
     const editor = setup("Hello");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("Hello\n");
+    expect(getEditorText(editor)).toBe("Hello\n");
   });
 
   test("cursor moves to start of new line", () => {
@@ -66,7 +59,7 @@ describe("Newline insertion", () => {
       editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
     }
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("Hello\n");
+    expect(getEditorText(editor)).toBe("Hello\n");
     expectPoint(editor.cursor, 1, 0);
   });
 });
@@ -78,7 +71,7 @@ describe("Newline auto-indent", () => {
     const editor = setup("    hello");
     editor.setCursor(mbPoint(0, 9));
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("    hello\n    ");
+    expect(getEditorText(editor)).toBe("    hello\n    ");
     expectPoint(editor.cursor, 1, 4);
   });
 
@@ -86,7 +79,7 @@ describe("Newline auto-indent", () => {
     const editor = setup("hello");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("hello\n");
+    expect(getEditorText(editor)).toBe("hello\n");
     expectPoint(editor.cursor, 1, 0);
   });
 
@@ -99,7 +92,7 @@ describe("Newline auto-indent", () => {
     expect(editor.selections.length).toBe(3);
 
     editor.dispatch({ type: "insertNewline" });
-    const text = getText(editor);
+    const text = getEditorText(editor);
     // Line 0 "aaa" has no indent → newline should not add indent
     // Line 1 "  bbb" has 2-space indent → newline should add "  "
     // Line 2 "    ccc" has 4-space indent → newline should add "    "
@@ -120,7 +113,7 @@ describe("Newline auto-indent", () => {
     const editor = setup("    hello world");
     editor.setCursor(mbPoint(0, 10)); // between "hello " and "world"
     editor.dispatch({ type: "insertNewline" });
-    expect(getText(editor)).toBe("    hello \n    world");
+    expect(getEditorText(editor)).toBe("    hello \n    world");
     expectPoint(editor.cursor, 1, 4);
   });
 });
@@ -135,7 +128,7 @@ describe("Newline with multi-cursor", () => {
     expect(editor.selections.length).toBe(2);
 
     editor.dispatch({ type: "insertNewline" });
-    const text = getText(editor);
+    const text = getEditorText(editor);
     expect(text).toContain("a\naa");
     expect(text).toContain("b\nbb");
   });

@@ -5,14 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Editor } from "../../src/editor/editor.ts";
 import { createSingleBufferEditor } from "../../src/editor/factories.ts";
-import { mbPoint, mbRow, num } from "../helpers.ts";
-
-// Helper to get text from editor
-function getText(editor: Editor): string {
-  const snap = editor.multiBuffer.snapshot();
-  const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
-  return lines.join("\n");
-}
+import { getEditorText, mbPoint, num } from "../helpers.ts";
 
 // Helper to create an editor with text
 function setup(text: string): Editor {
@@ -123,7 +116,7 @@ describe("Multi-cursor - insertText", () => {
     expect(editor.selections.length).toBe(3);
 
     editor.dispatch({ type: "insertText", text: "X" });
-    expect(getText(editor)).toBe("aXaa\nbXbb\ncXcc");
+    expect(getEditorText(editor)).toBe("aXaa\nbXbb\ncXcc");
   });
 
   test("insert newline at multiple cursors", () => {
@@ -132,7 +125,7 @@ describe("Multi-cursor - insertText", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(1, 1) });
 
     editor.dispatch({ type: "insertNewline" });
-    const text = getText(editor);
+    const text = getEditorText(editor);
     expect(text).toContain("a\naa");
     expect(text).toContain("b\nbb");
   });
@@ -146,7 +139,7 @@ describe("Multi-cursor - delete", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
 
     editor.dispatch({ type: "deleteBackward", granularity: "character" });
-    expect(getText(editor)).toBe("aa\nbb\ncc");
+    expect(getEditorText(editor)).toBe("aa\nbb\ncc");
   });
 
   test("deleteForward at multiple cursors", () => {
@@ -156,7 +149,7 @@ describe("Multi-cursor - delete", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
 
     editor.dispatch({ type: "deleteForward", granularity: "character" });
-    expect(getText(editor)).toBe("aa\nbb\ncc");
+    expect(getEditorText(editor)).toBe("aa\nbb\ncc");
   });
 });
 

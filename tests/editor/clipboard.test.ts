@@ -8,14 +8,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { Editor } from "../../src/editor/editor.ts";
 import { createSingleBufferEditor } from "../../src/editor/factories.ts";
-import { expectPoint, mbPoint, mbRow, resetCounters } from "../helpers.ts";
-
-// Helper to get full text from editor's multibuffer
-function getText(editor: Editor): string {
-  const snap = editor.multiBuffer.snapshot();
-  const lines = snap.lines(mbRow(0), mbRow(snap.lineCount));
-  return lines.join("\n");
-}
+import { expectPoint, getEditorText, mbPoint, resetCounters } from "../helpers.ts";
 
 // Helper to create an editor with text
 function setup(text: string): Editor {
@@ -42,7 +35,7 @@ describe("Clipboard - cut", () => {
       editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
     }
     editor.dispatch({ type: "cut" });
-    expect(getText(editor)).toBe(" World");
+    expect(getEditorText(editor)).toBe(" World");
   });
 
   test("without selection (collapsed), cuts the entire line", () => {
@@ -50,7 +43,7 @@ describe("Clipboard - cut", () => {
     editor.setCursor(mbPoint(1, 0));
     editor.dispatch({ type: "cut" });
     // "second\n" should be removed (deleteLine behavior)
-    expect(getText(editor)).toBe("first\nthird");
+    expect(getEditorText(editor)).toBe("first\nthird");
   });
 
   test("cursor position after cut is at start of former selection", () => {
@@ -74,7 +67,7 @@ describe("Clipboard - cut", () => {
     editor.dispatch({ type: "extendSelection", direction: "right", granularity: "word" });
 
     editor.dispatch({ type: "cut" });
-    const text = getText(editor);
+    const text = getEditorText(editor);
     // Both "aaa" and "ccc" should be removed
     expect(text).not.toContain("aaa");
     expect(text).not.toContain("ccc");
@@ -88,7 +81,7 @@ describe("Clipboard - cut", () => {
       editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
     }
     editor.dispatch({ type: "cut" });
-    expect(getText(editor)).toBe("Hello World");
+    expect(getEditorText(editor)).toBe("Hello World");
   });
 });
 
@@ -99,7 +92,7 @@ describe("Clipboard - paste", () => {
     const editor = setup("Hello");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "paste", text: " World" });
-    expect(getText(editor)).toBe("Hello World");
+    expect(getEditorText(editor)).toBe("Hello World");
   });
 
   test("replaces existing selection with pasted text", () => {
@@ -110,14 +103,14 @@ describe("Clipboard - paste", () => {
       editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
     }
     editor.dispatch({ type: "paste", text: "Goodbye" });
-    expect(getText(editor)).toBe("Goodbye World");
+    expect(getEditorText(editor)).toBe("Goodbye World");
   });
 
   test("paste multiline text inserts multiple lines", () => {
     const editor = setup("AB");
     editor.setCursor(mbPoint(0, 1));
     editor.dispatch({ type: "paste", text: "X\nY\nZ" });
-    expect(getText(editor)).toBe("AX\nY\nZB");
+    expect(getEditorText(editor)).toBe("AX\nY\nZB");
   });
 
   test("cursor ends up at end of pasted text", () => {
@@ -143,14 +136,14 @@ describe("Clipboard - paste", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(2, 1) });
 
     editor.dispatch({ type: "paste", text: "X" });
-    expect(getText(editor)).toBe("aXaa\nbXbb\ncXcc");
+    expect(getEditorText(editor)).toBe("aXaa\nbXbb\ncXcc");
   });
 
   test("paste in read-only mode is no-op", () => {
     const editor = setupReadOnly("Hello");
     editor.setCursor(mbPoint(0, 5));
     editor.dispatch({ type: "paste", text: " World" });
-    expect(getText(editor)).toBe("Hello");
+    expect(getEditorText(editor)).toBe("Hello");
   });
 });
 
@@ -215,7 +208,7 @@ describe("Clipboard - copy (no-op in core)", () => {
       editor.dispatch({ type: "extendSelection", direction: "right", granularity: "character" });
     }
     editor.dispatch({ type: "copy" });
-    expect(getText(editor)).toBe("Hello World");
+    expect(getEditorText(editor)).toBe("Hello World");
   });
 
   test("copy command does not move cursor", () => {
@@ -245,7 +238,7 @@ describe("Clipboard - copy (no-op in core)", () => {
     }
     // copy is not an edit command, so it should work in read-only mode
     expect(() => editor.dispatch({ type: "copy" })).not.toThrow();
-    expect(getText(editor)).toBe("Hello World");
+    expect(getEditorText(editor)).toBe("Hello World");
   });
 });
 
