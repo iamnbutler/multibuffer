@@ -1,7 +1,7 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
 	"files": {
-		"includes": ["src/**", "tests/**", "benchmarks/**", "playground/demo.ts", "playground/serve.ts", "playground/serve-static.ts", "playground/build.ts", "playground/debug-client.ts", "playground/fixtures/**"]
+		"includes": ["src/**", "tests/**", "benchmarks/**", "scripts/**", "playground/demo.ts", "playground/serve.ts", "playground/serve-static.ts", "playground/build.ts", "playground/debug-client.ts", "playground/debug-protocol.ts", "playground/diff-renderer.ts", "playground/fixtures/**"]
 	},
 	"linter": {
 		"rules": {
