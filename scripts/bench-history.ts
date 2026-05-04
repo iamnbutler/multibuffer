@@ -38,6 +38,7 @@ async function fetchHistory(): Promise<HistoryEntry[]> {
   return text
     .split("\n")
     .filter((line) => line.trim())
+    // biome-ignore lint/plugin/no-type-assertion: expect: JSON.parse returns any; asserting the deserialized shape
     .map((line) => JSON.parse(line) as HistoryEntry);
 }
 
