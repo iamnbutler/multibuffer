@@ -1,5 +1,5 @@
-cmds:bun test/bench/lint/typecheck(runner:no-bun)
-mine:#310#339 monthly:may-2026(#530) main:ce545ec
-last:T1+T6+T7 2026-05-04 run:25334078428
-hold:code-PRs
-bl:#1-GlyphAtlas/#2-mc(DONE#508)/#3-SB(DONE#501)/#4-undo/#5-PT(quadratic,issue-created)/#6-WM(DONE#483)/#7-BM(DONE#533)
+cmds:bun test/bench/lint/typecheck(no-bun-in-runner)
+mine:#310#339 monthly:#530(may-2026) main:ce545ec
+last:T2+T4+T7 2026-05-05 run:25392613333
+hold:code-PRs ~55open-PRs none-merged
+bl:#1-GlyphAtlas/#4-undo/#5-PT(issue#540created)
