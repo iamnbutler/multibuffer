@@ -104,4 +104,34 @@ describe("createUnifiedDiff", () => {
     expect(result.stats.inserts).toBeGreaterThan(0);
     expect(result.stats.deletes).toBeGreaterThan(0);
   });
+
+  test("both empty texts are equal with zero lines", () => {
+    // Guards against JS: "".split("\n") returns [""] (1 element), not []
+    const result = createUnifiedDiff(oldId, "", newId, "");
+    expect(result.isEqual).toBe(true);
+    expect(result.lineCount).toBe(0);
+    expect(result.lines.length).toBe(0);
+    expect(result.stats).toEqual({ inserts: 0, deletes: 0, equal: 0 });
+  });
+
+  test("non-empty old to empty new produces all deletes", () => {
+    const result = createUnifiedDiff(oldId, "a\nb", newId, "");
+    expect(result.isEqual).toBe(false);
+    expect(result.lines.every((l) => l.kind === "delete")).toBe(true);
+    expect(result.stats.deletes).toBe(2);
+    expect(result.stats.inserts).toBe(0);
+  });
+
+  test("isEqual is false when texts differ", () => {
+    const result = createUnifiedDiff(oldId, "old", newId, "new");
+    expect(result.isEqual).toBe(false);
+  });
+
+  test("stats.equal counts context lines accurately", () => {
+    // a and c are context (equal); b is changed
+    const result = createUnifiedDiff(oldId, "a\nb\nc", newId, "a\nB\nc");
+    expect(result.stats.equal).toBe(2);
+    expect(result.stats.deletes).toBe(1);
+    expect(result.stats.inserts).toBe(1);
+  });
 });
