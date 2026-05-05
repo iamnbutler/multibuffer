@@ -85,20 +85,14 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 
 ## Not Yet Implemented
 
-**Indentation** — `Tab` with selection (indent), `Shift+Tab` / `Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter.
-
-**Comment toggling** — `Mod+/` toggle line comment.
-
-**Find & replace** — `Mod+F` (find), `Mod+G`/`F3` (next), `Mod+Shift+G`/`Shift+F3` (previous), `Mod+H` (replace), `Mod+Shift+H` (replace all).
-
-**Multi-cursor** — `Mod+D` (next occurrence), `Mod+Shift+L` (all occurrences), `Mod+Opt+Up/Down` (add cursor above/below), `Opt+Click` (add cursor at click), `Escape` (collapse to single cursor).
-
-**Bracket pairs** — Auto-close brackets/quotes; `Mod+Shift+\` jump to matching bracket.
-
-**macOS text system** — `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose).
-
-**Scroll** — `Mod+Opt+Up/Down` scroll viewport without moving cursor.
-
-**Text transformation** — `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase).
-
-**Selection expansion** — `Mod+Shift+Arrow` extend selection by word/line.
+| Feature | Planned bindings |
+|---------|-----------------|
+| Indentation | `Tab` with selection (indent), `Shift+Tab`/`Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter |
+| Comment toggling | `Mod+/` |
+| Find & replace | `Mod+F` (find), `Mod+G`/`F3` (next), `Mod+Shift+G`/`Shift+F3` (previous), `Mod+H` (replace), `Mod+Shift+H` (replace all) |
+| Multi-cursor | `Mod+D` (next occurrence), `Mod+Shift+L` (all occurrences), `Mod+Opt+Up/Down` (add above/below), `Opt+Click` (add at click), `Escape` (collapse) |
+| Bracket pairs | Auto-close brackets/quotes; `Mod+Shift+\` (jump to matching bracket) |
+| macOS text system | `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose) |
+| Scroll | `Mod+Opt+Up/Down` (scroll without moving cursor) |
+| Text transformation | `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase) |
+| Selection expansion | `Mod+Shift+Arrow` (extend by word/line) |
