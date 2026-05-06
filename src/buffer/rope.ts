@@ -40,11 +40,19 @@ function textToChunks(text: string): Chunk[] {
   let pos = 0;
   while (pos < text.length) {
     let end = Math.min(pos + TARGET_CHUNK_SIZE, text.length);
-    // Try to break at a newline within the chunk
     if (end < text.length) {
+      // Try to break at a newline within the chunk
       const newlinePos = text.lastIndexOf("\n", end);
       if (newlinePos > pos) {
         end = newlinePos + 1; // include the newline in this chunk
+      } else if (
+        end > pos &&
+        text.charCodeAt(end - 1) >= 0xd800 &&
+        text.charCodeAt(end - 1) <= 0xdbff
+      ) {
+        // No newline available — avoid splitting a UTF-16 surrogate pair.
+        // The trailing high surrogate must stay paired with the next code unit.
+        end++;
       }
     }
     chunks.push(makeChunk(text.slice(pos, end)));
