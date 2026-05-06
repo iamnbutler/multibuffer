@@ -1,5 +1,5 @@
-cmds:bun test/bench/lint/typecheck(no-bun-in-runner)
-mine:#310#339 monthly:#530(may-2026) main:ce545ec
-last:T2+T4+T7 2026-05-05 run:25392613333
-hold:code-PRs ~55open-PRs none-merged
-bl:#1-GlyphAtlas/#4-undo/#5-PT(issue#540created)
+mine:#310#339 mo:#530 main:ce545ec
+last:2026-05-06 run:25451601982 T4+T5+T6+T7
+hold:~60open none-merged
+bl:GlyphAtlas/InjectionHL(NEW)/undo/PT(#540)
+T6:injection-highlighter.ts(510LoC)0bench
