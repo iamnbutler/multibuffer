@@ -6,28 +6,15 @@
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createBuffer } from "../../src/buffer/buffer.ts";
-import { Editor } from "../../src/editor/editor.ts";
+import type { Editor } from "../../src/editor/editor.ts";
 import { createSingleBufferEditor } from "../../src/editor/factories.ts";
-import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBuffer } from "../../src/multibuffer/types.ts";
-import {
-  createBufferId,
-  excerptRange,
-  expectPoint,
-  mbPoint,
-  mbRow,
-  num,
-  resetCounters,
-} from "../helpers.ts";
+import { expectPoint, mbPoint, mbRow, num, resetCounters } from "../helpers.ts";
 
 /** Create a multibuffer with a single excerpt containing the given text. */
 function setup(text: string): { mb: MultiBuffer; editor: Editor } {
-  const buf = createBuffer(createBufferId(), text);
-  const mb = createMultiBuffer();
-  mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
-  const editor = new Editor(mb);
-  return { mb, editor };
+  const editor = createSingleBufferEditor(text);
+  return { mb: editor.multiBuffer, editor };
 }
 
 /** Read the full text content from the multibuffer snapshot. */
