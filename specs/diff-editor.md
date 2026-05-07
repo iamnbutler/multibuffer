@@ -19,24 +19,11 @@ The system must handle:
 
 ### 2.1 Goals
 
-- Display a unified diff between two buffers with proper line-number attribution.
-- Render delete lines as read-only excerpts from the old buffer.
-- Render insert and equal lines as editable excerpts from the new buffer.
-- Apply visual decorations (background colors, gutter signs) to distinguish line types.
-- Support a dual-gutter mode showing old line numbers, new line numbers, and diff signs.
-- Preserve cursor position through excerpt rebuilds via the anchor system.
-- Debounce re-diff calculations to avoid excessive computation during rapid editing.
-- Support convergence: when edits make new text match old, delete+insert pairs collapse to equal.
-- Support divergence: when edits make equal text differ from old, new delete+insert pairs appear.
+Display a unified diff between two buffers with proper line-number attribution: delete lines as read-only excerpts from the old buffer; insert and equal lines as editable excerpts from the new buffer. Apply visual decorations (background colors, gutter signs) to distinguish line types, and support a dual-gutter mode showing old line numbers, new line numbers, and diff signs. Preserve cursor position through excerpt rebuilds via the anchor system, debouncing re-diff calculations to avoid excessive computation during rapid editing. Support convergence (edits that make new text match old collapse delete+insert pairs to equal) and divergence (edits that make equal text differ from old produce new delete+insert pairs).
 
 ### 2.2 Non-Goals
 
-- Side-by-side diff view (this spec covers unified view only).
-- Word-level or character-level diff highlighting within lines.
-- Three-way merge visualization.
-- Syntax-aware diffing (we diff by lines, not by AST).
-- Diff folding or hunk collapsing.
-- Git integration (this is a pure text diff component).
+Side-by-side diff view (this spec covers unified view only); word- or character-level intra-line highlighting; three-way merge visualization; syntax-aware diffing (line-based, not AST); diff folding or hunk collapsing; Git integration (this is a pure text diff component).
 
 ## 3. System Overview
 
@@ -106,71 +93,27 @@ When user edits:
 
 #### 4.1.1 DiffLine
 
-A single line in the diff output.
-
-Fields:
-- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
-- `text` (string) - The line content without trailing newline.
-- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
+A single line in the diff output, with `kind` (`"equal" | "insert" | "delete"`), `text` (line content without trailing newline), `oldRow` (0-based line number in old buffer; undefined for inserts), and `newRow` (0-based line number in new buffer; undefined for deletes).
 
 #### 4.1.2 DiffHunk
 
-A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
-
-Fields:
-- `oldStart` (number) - Starting line number in old buffer.
-- `oldCount` (number) - Number of lines from old buffer in this hunk.
-- `newStart` (number) - Starting line number in new buffer.
-- `newCount` (number) - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
+A contiguous group of diff lines with shared context, analogous to a unified diff hunk. Has `oldStart`/`oldCount` (range in old buffer), `newStart`/`newCount` (range in new buffer), and `lines` (readonly `DiffLine[]`, including context).
 
 #### 4.1.3 DiffResult
 
-Complete diff output.
-
-Fields:
-- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
-- `isEqual` (boolean) - True if old and new text are identical.
+The complete diff output: `hunks` (readonly `DiffHunk[]`) and `isEqual` (true when old and new text are identical).
 
 #### 4.1.4 Decoration
 
-Visual styling applied to a range of text.
-
-Fields:
-- `range` (MultiBufferRange) - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+Visual styling applied to a range of text: `range` (`MultiBufferRange`) and `style` (`Partial<DecorationStyle>` — background color, gutter sign, gutter sign color, etc.).
 
 #### 4.1.5 DecorationStyle
 
-All visual properties for a decorated line.
-
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+All visual properties for a decorated line: `backgroundColor`, `color`, `borderColor`, `fontWeight` (`"normal" | "bold"`), `fontStyle` (`"normal" | "italic"`), `textDecoration` (`"none" | "underline" | "line-through"`), and gutter-specific `gutterBackground`, `gutterColor`, `gutterSign` (e.g., `"+"`, `"−"`), and `gutterSignColor`.
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff on edit support. Exposes `multiBuffer`, `decorations` (readonly), `isEqual`, `oldBuffer`, and `newBuffer` state, plus methods: `reDiff()` (manual trigger; returns new `isEqual`), `notifyChange()` (schedule debounced re-diff), `onUpdate(callback)` (subscribe to decoration updates; returns an unsubscribe fn), and `dispose()` (clean up timers and subscriptions).
 
 ### 4.2 Excerpt Structure
 
