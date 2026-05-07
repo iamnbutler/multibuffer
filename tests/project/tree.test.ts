@@ -487,4 +487,49 @@ describe("createMemoryFsAdapter", () => {
 
     await expect(adapter.stat?.("/nonexistent")).rejects.toThrow("ENOENT");
   });
+
+  test("readdir throws ENOTDIR when called on a file path", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/root/file.ts": { type: "file" },
+    });
+
+    await expect(adapter.readdir("/root/file.ts")).rejects.toThrow("ENOTDIR");
+  });
+
+  test("readdir on declared empty directory returns [] without throwing", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/empty": { type: "directory" },
+    });
+
+    const entries = await adapter.readdir("/empty");
+
+    expect(entries).toEqual([]);
+  });
+
+  test("readdir normalizes trailing slashes", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/root/a.ts": { type: "file" },
+      "/root/sub": { type: "directory" },
+    });
+
+    const withSlash = await adapter.readdir("/root/");
+    const withoutSlash = await adapter.readdir("/root");
+
+    expect(withSlash.map((e) => e.name).sort()).toEqual(["a.ts", "sub"]);
+    expect(withSlash).toEqual(withoutSlash);
+  });
+
+  test("readdir enumerates top-level entries when root is '/'", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/a.ts": { type: "file" },
+      "/sub": { type: "directory" },
+      "/sub/nested.ts": { type: "file" },
+    });
+
+    const entries = await adapter.readdir("/");
+
+    expect(entries.map((e) => e.name).sort()).toEqual(["a.ts", "sub"]);
+    expect(entries.find((e) => e.name === "sub")?.isDirectory).toBe(true);
+    expect(entries.find((e) => e.name === "a.ts")?.isDirectory).toBe(false);
+  });
 });
