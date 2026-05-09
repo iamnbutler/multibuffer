@@ -142,6 +142,94 @@ describe("SlotMap - Generational Stale Detection", () => {
   });
 });
 
+describe("SlotMap - Set", () => {
+  test("set returns true and updates value for live key", () => {
+    const map = new SlotMap<string>();
+    const key = map.insert("hello");
+
+    expect(map.set(key, "world")).toBe(true);
+    expect(map.get(key)).toBe("world");
+  });
+
+  test("set does not change size", () => {
+    const map = new SlotMap<number>();
+    const key = map.insert(1);
+    map.insert(2);
+    expect(map.size).toBe(2);
+
+    map.set(key, 99);
+    expect(map.size).toBe(2);
+  });
+
+  test("set does not change the key's generation", () => {
+    const map = new SlotMap<string>();
+    const key = map.insert("a");
+
+    map.set(key, "b");
+
+    // Re-fetch via the original key — generation must still match.
+    expect(map.has(key)).toBe(true);
+    expect(map.get(key)).toBe("b");
+  });
+
+  test("set returns false for stale key (slot reused)", () => {
+    const map = new SlotMap<string>();
+    const oldKey = map.insert("first");
+    map.remove(oldKey);
+    const newKey = map.insert("second");
+
+    expect(map.set(oldKey, "clobber")).toBe(false);
+    // New occupant must be untouched.
+    expect(map.get(newKey)).toBe("second");
+  });
+
+  test("set returns false for stale key (slot empty)", () => {
+    const map = new SlotMap<string>();
+    const key = map.insert("hello");
+    map.remove(key);
+
+    expect(map.set(key, "anything")).toBe(false);
+    expect(map.get(key)).toBeUndefined();
+  });
+
+  test("set returns false for never-allocated slot index", () => {
+    const map = new SlotMap<string>();
+    expect(map.set({ index: 0, generation: 0 }, "x")).toBe(false);
+    expect(map.set({ index: 999, generation: 0 }, "x")).toBe(false);
+  });
+
+  test("set returns false for live slot but wrong generation", () => {
+    const map = new SlotMap<number>();
+    const key = map.insert(1);
+    const wrongGen = { index: key.index, generation: key.generation + 1 };
+
+    expect(map.set(wrongGen, 42)).toBe(false);
+    // Real occupant unchanged.
+    expect(map.get(key)).toBe(1);
+  });
+
+  test("set works repeatedly on the same key", () => {
+    const map = new SlotMap<number>();
+    const key = map.insert(0);
+
+    for (let i = 1; i <= 5; i++) {
+      expect(map.set(key, i)).toBe(true);
+      expect(map.get(key)).toBe(i);
+    }
+  });
+
+  test("set on one key does not affect other keys", () => {
+    const map = new SlotMap<string>();
+    const k1 = map.insert("a");
+    const k2 = map.insert("b");
+
+    map.set(k1, "A");
+
+    expect(map.get(k1)).toBe("A");
+    expect(map.get(k2)).toBe("b");
+  });
+});
+
 describe("SlotMap - Has", () => {
   test("has returns true for live key", () => {
     const map = new SlotMap<string>();
