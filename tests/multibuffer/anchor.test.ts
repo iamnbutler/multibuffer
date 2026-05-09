@@ -619,6 +619,98 @@ describe("Anchor Comparison", () => {
 });
 
 
+describe("compareAnchors — tiebreaker branches", () => {
+  test("excerpt index difference dominates everything else", () => {
+    // a has higher index but lower offset/generation/bias —
+    // index diff alone must determine order.
+    const a = anchor(5, 0, Bias.Left, 0);
+    const b = anchor(2, 999, Bias.Right, 99);
+    expect(compareAnchors(a, b)).toBeGreaterThan(0);
+    expect(compareAnchors(b, a)).toBeLessThan(0);
+  });
+
+  test("same index, different generation: ordered by generation", () => {
+    const older = anchor(3, 100, Bias.Right, 0);
+    const newer = anchor(3, 100, Bias.Right, 5);
+    expect(compareAnchors(older, newer)).toBeLessThan(0);
+    expect(compareAnchors(newer, older)).toBeGreaterThan(0);
+  });
+
+  test("same index, different generation: tiebreaker beats offset/bias", () => {
+    // Lower generation wins even if offset/bias would otherwise reorder.
+    const lowGenHighOffset = anchor(0, 200, Bias.Right, 0);
+    const highGenLowOffset = anchor(0, 0, Bias.Left, 1);
+    expect(compareAnchors(lowGenHighOffset, highGenLowOffset)).toBeLessThan(0);
+  });
+
+  test("same excerpt id, different offset: ordered by offset", () => {
+    const lower = anchor(1, 5, Bias.Left);
+    const higher = anchor(1, 50, Bias.Left);
+    expect(compareAnchors(lower, higher)).toBeLessThan(0);
+    expect(compareAnchors(higher, lower)).toBeGreaterThan(0);
+  });
+
+  test("same excerpt id and offset: ordered by bias (Left < Right)", () => {
+    const left = anchor(1, 10, Bias.Left);
+    const right = anchor(1, 10, Bias.Right);
+    // Bias.Left === 0, Bias.Right === 1 — Left should sort first.
+    expect(compareAnchors(left, right)).toBeLessThan(0);
+    expect(compareAnchors(right, left)).toBeGreaterThan(0);
+  });
+
+  test("identical anchors compare equal", () => {
+    const a = anchor(2, 17, Bias.Right, 4);
+    const b = anchor(2, 17, Bias.Right, 4);
+    expect(compareAnchors(a, b)).toBe(0);
+  });
+
+  test("compareAnchors is consistent with anchorsEqual", () => {
+    const cases: Array<[ReturnType<typeof anchor>, ReturnType<typeof anchor>]> = [
+      [anchor(0, 0, Bias.Left), anchor(0, 0, Bias.Left)],
+      [anchor(0, 0, Bias.Left), anchor(0, 0, Bias.Right)],
+      [anchor(0, 0, Bias.Left, 0), anchor(0, 0, Bias.Left, 1)],
+      [anchor(1, 5, Bias.Right), anchor(2, 5, Bias.Right)],
+    ];
+    for (const [a, b] of cases) {
+      expect(compareAnchors(a, b) === 0).toBe(anchorsEqual(a, b));
+    }
+  });
+});
+
+
+describe("reverseSelection", () => {
+  test("start head reverses to end", () => {
+    const a1 = anchor(0, 5, Bias.Right);
+    const a2 = anchor(0, 15, Bias.Right);
+    const sel = createSelection(createAnchorRange(a1, a2), "start");
+    expect(reverseSelection(sel).head).toBe("end");
+  });
+
+  test("end head reverses to start", () => {
+    const a1 = anchor(0, 5, Bias.Right);
+    const a2 = anchor(0, 15, Bias.Right);
+    const sel = createSelection(createAnchorRange(a1, a2), "end");
+    expect(reverseSelection(sel).head).toBe("start");
+  });
+
+  test("double reverse returns the original head", () => {
+    const a1 = anchor(0, 5, Bias.Right);
+    const a2 = anchor(0, 15, Bias.Right);
+    const sel = createSelection(createAnchorRange(a1, a2), "start");
+    expect(reverseSelection(reverseSelection(sel)).head).toBe("start");
+  });
+
+  test("range reference is preserved across reverse", () => {
+    const a1 = anchor(0, 5, Bias.Right);
+    const a2 = anchor(0, 15, Bias.Right);
+    const range = createAnchorRange(a1, a2);
+    const sel = createSelection(range, "end");
+    // Same range identity — reverseSelection swaps head, not endpoints.
+    expect(reverseSelection(sel).range).toBe(range);
+  });
+});
+
+
 describe("AnchorRange", () => {
   test("AnchorRange tracks both ends independently", () => {
     const buf = createBuffer(createBufferId(), "0123456789ABCDEFGHIJ");
