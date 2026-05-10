@@ -411,6 +411,90 @@ describe("Excerpt Range Merging", () => {
     expect(merged.length).toBe(1);
     expect(num(merged[0]?.context.start.row ?? row(0))).toBe(5);
   });
+
+  test("merge keeps leftmost primary start and rightmost primary end", () => {
+    // First range: context [0,5), primary [2,3)
+    // Second range: context [5,10), primary [7,9)
+    // After merge: context [0,10), primary should span min(2,7)=2 to max(3,9)=9
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5, 2, 3),
+      excerptRange(5, 10, 7, 9),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(2);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(9);
+  });
+
+  test("merge preserves wider primary when first range dominates", () => {
+    // First: context [0,10), primary [1,9) (wide)
+    // Second: context [10,15), primary [11,12) (narrow)
+    // Merged primary: [1,12) — start from first, end from second (since 12>9)
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 10, 1, 9),
+      excerptRange(10, 15, 11, 12),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(1);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(12);
+  });
+
+  test("merge preserves wider primary when second range dominates", () => {
+    // First: context [0,5), primary [3,4) (narrow, late)
+    // Second: context [5,15), primary [6,14) (wide)
+    // Merged primary: [3,14) — start from first (3<6), end from second (14>4)
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5, 3, 4),
+      excerptRange(5, 15, 6, 14),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(3);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(14);
+  });
+
+  test("three-range chain expands primary across all merged inputs", () => {
+    // Chain merge: all three contexts are adjacent/overlap
+    // Primary should span min(2, 6, 11) = 2 to max(4, 8, 14) = 14
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5, 2, 4),
+      excerptRange(5, 10, 6, 8),
+      excerptRange(10, 15, 11, 14),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(2);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(14);
+  });
+
+  test("non-merging ranges keep their own primary intact", () => {
+    // Two non-adjacent ranges: each retains its own primary
+    const merged = mergeExcerptRanges([
+      excerptRange(0, 5, 1, 4),
+      excerptRange(10, 15, 11, 14),
+    ]);
+    expect(merged.length).toBe(2);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(1);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(4);
+    expect(num(merged[1]?.primary.start.row ?? row(0))).toBe(11);
+    expect(num(merged[1]?.primary.end.row ?? row(0))).toBe(14);
+  });
+
+  test("single range returned with primary intact", () => {
+    const merged = mergeExcerptRanges([excerptRange(5, 10, 6, 9)]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(6);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(9);
+  });
+
+  test("unsorted inputs still yield correct merged primary", () => {
+    // Same as adjacent merge but feed in reverse order — sort+merge must
+    // still pick min(start) / max(end) regardless of input order.
+    const merged = mergeExcerptRanges([
+      excerptRange(5, 10, 7, 9),
+      excerptRange(0, 5, 2, 3),
+    ]);
+    expect(merged.length).toBe(1);
+    expect(num(merged[0]?.primary.start.row ?? row(0))).toBe(2);
+    expect(num(merged[0]?.primary.end.row ?? row(0))).toBe(9);
+  });
 });
 
 
