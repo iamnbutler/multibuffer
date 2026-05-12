@@ -1,8 +1,6 @@
-mine:#310#339 mo:#530 main:ce545ec
-last:2026-05-11 run:25687295633 T4+T5+T7
+m:#310#339 mo:#530 main:ce545ec
+last:2026-05-12 r:25752170022 T4+T2+T7
 hold:60+open none-merged
-bl:GA/IH(#377addr-open)/undo/PT(#540)
-T6:IH-510L/0bench in highlighter.bench.ts — maint #377 fills (open)
-maint-perf-PRs-open:#374(FileNav)#375(editBatch)#377(InjBench)
-2026-05-11:no perf-PR merge/no new perfIssue comments/only new PR #558(DocUnbloat) nonperf
-push_memory:30KB-disk(29KB.git)>12KB-limit; cant shrink .git further
+bl:GA/IH(#377)/undo/PT(#540)
+0512:new#559(biome)#560(DocUnb) close#553#557(DocUnb) all nonperf; 38perfPRs still open
+push_memory:30KB(git)>12KB - persistent infra issue
