@@ -6,14 +6,7 @@ Purpose: Define a diff viewing and editing component built on the MultiBuffer ar
 
 ## 1. Problem Statement
 
-The diff editor solves the problem of viewing and editing differences between two versions of a file within a unified, scrollable interface. Unlike traditional side-by-side or read-only unified diffs, this component allows direct editing of the "new" version while maintaining accurate diff visualization.
-
-The system must handle:
-
-- **Visualization**: Display deleted lines (from old version) interleaved with inserted/modified lines (from new version) in a unified view.
-- **Editing**: Allow users to edit insert and equal lines (from the new buffer) while keeping delete lines read-only.
-- **Live updates**: When edits change the relationship between old and new text, the diff must update accordingly.
-- **Cursor preservation**: User's editing position must survive diff recalculations.
+The diff editor solves the problem of viewing and editing differences between two versions of a file within a unified, scrollable interface. Unlike traditional side-by-side or read-only unified diffs, this component allows direct editing of the "new" version while maintaining accurate diff visualization, with the cursor surviving live re-diff. See §2.1 for the full goal list.
 
 ## 2. Goals and Non-Goals
 
@@ -159,18 +152,7 @@ Fields:
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff on edit support. See [§7.2](#72-creatediffcontroller) for the full interface.
 
 ### 4.2 Excerpt Structure
 
@@ -203,13 +185,8 @@ Results in 4 excerpts total. The MultiBuffer line count is 4 (one more than eith
 - Width: `gutterWidth` from Measurements.
 
 #### Diff Mode (`gutterMode: "diff"`)
-- Three columns: old line number | new line number | sign.
-- Fixed widths: 40px + 40px + 16px = 96px total.
-- Old line number shown for equal and delete lines.
-- New line number shown for equal and insert lines.
-- Sign shows "+", "−", or space.
 
-Line number display rules:
+Three fixed-width columns (40 + 40 + 16 = 96px): old line number, new line number, sign.
 
 | Line Kind | Old Gutter | New Gutter | Sign |
 |-----------|------------|------------|------|
@@ -292,29 +269,16 @@ for each hunk:
 
 ### 5.5 Convergence and Divergence
 
-**Convergence** (edit makes insert match delete):
+**Convergence** — editing an insert to match its paired delete collapses the pair into a single equal excerpt (line count decreases by 1).
 
-When user edits an insert line to match the corresponding delete line:
-- The delete+insert pair should collapse to a single equal line.
-- Line count in MultiBuffer decreases.
-- The delete excerpt is removed.
-- The insert excerpt becomes an equal excerpt.
-
-Example:
 ```
 Before: delete "foo" + insert "bar"  →  2 lines, 2 excerpts
 Edit: change "bar" to "foo"
 After: equal "foo"  →  1 line, 1 excerpt
 ```
 
-**Divergence** (edit makes equal differ from old):
+**Divergence** — editing an equal line so it no longer matches the old text splits it into a delete+insert pair (line count increases by 1).
 
-When user edits an equal line to no longer match the old text:
-- A new delete+insert pair appears.
-- Line count in MultiBuffer increases.
-- The equal excerpt splits into delete (from old) + insert (from new).
-
-Example:
 ```
 Before: equal "foo"  →  1 line, 1 excerpt
 Edit: change "foo" to "bar"
@@ -381,16 +345,11 @@ In diff mode, each line row contains:
 
 ### 6.3 Hit Testing
 
-In diff mode, `hitTest(x, y)` must account for the wider gutter:
-- Effective gutter width = 40 + 40 + 16 = 96px.
-- Content starts at x = 96px.
-- Column calculation uses `(x - 96) / charWidth`.
+In diff mode, `hitTest(x, y)` uses an effective gutter width of 96px: content starts at `x = 96`, and column = `(x - 96) / charWidth`.
 
 ### 6.4 Selection Rendering
 
-Selection rectangles must also account for diff gutter width:
-- Selection x-start = 96 + (startColumn * charWidth).
-- Selection width spans the selected column range.
+Selection rectangles also offset by the 96px gutter: `x-start = 96 + (startColumn * charWidth)`, width spans the selected column range.
 
 ## 7. API Specification
 
