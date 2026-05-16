@@ -431,24 +431,49 @@ export class Rope {
     }
   }
 
-  /** Get a substring by UTF-16 code unit offset range. */
+  /**
+   * Get a substring by UTF-16 code unit offset range.
+   *
+   * Binary-searches for the starting chunk in O(log n_chunks), then walks
+   * forward only through chunks that overlap [start, end). The previous
+   * implementation walked all chunks linearly, which made tiny slices near
+   * the end of large ropes O(n_chunks) instead of O(log n_chunks).
+   *
+   * Fast path: when start..end fits within a single chunk (the common case
+   * for the 1-char surrogate-pair check in `BufferSnapshot.clipOffset`),
+   * returns `chunk.text.slice(...)` directly with no string concatenation.
+   */
   slice(start: number, end: number): string {
     if (start >= end || start >= this._length) return "";
+    const clampedStart = Math.max(0, start);
+    const clampedEnd = Math.min(end, this._length);
 
-    let result = "";
-    let offset = 0;
-    for (const chunk of this._chunks) {
-      const chunkEnd = offset + chunk.text.length;
-      if (chunkEnd <= start) {
-        offset = chunkEnd;
-        continue;
+    const startCi = this._findChunkByOffset(clampedStart);
+    const startChunk = this._chunks[startCi];
+    if (!startChunk) return "";
+
+    const startChunkOffset = this._chunkOffsets[startCi] ?? 0;
+    const startInChunk = clampedStart - startChunkOffset;
+    const startChunkEnd = startChunkOffset + startChunk.text.length;
+
+    // Fast path: the entire slice fits in one chunk.
+    if (clampedEnd <= startChunkEnd) {
+      return startChunk.text.slice(startInChunk, clampedEnd - startChunkOffset);
+    }
+
+    let result = startChunk.text.slice(startInChunk);
+    for (let ci = startCi + 1; ci < this._chunks.length; ci++) {
+      const chunk = this._chunks[ci];
+      if (!chunk) continue;
+      const chunkOffset = this._chunkOffsets[ci] ?? 0;
+      if (chunkOffset >= clampedEnd) break;
+      const chunkEnd = chunkOffset + chunk.text.length;
+      if (clampedEnd >= chunkEnd) {
+        result += chunk.text;
+      } else {
+        result += chunk.text.slice(0, clampedEnd - chunkOffset);
+        break;
       }
-      if (offset >= end) break;
-
-      const sliceStart = Math.max(0, start - offset);
-      const sliceEnd = Math.min(chunk.text.length, end - offset);
-      result += chunk.text.slice(sliceStart, sliceEnd);
-      offset = chunkEnd;
     }
     return result;
   }
