@@ -22,14 +22,7 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### adjustOffset
 
-A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
-
-- Offsets before the edit pass through unchanged.
-- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
-- Offsets at the edit start with `Bias.Right` jump past inserted text.
-- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
-
-Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries: offsets before the edit pass through unchanged; offsets after the deleted range shift by `insertedLength − deletedLength`; offsets at the edit start jump past inserted text with `Bias.Right` or clamp to the edit start with `Bias.Left` (also clamping anything within the deleted range). Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
 
 See: `src/buffer/offset.ts`, `src/multibuffer/anchor.ts`
 
@@ -43,10 +36,7 @@ A behavior of the `insertNewline` command: the new line automatically receives t
 
 ### Bias
 
-A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds.
-
-- `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
-- `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
+A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds. `Bias.Left` stays left of inserted text and clips to the position before a boundary; `Bias.Right` advances past inserted text and clips to the position at or after a boundary.
 
 ### Buffer
 
@@ -82,24 +72,13 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 ### Closer
 
-An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
-
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides each PR's outcome: applies `ready-to-merge` when CI is green and no blocking reviews remain, `needs-review` when blocking reviews or unresolved issues exist, or closes duplicates/spam/fundamentally broken PRs. Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
 
 See: `.github/workflows/closer.md`
 
 ### Coordinate Systems
 
-The project uses two distinct coordinate spaces:
-
-- **Buffer coordinates** — row/column or byte offset within a single source file (`BufferRow`, `BufferOffset`, `BufferPoint`).
-- **Multibuffer coordinates** — row/column or byte offset within the unified scrollable view across all excerpts (`MultiBufferRow`, `MultiBufferOffset`, `MultiBufferPoint`).
-
-Branded types enforce that these are never accidentally mixed.
+The project uses two distinct coordinate spaces: **Buffer coordinates** (`BufferRow`, `BufferOffset`, `BufferPoint`) address row/column or byte offsets within a single source file, while **Multibuffer coordinates** (`MultiBufferRow`, `MultiBufferOffset`, `MultiBufferPoint`) address them within the unified scrollable view across all excerpts. Branded types enforce that these are never accidentally mixed.
 
 ---
 
@@ -123,12 +102,7 @@ An interface (`src/renderer/types.ts`) describing the full set of visual propert
 
 A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
 
-Key methods:
-
-- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
-- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
-- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
-- `dispose()` — cleans up timers and subscriptions.
+Key methods: `reDiff()` recomputes the diff immediately and returns the new `isEqual` state; `notifyChange()` schedules a debounced re-diff (default 150 ms); `onUpdate(callback)` subscribes to decoration updates and returns an unsubscribe function; `dispose()` cleans up timers and subscriptions.
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
@@ -140,11 +114,7 @@ See: `src/diff/types.ts`
 
 ### DiffKind
 
-The type of change a [DiffLine](#diffline) represents:
-
-- `"equal"` — the line is unchanged between old and new.
-- `"insert"` — the line was added in the new version (has no `oldRow`).
-- `"delete"` — the line was removed from the old version (has no `newRow`).
+The type of change a [DiffLine](#diffline) represents: `"equal"` (unchanged between old and new), `"insert"` (added in the new version, no `oldRow`), or `"delete"` (removed from the old version, no `newRow`).
 
 ### DiffLine
 
@@ -200,9 +170,7 @@ The public view of an excerpt, exposed to consumers. Contains the excerpt's `id`
 
 ### ExcerptRange
 
-The specification for creating an excerpt. Contains:
-- `context` — the full `BufferRange` to display (including any surrounding context lines).
-- `primary` — the highlighted sub-range within `context`.
+The specification for creating an excerpt: `context` is the full `BufferRange` to display (including any surrounding context lines), and `primary` is the highlighted sub-range within `context`.
 
 ---
 
@@ -348,14 +316,7 @@ An interface (`src/renderer/types.ts`) that rendering backends implement. A rend
 
 ### Reviewer
 
-An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
-
-- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
-- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
-- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
-- Up to 25 inline review comments per run, prioritising blocking issues first.
-
-Read-only: never writes implementation code or pushes to branches.
+An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX. Uses `REQUEST_CHANGES` for blocking issues and `COMMENT` for non-blocking suggestions; hardballs every `biome-ignore` suppression (must have concrete justification or be rewritten to avoid one); may sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews; posts up to 25 inline comments per run, prioritising blockers first. Read-only: never writes implementation code or pushes to branches.
 
 See: `.github/workflows/reviewer.md`
 
@@ -415,12 +376,7 @@ Displaying a single logical line across multiple visual rows when it exceeds the
 
 ### Surrogate Pair Snapping
 
-The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
-
-- `Bias.Left` — steps back to the high surrogate (the position *before* the supplementary character).
-- `Bias.Right` — steps past the low surrogate (the position *after* the supplementary character).
-
-This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
+The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction: `Bias.Left` steps back to the high surrogate (position *before* the supplementary character), `Bias.Right` steps past the low surrogate (position *after*). This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
 
 See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
@@ -438,12 +394,7 @@ An artificial newline appended after an excerpt's last line to visually separate
 
 ### TreeEdit
 
-An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
-
-- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
-- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
-
-Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class: `startIndex` / `oldEndIndex` / `newEndIndex` are byte offsets of the changed range in the old and new text; `startPosition` / `oldEndPosition` / `newEndPosition` are row/column positions of the same endpoints. Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
 
 See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
