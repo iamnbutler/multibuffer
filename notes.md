@@ -1,5 +1,5 @@
 m:#310#339#565 mo:#530 main:ce545ec
-last:2026-05-21 r:26243306742 T2+T4+T5+T7
+last:2026-05-22 r:26303279371 T2+T4+T5+T7
 bun:works via curl install in runner
 bl:GA/IH(#377)/undo(#435)/PT(#540); rope.slice resolved via #565
 0512:new#559(biome)#560(DocUnb) close#553#557(DocUnb)
@@ -12,4 +12,5 @@ bl:GA/IH(#377)/undo(#435)/PT(#540); rope.slice resolved via #565
 0519:new#568(DocUnb) close#564#566(DocUnb); #310#339#565 all mergeable_state:clean; no human comments on #417/#446/#496/#540; backlog unchanged
 0520:new#569(DocUnb bindings.md condense); #310/#339/#565 all clean; T6 audit: src cov ok; remaining gaps tracked: GA(blk-browser)/IH(#377)/undo(#435 covers fix)/PT(#540); bench-data+bench/run-history branches exist
 0521:new#572(DocUnb gloss bullet->prose) #570(Docs/Update wf-fail) #571(Repo Assist wf-fail); #310/#339/#565 all clean; no human comments on perf issues; backlog unchanged
+0522:new#573(DocUnb gloss remaining bullets->prose); #310/#339/#565 all clean; no human comments on perf issues; backlog unchanged
 push_memory:30KB(git)>12KB - persistent infra issue
