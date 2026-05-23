@@ -1,16 +1,17 @@
-m:#310#339#565 mo:#530 main:ce545ec
-last:2026-05-22 r:26303279371 T2+T4+T5+T7
+m:#310#339#565+NEW(540) mo:#530 main:ce545ec
+last:2026-05-23 r:26339135235 T3+T4+T7
 bun:works via curl install in runner
-bl:GA/IH(#377)/undo(#435)/PT(#540); rope.slice resolved via #565
+bl:GA/IH(#377)/undo(#435); rope.slice via #565; PT(#540) addressed
 0512:new#559(biome)#560(DocUnb) close#553#557(DocUnb)
 0513:new#561(DocUnb) #310#339 clean
 0514:no-new-PRs close#560(DocUnb) #562(DocUnb-wf-fail)
 0515:new#563(DocUnb) clean
-0516:new#565 RopeSlice PR; rope.slice O(n_chunks)->O(log n_chunks)+fastpath; 13x late 1-char; hold-lifted-once
-0517:new#564#566(DocUnb) close#563(DocUnb); hold reinstated; #310#339#565 all clean; maint-only
-0518:new#567(DocUnb) all PRs clean; maint-only; no human comments on perf issues
-0519:new#568(DocUnb) close#564#566(DocUnb); #310#339#565 all mergeable_state:clean; no human comments on #417/#446/#496/#540; backlog unchanged
-0520:new#569(DocUnb bindings.md condense); #310/#339/#565 all clean; T6 audit: src cov ok; remaining gaps tracked: GA(blk-browser)/IH(#377)/undo(#435 covers fix)/PT(#540); bench-data+bench/run-history branches exist
-0521:new#572(DocUnb gloss bullet->prose) #570(Docs/Update wf-fail) #571(Repo Assist wf-fail); #310/#339/#565 all clean; no human comments on perf issues; backlog unchanged
-0522:new#573(DocUnb gloss remaining bullets->prose); #310/#339/#565 all clean; no human comments on perf issues; backlog unchanged
+0516:new#565 RopeSlice; 13x late 1-char; hold-lifted-once
+0517:new#564#566(DocUnb) close#563(DocUnb); hold reinstated
+0518:new#567(DocUnb)
+0519:new#568(DocUnb) close#564#566(DocUnb)
+0520:new#569(DocUnb bindings.md condense); T6 audit
+0521:new#572(DocUnb) #570/#571(wf-fail)
+0522:new#573(DocUnb gloss rest); backlog unchanged
+0523:NEW perf(project) shouldTraverseDirectory hoist + bench(project).bench.ts (6-bench Project Tree); paired 1.21x-1.83x speedup; tests 2265 pass; #540 addressed; hold-lifted-once
 push_memory:30KB(git)>12KB - persistent infra issue
