@@ -260,6 +260,14 @@ export function shouldTraverseDirectory(
   exclude: readonly string[],
   matcher: GlobMatcher = defaultGlobMatcher,
 ): boolean {
+  // dirPath was previously re-split once per include pattern (and again per
+  // simple exclude pattern). For a deep tree (8 segments) with 5 include
+  // patterns that's 5× redundant O(depth) work per directory visited.
+  // Compute once up front; falsy include + simple-exclude paths pay one extra
+  // split, but it's a single allocation amortized across the whole loop.
+  const dirParts = dirPath.split("/");
+  const dirName = dirParts[dirParts.length - 1] ?? dirPath;
+
   // Check if directory itself is excluded (exact match or directory patterns)
   for (const pattern of exclude) {
     // Exact match of directory name
@@ -269,7 +277,6 @@ export function shouldTraverseDirectory(
     // Check if pattern is just a directory name (like "node_modules")
     if (!pattern.includes("/") && !pattern.includes("*")) {
       // Simple name pattern - check if it matches the last component
-      const dirName = dirPath.split("/").pop() ?? dirPath;
       if (dirName === pattern) {
         return false;
       }
@@ -282,6 +289,7 @@ export function shouldTraverseDirectory(
   }
 
   // Check if any include pattern could potentially match files in this directory
+  const dirPartsLen = dirParts.length;
   for (const pattern of include) {
     // Check if pattern starts with ** (matches any directory)
     if (pattern.startsWith("**/") || pattern === "**") {
@@ -293,12 +301,13 @@ export function shouldTraverseDirectory(
       return true;
     }
 
-    // Check if directory path is a prefix of the pattern
+    // Check if directory path is a prefix of the pattern.
     const patternParts = pattern.split("/");
-    const dirParts = dirPath.split("/");
+    const limit =
+      dirPartsLen < patternParts.length ? dirPartsLen : patternParts.length;
 
     let couldMatch = true;
-    for (let i = 0; i < dirParts.length && i < patternParts.length; i++) {
+    for (let i = 0; i < limit; i++) {
       const patternPart = patternParts[i];
       const dirPart = dirParts[i];
       if (patternPart === undefined || dirPart === undefined) {
