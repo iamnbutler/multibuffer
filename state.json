@@ -1,1 +1,1 @@
-{"r":"26577971040","head":"ce545ec","may":"#527","prev":"26561519086"}
+{"r":"26596208176","head":"ce545ec","may":"#527","prev":"26577971040","notes":"2026-05-28 full triage: all 112 RA PRs clean, no CI fails (bot PRs=no auto-CI). All 9 bug issues have fix PRs (512->513,536->537)-no dup PRs. 15 dup-title pairs already in #527 close-list. Added #581/580/565 bot PRs to #527. No merges since 2026-03-22."}
