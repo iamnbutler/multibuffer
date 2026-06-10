@@ -25,13 +25,7 @@ Standard GitHub Actions workflow (not `gh aw`).
 7. Push branch
 8. Create PR titled `release: v{version}` targeting `main`
 
-The PR goes through normal CI (typecheck, lint, test) and review. No special labels or automation needed — the release-deploy workflow identifies it by branch name.
-
-### What it does NOT do
-
-- Run tests (CI handles that on the PR)
-- Create tags (release-deploy handles that)
-- Generate release notes (release-deploy handles that)
+The PR goes through normal CI (typecheck, lint, test) and review. No special labels or automation needed — the release-deploy workflow identifies it by branch name. This workflow only bumps the version and opens the PR; tags, release notes, and tests are all handled downstream by release-deploy and CI.
 
 ## 2. Release / Deploy (`release-deploy.yml`)
 
@@ -97,29 +91,15 @@ The release-deploy workflow reads this template and substitutes the placeholders
 
 A `gh aw` agentic workflow following the same pattern as `code-simplifier.md`.
 
-**Triggers:**
-- `schedule: weekly` (compiles to something like `0 7 * * 3` — Wednesday 7am UTC)
-- `workflow_dispatch`
-- Dispatched by release-deploy workflow after creating a release
+**Triggers:** weekly `schedule` (e.g. `0 7 * * 3` — Wednesday 7am UTC), `workflow_dispatch`, and dispatch from release-deploy after a release.
 
-**Scope — files to update:**
-- `README.md` — architecture, status, test/bench counts, demo instructions
-- `CLAUDE.md` — file tree, architecture section, subpath exports, constraints
-- `docs/*.md` — glossary, bindings, any other docs that drifted
+**Scope:** updates `README.md` (architecture, status, test/bench counts, demo instructions), `CLAUDE.md` (file tree, architecture, subpath exports, constraints), and `docs/*.md` (glossary, bindings, anything that drifted).
 
-**Principles:**
-- Read the actual codebase to determine truth (file tree, test count, bench count, exports)
-- Keep docs terse and focused — trim bloat, remove stale sections
-- Don't invent content — only reflect what exists in the code
-- Skip if nothing changed (no PR created)
+**Principles:** read the actual codebase to determine truth (file tree, counts, exports); keep docs terse, trimming bloat and stale sections; never invent content; skip with no PR if nothing changed.
 
-**Safe outputs:**
-- `create-pull-request` with title prefix `[docs-update]`, labels `[docs, automation]`, expires `1d`
-- `skip-if-match: 'is:pr is:open in:title "[docs-update]"'`
+**Safe outputs:** `create-pull-request` with title prefix `[docs-update]`, labels `[docs, automation]`, expires `1d`, and `skip-if-match: 'is:pr is:open in:title "[docs-update]"'`.
 
-**Tools:** `github` toolset (repos, pull_requests) + file read/write.
-
-**Permissions:** `read-all` for codebase inspection, write for PR creation.
+**Tools & permissions:** `github` toolset (repos, pull_requests) plus file read/write; `read-all` for codebase inspection, write for PR creation.
 
 ## 5. package.json change
 
@@ -127,27 +107,8 @@ Remove `"private": true` to prepare for eventual npm publishing.
 
 ## File inventory
 
-New files:
-
-| File | Type |
-|------|------|
-| `.github/workflows/release.yml` | GitHub Actions workflow |
-| `.github/workflows/release-deploy.yml` | GitHub Actions workflow |
-| `.github/release-notes-template.md` | Release notes template |
-| `.github/workflows/docs-update.md` | `gh aw` workflow definition |
-
-Modified files:
-
-| File | Change |
-|------|--------|
-| `package.json` | Remove `"private": true` |
+New: `.github/workflows/release.yml` and `release-deploy.yml` (GitHub Actions workflows), `.github/release-notes-template.md` (template), `.github/workflows/docs-update.md` (`gh aw` workflow). Modified: `package.json` (remove `"private": true`).
 
 ## Sequencing
 
-1. Add release notes template
-2. Add release workflow
-3. Add release-deploy workflow (depends on template)
-4. Add docs-update workflow
-5. Remove `private` from package.json
-
-Steps 1-3 can be one PR. Step 4 is independent. Step 5 can go with either.
+Add the release notes template, then the release workflow, then release-deploy (depends on the template) — these three can be one PR. The docs-update workflow is independent; removing `private` from `package.json` can go with either.
