@@ -6,14 +6,7 @@ Purpose: Define a diff viewing and editing component built on the MultiBuffer ar
 
 ## 1. Problem Statement
 
-The diff editor solves the problem of viewing and editing differences between two versions of a file within a unified, scrollable interface. Unlike traditional side-by-side or read-only unified diffs, this component allows direct editing of the "new" version while maintaining accurate diff visualization.
-
-The system must handle:
-
-- **Visualization**: Display deleted lines (from old version) interleaved with inserted/modified lines (from new version) in a unified view.
-- **Editing**: Allow users to edit insert and equal lines (from the new buffer) while keeping delete lines read-only.
-- **Live updates**: When edits change the relationship between old and new text, the diff must update accordingly.
-- **Cursor preservation**: User's editing position must survive diff recalculations.
+The diff editor solves the problem of viewing and editing differences between two versions of a file within a unified, scrollable interface. Unlike traditional side-by-side or read-only unified diffs, this component allows direct editing of the "new" version while maintaining accurate diff visualization. It must interleave deleted lines (read-only, from the old version) with inserted and modified lines (editable, from the new version), update the diff live as edits change the relationship between the two texts, and preserve the user's editing position across recalculations. The detailed requirements appear in §2.1.
 
 ## 2. Goals and Non-Goals
 
@@ -159,18 +152,7 @@ Fields:
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff-on-edit support. It exposes the diff's `multiBuffer`, current `decorations`, `isEqual` state, and the `oldBuffer`/`newBuffer` pair, plus methods to re-diff, schedule debounced updates, subscribe to decoration changes, and dispose. See §7.2 for the full interface.
 
 ### 4.2 Excerpt Structure
 
@@ -205,9 +187,6 @@ Results in 4 excerpts total. The MultiBuffer line count is 4 (one more than eith
 #### Diff Mode (`gutterMode: "diff"`)
 - Three columns: old line number | new line number | sign.
 - Fixed widths: 40px + 40px + 16px = 96px total.
-- Old line number shown for equal and delete lines.
-- New line number shown for equal and insert lines.
-- Sign shows "+", "−", or space.
 
 Line number display rules:
 
