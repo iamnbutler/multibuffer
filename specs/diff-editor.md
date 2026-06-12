@@ -8,66 +8,29 @@ Purpose: Define a diff viewing and editing component built on the MultiBuffer ar
 
 The diff editor solves the problem of viewing and editing differences between two versions of a file within a unified, scrollable interface. Unlike traditional side-by-side or read-only unified diffs, this component allows direct editing of the "new" version while maintaining accurate diff visualization.
 
-The system must handle:
-
-- **Visualization**: Display deleted lines (from old version) interleaved with inserted/modified lines (from new version) in a unified view.
-- **Editing**: Allow users to edit insert and equal lines (from the new buffer) while keeping delete lines read-only.
-- **Live updates**: When edits change the relationship between old and new text, the diff must update accordingly.
-- **Cursor preservation**: User's editing position must survive diff recalculations.
+The system must display deleted lines (from the old version) interleaved with inserted/modified lines (from the new version) in a unified view, allow editing of insert and equal lines (from the new buffer) while keeping delete lines read-only, update the diff when edits change the relationship between old and new text, and preserve the user's editing position across diff recalculations.
 
 ## 2. Goals and Non-Goals
 
 ### 2.1 Goals
 
-- Display a unified diff between two buffers with proper line-number attribution.
-- Render delete lines as read-only excerpts from the old buffer.
-- Render insert and equal lines as editable excerpts from the new buffer.
-- Apply visual decorations (background colors, gutter signs) to distinguish line types.
-- Support a dual-gutter mode showing old line numbers, new line numbers, and diff signs.
-- Preserve cursor position through excerpt rebuilds via the anchor system.
-- Debounce re-diff calculations to avoid excessive computation during rapid editing.
-- Support convergence: when edits make new text match old, delete+insert pairs collapse to equal.
-- Support divergence: when edits make equal text differ from old, new delete+insert pairs appear.
+Display a unified diff between two buffers with proper line-number attribution: delete lines as read-only excerpts from the old buffer, insert and equal lines as editable excerpts from the new buffer, with visual decorations (background colors, gutter signs) distinguishing line types and a dual-gutter mode showing old line numbers, new line numbers, and diff signs. Preserve cursor position through excerpt rebuilds via the anchor system, and debounce re-diff calculations to avoid excessive computation during rapid editing. Support convergence (edits making new text match old collapse delete+insert pairs to equal) and divergence (edits making equal text differ from old produce new delete+insert pairs).
 
 ### 2.2 Non-Goals
 
-- Side-by-side diff view (this spec covers unified view only).
-- Word-level or character-level diff highlighting within lines.
-- Three-way merge visualization.
-- Syntax-aware diffing (we diff by lines, not by AST).
-- Diff folding or hunk collapsing.
-- Git integration (this is a pure text diff component).
+Out of scope: side-by-side diff view (this spec covers unified view only), word- or character-level highlighting within lines, three-way merge visualization, syntax-aware diffing (we diff by lines, not by AST), diff folding or hunk collapsing, and git integration (this is a pure text diff component).
 
 ## 3. System Overview
 
 ### 3.1 Main Components
 
-1. **Diff Algorithm** (`src/diff/diff.ts`)
-   - Implements Myers' O(ND) line-level diff.
-   - Groups edits into hunks with configurable context lines.
-   - Returns `DiffResult` with hunks and `isEqual` flag.
-
-2. **Diff MultiBuffer Builder** (`src/diff/multibuffer.ts`)
-   - Takes old and new `Buffer` objects.
-   - Runs diff algorithm on their text content.
-   - Constructs a `MultiBuffer` with excerpts from appropriate source buffers.
-   - Generates `Decoration[]` for visual styling.
-
-3. **Diff Controller** (`src/diff/controller.ts`)
-   - Wraps the diff MultiBuffer with change detection.
-   - Provides `notifyChange()` for edit notifications.
-   - Debounces and triggers re-diff on content changes.
-   - Notifies subscribers when decorations update.
-
-4. **Diff Gutter Renderer** (in `src/renderer/dom.ts`)
-   - When `gutterMode: "diff"`, renders dual line number columns.
-   - Displays old line number, new line number, and sign character.
-   - Applies decoration styles to gutter elements.
-
-5. **Editor** (`src/editor/editor.ts`)
-   - Existing editor handles all editing operations.
-   - Respects `editable` flag on excerpts (rejects edits to non-editable).
-   - Fires `onChange` callback after mutations.
+| Component | Location | Responsibility |
+|-----------|----------|----------------|
+| Diff Algorithm | `src/diff/diff.ts` | Myers' O(ND) line-level diff; groups edits into hunks with configurable context lines; returns `DiffResult` with hunks and `isEqual` flag. |
+| Diff MultiBuffer Builder | `src/diff/multibuffer.ts` | Runs the diff on old/new `Buffer` text and constructs a `MultiBuffer` with excerpts from the appropriate source buffers, plus `Decoration[]` for styling. |
+| Diff Controller | `src/diff/controller.ts` | Wraps the diff MultiBuffer with change detection; `notifyChange()` debounces and triggers re-diff; notifies subscribers when decorations update. |
+| Diff Gutter Renderer | `src/renderer/dom.ts` | When `gutterMode: "diff"`, renders dual line-number columns (old #, new #, sign character) and applies decoration styles to gutter elements. |
+| Editor | `src/editor/editor.ts` | Existing editor; respects the `editable` flag on excerpts (rejects edits to non-editable) and fires `onChange` after mutations. |
 
 ### 3.2 Data Flow
 
@@ -106,71 +69,27 @@ When user edits:
 
 #### 4.1.1 DiffLine
 
-A single line in the diff output.
-
-Fields:
-- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
-- `text` (string) - The line content without trailing newline.
-- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
+A single line in the diff output. Fields: `kind` ("equal" | "insert" | "delete"), the type of change; `text` (string), the line content without trailing newline; `oldRow` (number | undefined), 0-based line number in the old buffer (undefined for insert lines); `newRow` (number | undefined), 0-based line number in the new buffer (undefined for delete lines).
 
 #### 4.1.2 DiffHunk
 
-A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
-
-Fields:
-- `oldStart` (number) - Starting line number in old buffer.
-- `oldCount` (number) - Number of lines from old buffer in this hunk.
-- `newStart` (number) - Starting line number in new buffer.
-- `newCount` (number) - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
+A contiguous group of diff lines with shared context, analogous to a unified diff hunk. Fields: `oldStart` / `oldCount` (number), starting line and line count from the old buffer; `newStart` / `newCount` (number), the same for the new buffer; `lines` (readonly DiffLine[]), the lines in this hunk including context.
 
 #### 4.1.3 DiffResult
 
-Complete diff output.
-
-Fields:
-- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
-- `isEqual` (boolean) - True if old and new text are identical.
+Complete diff output. Fields: `hunks` (readonly DiffHunk[]), all hunks describing changes; `isEqual` (boolean), true if old and new text are identical.
 
 #### 4.1.4 Decoration
 
-Visual styling applied to a range of text.
-
-Fields:
-- `range` (MultiBufferRange) - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+Visual styling applied to a range of text. Fields: `range` (MultiBufferRange), the rows it applies to; `style` (Partial<DecorationStyle>), visual properties such as backgroundColor, gutterSign, and gutterSignColor.
 
 #### 4.1.5 DecorationStyle
 
-All visual properties for a decorated line.
-
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+All visual properties for a decorated line. Line styling: `backgroundColor`, `color`, `borderColor` (string); `fontWeight` ("normal" | "bold"); `fontStyle` ("normal" | "italic"); `textDecoration` ("none" | "underline" | "line-through"). Gutter styling: `gutterBackground`, `gutterColor` (string); `gutterSign` (string), the sign character e.g. "+" or "−"; `gutterSignColor` (string).
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff-on-edit support. See the `DiffController` interface in §7.2 for its fields and methods.
 
 ### 4.2 Excerpt Structure
 
@@ -198,16 +117,9 @@ Results in 4 excerpts total. The MultiBuffer line count is 4 (one more than eith
 
 ### 4.3 Gutter Display Modes
 
-#### Standard Mode (`gutterMode: undefined | "standard"`)
-- Single gutter column showing MultiBuffer row number.
-- Width: `gutterWidth` from Measurements.
+**Standard Mode** (`gutterMode: undefined | "standard"`): a single gutter column showing the MultiBuffer row number, with width `gutterWidth` from Measurements.
 
-#### Diff Mode (`gutterMode: "diff"`)
-- Three columns: old line number | new line number | sign.
-- Fixed widths: 40px + 40px + 16px = 96px total.
-- Old line number shown for equal and delete lines.
-- New line number shown for equal and insert lines.
-- Sign shows "+", "−", or space.
+**Diff Mode** (`gutterMode: "diff"`): three columns — old line number | new line number | sign — at fixed widths 40px + 40px + 16px = 96px total, per the rules below.
 
 Line number display rules:
 
@@ -460,56 +372,24 @@ interface Measurements {
 
 ### 8.1 Diff Algorithm Tests
 
-- Empty inputs (both empty, one empty, neither empty).
-- Identical inputs → `isEqual: true`.
-- Single-line change in middle of file.
-- Multi-line contiguous delete.
-- Multi-line contiguous insert.
-- Interleaved changes.
-- Change at file start/end.
-- Context line merging (changes within 2*context).
-- Context line separation (changes beyond 2*context).
+Cover empty inputs (both empty, one empty, neither empty), identical inputs (`isEqual: true`), a single-line change mid-file, multi-line contiguous delete and insert, interleaved changes, changes at file start/end, and context handling — merging changes within `2*context` and separating changes beyond it.
 
 ### 8.2 Diff MultiBuffer Tests
 
-- Excerpt count matches expected grouping.
-- Excerpt source buffers (old vs new) correct.
-- Excerpt editable flags correct.
-- Decoration ranges match excerpt boundaries.
-- Decoration styles correct for line kind.
-- Total line count correct.
+Verify excerpt count matches expected grouping, excerpt source buffers (old vs new) and editable flags are correct, decoration ranges match excerpt boundaries with styles correct for each line kind, and total line count is correct.
 
 ### 8.3 DiffController Tests
 
-- `reDiff()` updates decorations.
-- `notifyChange()` debounces correctly.
-- Subscribers receive updates after re-diff.
-- Convergence: edit to match old collapses pair.
-- Divergence: edit to differ creates new pair.
-- Cursor preserved through re-diff.
-- `dispose()` cleans up timers.
+Verify `reDiff()` updates decorations, `notifyChange()` debounces correctly, subscribers receive updates after re-diff, convergence collapses a pair while divergence creates a new one, cursor is preserved through re-diff, and `dispose()` cleans up timers.
 
 ### 8.4 Renderer Tests (E2E)
 
-- Diff gutter shows correct line numbers.
-- Delete lines show "−" sign.
-- Insert lines show "+" sign.
-- Equal lines show no sign.
-- Background colors applied correctly.
-- No excerpt headers in diff mode.
-- Hit testing works with diff gutter width.
-- Selection rendering accounts for diff gutter.
+Verify the diff gutter shows correct line numbers; delete/insert/equal lines show "−"/"+"/no sign; background colors are applied; no excerpt headers appear in diff mode; and hit testing and selection rendering account for the diff gutter width.
 
 ## 9. Performance Requirements
 
-- Diff calculation: <10ms for files under 10K lines with scattered changes.
-- Excerpt rebuild: <5ms for typical diff results.
-- Re-render after re-diff: <16ms (one frame).
-- Memory: No per-line allocations; reuse excerpt objects where possible.
+Diff calculation must stay under 10ms for files below 10K lines with scattered changes, excerpt rebuild under 5ms for typical diff results, and re-render after re-diff under 16ms (one frame). Avoid per-line allocations; reuse excerpt objects where possible.
 
 ## 10. Deferred Features
 
-- **Word-level highlighting**: Out of scope for v1; can be added as a decoration extension.
-- **Hunk folding**: Out of scope for v1; requires excerpt expand/collapse support.
-- **Three-way merge**: Out of scope; requires significantly different architecture.
-- **Undo behavior**: Supported — the editor's undo stack operates on the new buffer independently of diff state.
+Word-level highlighting (addable later as a decoration extension), hunk folding (requires excerpt expand/collapse support), and three-way merge (requires a significantly different architecture) are out of scope for v1. Undo is supported — the editor's undo stack operates on the new buffer independently of diff state.
