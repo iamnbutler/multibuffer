@@ -1,14 +1,10 @@
-# TI 2026-06-16
-cmd:bun test/typecheck/lint/fuzz/test:e2e (bun NOT preinstalled)
-fw:bun:test;fast-check(fuzz);playwright(e2e);helpers.ts
-TIPRs:#312#335#357#368#538#541#543#548 open/draft/comments:0(NO human feedback EVER);#373(maintainer)open/unstable/comments:1(old),unchanged since 2026-04-09
-PRstatus:no commit-status checks on bot TI PRs;CI NOT auto-run on bot PRs(trigger manually)
-verified-this-run(2026-06-16):all 8 TI PRs via search=open/draft/comments:0;#373 via get=open/unstable/comments:1/updated 2026-04-09/base ce545ec;#586 comments:0,NO checkboxes ticked(all [ ]);only open testing-label issue=#586 itself;main HEAD=ce545ec via list_commits(unchanged since 2026-03-23);no new commits
-blocked-backlog:1 anchor-bias(RepoAssist#400);2 singleton(unimpl);3 edit-proxy(BLOCKED);4 webgpu(low);5 getText follow-up(after#538);6 setup() dup(after#543);7 adapter real-fs(low);8 hunkToHeader(#373 covers);9 workers(low)
-rr:last=4,2,5(monitoring);3,6 held(restraint)
-state:main=ce545ec(unchanged since 2026-03-23);2274 tests(2278 on#548 branch)
-queue:50+ open PRs across RepoAssist/PerfImprover/TI -> strong restraint, NO new PRs
-restraint:9 pending(8 TI+#373)+huge cross-bot queue->hold new PRs(tasks 3,6);silence>spam
-summary:June=#586;updated w/ 2026-06-16 run entry(prepended;kept 06-15 full,folded 06-14 into archive note thru 06-14);0 human comments,0 checkboxes ticked
-infra:#579 auto-issue=repo-memory push failure(harness,out-of-scope)
-next:keep monitoring;watch for ANY human comment/merge=signal to resume PRs;close June#586->open July at 2026-07;keep run history reverse-chron
+# TI 2026-06-17
+cmd:bun test/typecheck/lint/fuzz/test:e2e(bun NOT preinstalled);CI=install>build:demo>typecheck>lint>test;no coverage
+TIPRs:#312#335#357#368#538#541#543#548 open/draft/comments:0(NO human feedback EVER);#373(maintainer)open/unstable/comments:1(old) unchanged 2026-04-09
+PRstatus:CI NOT auto-run on bot PRs(trigger manually);no commit-status checks
+verified-2026-06-17:8 TI PRs=open/draft/comments:0;#373=open/unstable/comments:1/base ce545ec;#586 comments:0,0 checkboxes ticked;only open testing-label issue=#586;main=ce545ec unchanged since 2026-03-23
+backlog(blocked/low):1 anchor-bias(RepoAssist#400);2 singleton(unimpl);3 edit-proxy(BLOCKED);4 webgpu(low);5 getText follow-up(post#538);6 setup() dup(post#543);7 adapter real-fs(low);8 hunkToHeader(#373);9 workers(low)
+state:2274 tests(2278 on#548);queue 50+ open PRs cross-bot->strong restraint,NO new PRs(skip tasks3,6);silence>spam
+summary:June=#586;prepended 2026-06-17 entry(06-16 full,folded thru 06-15 into archive note)
+infra:#579 auto-issue=repo-memory push validation fails(reports inflated size;harness bug,file actually ~1.6KB;out-of-scope)
+next:monitor;ANY human comment/merge=resume PRs;close June#586->open July at 2026-07;run history reverse-chron
