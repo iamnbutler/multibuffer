@@ -441,8 +441,10 @@ describe("Buffer Performance", () => {
     const middle = benchmark(() => snapshot.line(row(5000)), 1000);
     const late = benchmark(() => snapshot.line(row(9990)), 1000);
 
-    expect(middle.avgMs).toBeLessThan(early.avgMs * 3 + 0.001);
-    // Generous tolerance for CI runners where timing is noisy
+    // Generous tolerance for CI runners where timing is noisy. At sub-microsecond
+    // scale a tighter bound flakes on GC/JIT jitter; a true O(n) regression would
+    // make these ~100x+ slower, so this still catches non-O(1) line access.
+    expect(middle.avgMs).toBeLessThan(early.avgMs * 10 + 0.01);
     expect(late.avgMs).toBeLessThan(early.avgMs * 10 + 0.01);
   });
 
