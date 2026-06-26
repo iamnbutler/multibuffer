@@ -1,8 +1,9 @@
 m:#310#339#565#575 mo:June2026(#588) main:ce545ec
-last:2026-06-25 r:28189778669 T4+T5+T7
+last:2026-06-26 r:28255417312 T4+T5+T7
 bun:works via curl install in runner
 bl:GA/IH(#377)/undo(#435); rope.slice done#565; PT(#540) done#575
 hold:reinstated(maint-only); lifted twice for #565,#575
+0626:maint run. All4 perf-PRs mergeable_state:clean. Since 0625 only docs: #618 new(open); #616 closed unmerged. Main unchanged ce545ec. No perf PRs merged/closed; no perf issues closed. SA-list unchanged. #588 0 comments=no maint instructions/checkbox changes. Perf issues #417/#446/#496/#540 all 1 comment(own),untouched Apr/May-no Task5(anti-spam). Updated #588:rewrote whole body cleanly,prepended 0626 entry,folded 0621 into Earlier-June(now 06-01..06-21,5 detailed 06-22..06-26). No trailing footer-safe-output appends one.
 0625:maint run. All4 perf-PRs mergeable_state:clean (draft,no CI fail,no conflicts). Since 0624 only docs: #617 new(open); #615 closed unmerged. Main unchanged ce545ec. No perf PRs merged/closed; no perf issues closed. SA-list unchanged. #588 0 comments=no maint instructions/checkbox changes. Perf issues #417/#446/#496/#540 all 1 comment(own),untouched Apr/May-no Task5(anti-spam). Updated #588:rewrote whole body cleanly,prepended 0625 entry,folded 0620 into Earlier-June(now 06-01..06-20,5 detailed 06-21..06-25). Stripped trailing dup footers-let safe-output append one.
 0624:maint run. All4 clean. Since 0623 only docs:#616 new;#614 closed unmerged. Main ce545ec. SA unchanged. #588 0 comments. Folded 0619 into Earlier-June.
 0623:maint run. All4 clean. Since 0622 only docs:#615 new;#613/#612/#610 closed;#614 open. SA unchanged. Folded 0618.
