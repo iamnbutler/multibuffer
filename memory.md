@@ -1,1 +1,1 @@
-mine:#310#339#565#575 mo:June2026(#588) main:ce545ec last:2026-06-28 run:28330475973 T4+T5+T7 hold-reinstated(maint-only) bun-via-curl bl:GA/IH(#377)/undo(#435) maint-perf-PRs:all-clean SA-list:unchanged(59,carried-fwd,all-verified-open)
+mine:#310#339#565#575 mo:June2026(#588) main:ce545ec last:2026-06-29 run:28392284580 T4+T5+T7 hold-reinstated(maint-only) bun-via-curl bl:GA/IH(#377)/undo(#435) maint-perf-PRs:all-clean SA-list:unchanged(59,carried-fwd,all-verified-open)
