@@ -106,71 +106,27 @@ When user edits:
 
 #### 4.1.1 DiffLine
 
-A single line in the diff output.
-
-Fields:
-- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
-- `text` (string) - The line content without trailing newline.
-- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
+A single line in the diff output: `kind` (`"equal" | "insert" | "delete"`), `text` (content without trailing newline), and 0-based source rows `oldRow`/`newRow` (`undefined` on insert/delete lines respectively).
 
 #### 4.1.2 DiffHunk
 
-A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
-
-Fields:
-- `oldStart` (number) - Starting line number in old buffer.
-- `oldCount` (number) - Number of lines from old buffer in this hunk.
-- `newStart` (number) - Starting line number in new buffer.
-- `newCount` (number) - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
+A contiguous group of diff lines with shared context, analogous to a unified diff hunk. Carries `oldStart`/`oldCount` and `newStart`/`newCount` (line ranges in each buffer) plus a `lines` (readonly DiffLine[]) array including context.
 
 #### 4.1.3 DiffResult
 
-Complete diff output.
-
-Fields:
-- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
-- `isEqual` (boolean) - True if old and new text are identical.
+Complete diff output: `hunks` (readonly DiffHunk[]) and `isEqual` (boolean — true when old and new text are identical).
 
 #### 4.1.4 Decoration
 
-Visual styling applied to a range of text.
-
-Fields:
-- `range` (MultiBufferRange) - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+Visual styling applied to a range: `range` (MultiBufferRange) and `style` (Partial<DecorationStyle> — `backgroundColor`, `gutterSign`, `gutterSignColor`, etc.).
 
 #### 4.1.5 DecorationStyle
 
-All visual properties for a decorated line.
-
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+All visual properties for a decorated line. Line styling: `backgroundColor`, `color`, `borderColor`, `fontWeight` (`"normal" | "bold"`), `fontStyle` (`"normal" | "italic"`), `textDecoration` (`"none" | "underline" | "line-through"`). Gutter styling: `gutterBackground`, `gutterColor`, `gutterSign` (e.g. `"+"`, `"−"`), `gutterSignColor`.
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff-on-edit support. See the full interface in [§7.2](#72-creatediffcontroller): the `multiBuffer`, `decorations`, `isEqual`, `oldBuffer`, and `newBuffer` accessors plus `reDiff()`, `notifyChange()`, `onUpdate()`, and `dispose()`.
 
 ### 4.2 Excerpt Structure
 
