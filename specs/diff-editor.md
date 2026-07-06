@@ -42,32 +42,13 @@ The system must handle:
 
 ### 3.1 Main Components
 
-1. **Diff Algorithm** (`src/diff/diff.ts`)
-   - Implements Myers' O(ND) line-level diff.
-   - Groups edits into hunks with configurable context lines.
-   - Returns `DiffResult` with hunks and `isEqual` flag.
-
-2. **Diff MultiBuffer Builder** (`src/diff/multibuffer.ts`)
-   - Takes old and new `Buffer` objects.
-   - Runs diff algorithm on their text content.
-   - Constructs a `MultiBuffer` with excerpts from appropriate source buffers.
-   - Generates `Decoration[]` for visual styling.
-
-3. **Diff Controller** (`src/diff/controller.ts`)
-   - Wraps the diff MultiBuffer with change detection.
-   - Provides `notifyChange()` for edit notifications.
-   - Debounces and triggers re-diff on content changes.
-   - Notifies subscribers when decorations update.
-
-4. **Diff Gutter Renderer** (in `src/renderer/dom.ts`)
-   - When `gutterMode: "diff"`, renders dual line number columns.
-   - Displays old line number, new line number, and sign character.
-   - Applies decoration styles to gutter elements.
-
-5. **Editor** (`src/editor/editor.ts`)
-   - Existing editor handles all editing operations.
-   - Respects `editable` flag on excerpts (rejects edits to non-editable).
-   - Fires `onChange` callback after mutations.
+| Component | Source | Role |
+|-----------|--------|------|
+| Diff Algorithm | `src/diff/diff.ts` | Myers' O(ND) line-level diff; groups edits into hunks with configurable context; returns `DiffResult` (§5.1). |
+| Diff MultiBuffer Builder | `src/diff/multibuffer.ts` | Builds a `MultiBuffer` with excerpts from the appropriate source buffers plus `Decoration[]` for styling (§5.2). |
+| Diff Controller | `src/diff/controller.ts` | Wraps the diff MultiBuffer with change detection; debounces and triggers re-diff; notifies subscribers (§5.4, §7.2). |
+| Diff Gutter Renderer | `src/renderer/dom.ts` | Renders dual line-number columns and sign characters when `gutterMode: "diff"` (§4.3, §6.2). |
+| Editor | `src/editor/editor.ts` | Dispatches editing; respects the `editable` excerpt flag and fires `onChange` after mutations (§5.3). |
 
 ### 3.2 Data Flow
 
