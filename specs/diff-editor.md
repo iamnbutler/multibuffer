@@ -42,32 +42,13 @@ The system must handle:
 
 ### 3.1 Main Components
 
-1. **Diff Algorithm** (`src/diff/diff.ts`)
-   - Implements Myers' O(ND) line-level diff.
-   - Groups edits into hunks with configurable context lines.
-   - Returns `DiffResult` with hunks and `isEqual` flag.
-
-2. **Diff MultiBuffer Builder** (`src/diff/multibuffer.ts`)
-   - Takes old and new `Buffer` objects.
-   - Runs diff algorithm on their text content.
-   - Constructs a `MultiBuffer` with excerpts from appropriate source buffers.
-   - Generates `Decoration[]` for visual styling.
-
-3. **Diff Controller** (`src/diff/controller.ts`)
-   - Wraps the diff MultiBuffer with change detection.
-   - Provides `notifyChange()` for edit notifications.
-   - Debounces and triggers re-diff on content changes.
-   - Notifies subscribers when decorations update.
-
-4. **Diff Gutter Renderer** (in `src/renderer/dom.ts`)
-   - When `gutterMode: "diff"`, renders dual line number columns.
-   - Displays old line number, new line number, and sign character.
-   - Applies decoration styles to gutter elements.
-
-5. **Editor** (`src/editor/editor.ts`)
-   - Existing editor handles all editing operations.
-   - Respects `editable` flag on excerpts (rejects edits to non-editable).
-   - Fires `onChange` callback after mutations.
+| Component | Source | Role |
+|-----------|--------|------|
+| Diff Algorithm | `src/diff/diff.ts` | Myers' O(ND) line diff; groups edits into hunks with context lines; returns `DiffResult`. See [§5.1](#51-diff-calculation). |
+| Diff MultiBuffer Builder | `src/diff/multibuffer.ts` | Diffs two `Buffer`s and builds a `MultiBuffer` of excerpts plus `Decoration[]`. See [§5.2](#52-excerpt-construction). |
+| Diff Controller | `src/diff/controller.ts` | Wraps the MultiBuffer with change detection; debounces and triggers re-diff; notifies subscribers. See [§5.4](#54-live-re-diff), [§4.1.6](#416-diffcontroller). |
+| Diff Gutter Renderer | `src/renderer/dom.ts` | Renders dual line-number columns and sign characters when `gutterMode: "diff"`. See [§4.3](#43-gutter-display-modes), [§6.2](#62-diff-gutter-layout). |
+| Editor | `src/editor/editor.ts` | Handles editing, respects the excerpt `editable` flag, fires `onChange`. See [§5.3](#53-editing-behavior). |
 
 ### 3.2 Data Flow
 
@@ -108,69 +89,63 @@ When user edits:
 
 A single line in the diff output.
 
-Fields:
-- `kind` ("equal" | "insert" | "delete") - The type of change this line represents.
-- `text` (string) - The line content without trailing newline.
-- `oldRow` (number | undefined) - 0-based line number in old buffer. Undefined for insert lines.
-- `newRow` (number | undefined) - 0-based line number in new buffer. Undefined for delete lines.
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | `"equal" \| "insert" \| "delete"` | The type of change this line represents. |
+| `text` | `string` | The line content without trailing newline. |
+| `oldRow` | `number \| undefined` | 0-based line number in old buffer. Undefined for insert lines. |
+| `newRow` | `number \| undefined` | 0-based line number in new buffer. Undefined for delete lines. |
 
 #### 4.1.2 DiffHunk
 
 A contiguous group of diff lines with shared context. Analogous to a unified diff hunk.
 
-Fields:
-- `oldStart` (number) - Starting line number in old buffer.
-- `oldCount` (number) - Number of lines from old buffer in this hunk.
-- `newStart` (number) - Starting line number in new buffer.
-- `newCount` (number) - Number of lines from new buffer in this hunk.
-- `lines` (readonly DiffLine[]) - The lines in this hunk, including context.
+| Field | Type | Description |
+|-------|------|-------------|
+| `oldStart` | `number` | Starting line number in old buffer. |
+| `oldCount` | `number` | Number of lines from old buffer in this hunk. |
+| `newStart` | `number` | Starting line number in new buffer. |
+| `newCount` | `number` | Number of lines from new buffer in this hunk. |
+| `lines` | `readonly DiffLine[]` | The lines in this hunk, including context. |
 
 #### 4.1.3 DiffResult
 
 Complete diff output.
 
-Fields:
-- `hunks` (readonly DiffHunk[]) - All hunks describing changes.
-- `isEqual` (boolean) - True if old and new text are identical.
+| Field | Type | Description |
+|-------|------|-------------|
+| `hunks` | `readonly DiffHunk[]` | All hunks describing changes. |
+| `isEqual` | `boolean` | True if old and new text are identical. |
 
 #### 4.1.4 Decoration
 
 Visual styling applied to a range of text.
 
-Fields:
-- `range` (MultiBufferRange) - The rows this decoration applies to.
-- `style` (Partial<DecorationStyle>) - Visual properties: backgroundColor, gutterSign, gutterSignColor, etc.
+| Field | Type | Description |
+|-------|------|-------------|
+| `range` | `MultiBufferRange` | The rows this decoration applies to. |
+| `style` | `Partial<DecorationStyle>` | Visual properties: backgroundColor, gutterSign, gutterSignColor, etc. |
 
 #### 4.1.5 DecorationStyle
 
 All visual properties for a decorated line.
 
-Fields:
-- `backgroundColor` (string) - Line background color.
-- `color` (string) - Text color.
-- `borderColor` (string) - Border color.
-- `fontWeight` ("normal" | "bold") - Text weight.
-- `fontStyle` ("normal" | "italic") - Text style.
-- `textDecoration` ("none" | "underline" | "line-through") - Text decoration.
-- `gutterBackground` (string) - Background for gutter area.
-- `gutterColor` (string) - Text color for line numbers.
-- `gutterSign` (string) - Sign character (e.g., "+", "−").
-- `gutterSignColor` (string) - Color for the sign character.
+| Field | Type | Description |
+|-------|------|-------------|
+| `backgroundColor` | `string` | Line background color. |
+| `color` | `string` | Text color. |
+| `borderColor` | `string` | Border color. |
+| `fontWeight` | `"normal" \| "bold"` | Text weight. |
+| `fontStyle` | `"normal" \| "italic"` | Text style. |
+| `textDecoration` | `"none" \| "underline" \| "line-through"` | Text decoration. |
+| `gutterBackground` | `string` | Background for gutter area. |
+| `gutterColor` | `string` | Text color for line numbers. |
+| `gutterSign` | `string` | Sign character (e.g., "+", "−"). |
+| `gutterSignColor` | `string` | Color for the sign character. |
 
 #### 4.1.6 DiffController
 
-Controller for a diff view with re-diff on edit support.
-
-Interface:
-- `multiBuffer` (MultiBuffer) - The underlying MultiBuffer.
-- `decorations` (readonly Decoration[]) - Current decorations.
-- `isEqual` (boolean) - Whether buffers are currently equal.
-- `oldBuffer` (Buffer) - The baseline buffer.
-- `newBuffer` (Buffer) - The editable buffer.
-- `reDiff()` - Manually trigger re-diff. Returns new `isEqual` state.
-- `notifyChange()` - Schedule debounced re-diff.
-- `onUpdate(callback)` - Subscribe to decoration updates. Returns unsubscribe fn.
-- `dispose()` - Clean up timers and subscriptions.
+Controller for a diff view with re-diff on edit support. See [§7.2](#72-creatediffcontroller) for the full interface — fields `multiBuffer`, `decorations`, `isEqual`, `oldBuffer`, `newBuffer` and methods `reDiff()`, `notifyChange()`, `onUpdate()`, `dispose()`.
 
 ### 4.2 Excerpt Structure
 
@@ -381,16 +356,11 @@ In diff mode, each line row contains:
 
 ### 6.3 Hit Testing
 
-In diff mode, `hitTest(x, y)` must account for the wider gutter:
-- Effective gutter width = 40 + 40 + 16 = 96px.
-- Content starts at x = 96px.
-- Column calculation uses `(x - 96) / charWidth`.
+In diff mode, `hitTest(x, y)` must account for the wider gutter (96px, per [§6.2](#62-diff-gutter-layout)): content starts at `x = 96`, and column is `(x - 96) / charWidth`.
 
 ### 6.4 Selection Rendering
 
-Selection rectangles must also account for diff gutter width:
-- Selection x-start = 96 + (startColumn * charWidth).
-- Selection width spans the selected column range.
+Selection rectangles must also account for the 96px diff gutter: selection x-start is `96 + startColumn * charWidth`, and width spans the selected column range.
 
 ## 7. API Specification
 
