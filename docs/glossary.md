@@ -22,14 +22,7 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### adjustOffset
 
-A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
-
-- Offsets before the edit pass through unchanged.
-- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
-- Offsets at the edit start with `Bias.Right` jump past inserted text.
-- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
-
-Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries: offsets before the edit pass through unchanged; offsets after the deleted range shift by `insertedLength − deletedLength`; offsets at the edit start jump past inserted text under `Bias.Right`, while those at the start under `Bias.Left` (or within the deleted range) clamp to the edit start. Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
 
 See: `src/buffer/offset.ts`, `src/multibuffer/anchor.ts`
 
@@ -82,13 +75,7 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 ### Closer
 
-An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
-
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides each pull request's outcome: it applies `ready-to-merge` when CI is green and no blocking reviews remain, applies `needs-review` when blocking reviews or unresolved issues exist, and closes PRs that are duplicate, spam, or fundamentally broken. Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
 
 See: `.github/workflows/closer.md`
 
@@ -121,14 +108,7 @@ An interface (`src/renderer/types.ts`) describing the full set of visual propert
 
 ### DiffController
 
-A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
-
-Key methods:
-
-- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
-- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
-- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
-- `dispose()` — cleans up timers and subscriptions.
+A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling. Key methods: `reDiff()` recomputes the diff immediately and returns the new `isEqual` state; `notifyChange()` schedules a debounced re-diff (default 150 ms); `onUpdate(callback)` subscribes to decoration updates and returns an unsubscribe function; `dispose()` cleans up timers and subscriptions.
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
@@ -348,14 +328,7 @@ An interface (`src/renderer/types.ts`) that rendering backends implement. A rend
 
 ### Reviewer
 
-An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
-
-- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
-- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
-- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
-- Up to 25 inline review comments per run, prioritising blocking issues first.
-
-Read-only: never writes implementation code or pushes to branches.
+An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX. It uses `REQUEST_CHANGES` for blocking issues and `COMMENT` for non-blocking suggestions, hardballs every `biome-ignore` suppression (each must carry concrete justification or be rewritten to avoid needing one), can sparingly file issues (max 1/run) for antipatterns recurring across reviews, and leaves up to 25 inline comments per run with blocking issues first. Read-only: never writes implementation code or pushes to branches.
 
 See: `.github/workflows/reviewer.md`
 
@@ -438,12 +411,7 @@ An artificial newline appended after an excerpt's last line to visually separate
 
 ### TreeEdit
 
-An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
-
-- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
-- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
-
-Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class: `startIndex` / `oldEndIndex` / `newEndIndex` are the byte offsets of the changed range in the old and new text, and `startPosition` / `oldEndPosition` / `newEndPosition` are the row/column positions of the range endpoints. Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
 
 See: `src/renderer/highlighter.ts`, [Incremental Parsing](#incremental-parsing)
 
