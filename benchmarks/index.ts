@@ -13,10 +13,10 @@
 import { bufferBenchmarks } from "./buffer.bench.ts";
 import { diffBenchmarks } from "./diff.bench.ts";
 import { diffControllerBenchmarks } from "./diff-controller.bench.ts";
-import { multiFileDiffBenchmarks } from "./multi-file.bench.ts";
 import { editorBenchmarks } from "./editor.bench.ts";
 import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { highlighterBenchmarks } from "./highlighter.bench.ts";
+import { multiFileDiffBenchmarks } from "./multi-file.bench.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { rendererBenchmarks } from "./renderer.bench.ts";
 import { tileMapBenchmarks } from "./tile-map.bench.ts";
