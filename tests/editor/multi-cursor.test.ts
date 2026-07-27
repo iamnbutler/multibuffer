@@ -292,20 +292,50 @@ describe("Multi-cursor - goal column (per-cursor sticky columns)", () => {
   });
 
   test("extendSelection preserves per-cursor goal column through short lines", () => {
-    const editor = setup("AAAAAA\nBB\nCCCCCC");
+    // Cursors start on rows 0 and 3 so the growing selections stay disjoint.
+    // Two selections extended from the same row would overlap and merge into
+    // one, which necessarily discards their separate goal columns.
+    // rows 0/3: 6 chars — heads start at col 5 and col 2
+    // rows 1/4: 1 char  — both heads clamp to col 1
+    // rows 2/5: 6 chars — each head restores its own goal col
+    const editor = setup("AAAAAA\nB\nCCCCCC\nDDDDDD\nE\nFFFFFF");
     editor.setCursor(mbPoint(0, 5));
-    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(3, 2) });
 
     editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
     editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
 
+    expect(editor.selections.length).toBe(2);
     const snap = editor.multiBuffer.snapshot();
     const headCols = editor.selections.map((sel) => {
       const ha = sel.head === "end" ? sel.range.end : sel.range.start;
       return snap.resolveAnchor(ha)?.column;
     });
-    expect(headCols).toContain(1);
     expect(headCols).toContain(5);
+    expect(headCols).toContain(2);
+  });
+
+  test("extendSelection merges overlapping selections and drops their goal columns", () => {
+    // Both cursors sit on row 0, so the first extension makes the selections
+    // overlap and they merge into a single selection spanning both anchors.
+    const editor = setup("AAAAAA\nBB\nCCCCCC");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(editor.selections.length).toBe(1);
+
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(editor.selections.length).toBe(1);
+
+    const snap = editor.multiBuffer.snapshot();
+    const sel = editor.selections[0];
+    expect(sel).toBeDefined();
+    if (!sel) return;
+    // The merged selection keeps the leftmost anchor and tracks the column it
+    // clamped to on the short row — the two original goal columns are gone.
+    expect(snap.resolveAnchor(sel.range.start)?.column).toBe(1);
+    expect(num(snap.resolveAnchor(sel.range.end)?.row ?? mbRow(0))).toBe(2);
   });
 
   test("goal column resets after horizontal move", () => {
