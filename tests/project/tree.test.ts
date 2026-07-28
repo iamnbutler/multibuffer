@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test";
 import {
   createMemoryFsAdapter,
   createProjectTree,
+  type FsAdapter,
+  type FsStat,
   type ProjectEntry,
 } from "../../src/project/index.ts";
 
@@ -442,6 +444,143 @@ describe("createProjectTree", () => {
       expect(dir?.path).toBe("/project/src");
       expect(dir?.relativePath).toBe("src");
     });
+  });
+});
+
+describe("root property", () => {
+  test("exposes the root path", () => {
+    const adapter = createMemoryFsAdapter({ "/my/project": { type: "directory" } });
+    const tree = createProjectTree("/my/project", { adapter });
+    expect(tree.root).toBe("/my/project");
+  });
+
+  test("strips trailing slashes from root", () => {
+    const adapter = createMemoryFsAdapter({ "/my/project": { type: "directory" } });
+    const tree = createProjectTree("/my/project/", { adapter });
+    expect(tree.root).toBe("/my/project");
+  });
+});
+
+describe("get() edge cases", () => {
+  test("returns directory entry for a directory path", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/root": { type: "directory" },
+      "/root/src": { type: "directory" },
+      "/root/src/index.ts": { type: "file" },
+    });
+
+    const tree = createProjectTree("/root", { adapter });
+    const entry = await tree.get("src");
+
+    expect(entry?.type).toBe("directory");
+    expect(entry?.name).toBe("src");
+    expect(entry?.relativePath).toBe("src");
+  });
+
+  test("returns undefined for path excluded by filters", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/root": { type: "directory" },
+      "/root/index.ts": { type: "file" },
+      "/root/index.test.ts": { type: "file" },
+    });
+
+    const tree = createProjectTree("/root", {
+      adapter,
+      exclude: ["*.test.ts"],
+    });
+
+    expect(await tree.get("index.ts")).toBeDefined();
+    expect(await tree.get("index.test.ts")).toBeUndefined();
+  });
+
+  test("works without adapter.stat (fallback via readdir)", async () => {
+    const baseAdapter = createMemoryFsAdapter({
+      "/root": { type: "directory" },
+      "/root/src": { type: "directory" },
+      "/root/src/index.ts": { type: "file" },
+    });
+    // Strip stat to exercise the fallback code path in get()
+    const adapterWithoutStat: FsAdapter = { readdir: baseAdapter.readdir.bind(baseAdapter) };
+
+    const tree = createProjectTree("/root", { adapter: adapterWithoutStat });
+
+    const file = await tree.get("src/index.ts");
+    expect(file?.type).toBe("file");
+    expect(file?.name).toBe("index.ts");
+    expect(file?.relativePath).toBe("src/index.ts");
+
+    const dir = await tree.get("src");
+    expect(dir?.type).toBe("directory");
+    expect(dir?.name).toBe("src");
+  });
+});
+
+describe("resilience", () => {
+  test("entries() returns nothing for an empty directory", async () => {
+    const adapter = createMemoryFsAdapter({
+      "/root": { type: "directory" },
+    });
+
+    const tree = createProjectTree("/root", { adapter });
+    const paths = await collectPaths(tree.entries());
+
+    expect(paths).toEqual([]);
+  });
+
+  test("silently ignores stat errors when collecting metadata", async () => {
+    const baseAdapter = createMemoryFsAdapter({
+      "/root": { type: "directory" },
+      "/root/file.ts": { type: "file" },
+    });
+    const adapterWithFailingStat: FsAdapter = {
+      readdir: baseAdapter.readdir.bind(baseAdapter),
+      async stat(_path: string): Promise<FsStat> {
+        throw new Error("stat permission denied");
+      },
+    };
+
+    const tree = createProjectTree("/root", {
+      adapter: adapterWithFailingStat,
+      includeMetadata: true,
+    });
+    const entries = await collectEntries(tree.entries());
+    const file = entries.find((e) => e.type === "file");
+
+    // File is still yielded despite stat failure
+    expect(file).toBeDefined();
+    expect(file?.name).toBe("file.ts");
+    if (file?.type === "file") {
+      // No metadata when stat throws
+      expect(file.size).toBeUndefined();
+      expect(file.mtime).toBeUndefined();
+    }
+  });
+
+  test("readdir error during enumeration is silently skipped", async () => {
+    // Adapter whose readdir throws for a specific subdirectory
+    const goodDirs: FsAdapter = {
+      async readdir(path: string) {
+        if (path === "/root") {
+          return [
+            { name: "good.ts", isDirectory: false },
+            { name: "broken", isDirectory: true },
+          ];
+        }
+        if (path === "/root/broken") {
+          throw new Error("EACCES: permission denied");
+        }
+        return [];
+      },
+    };
+
+    const tree = createProjectTree("/root", { adapter: goodDirs });
+    const paths = await collectPaths(tree.entries());
+
+    // The directory itself is still yielded (the parent readdir succeeded);
+    // only its contents are skipped, and enumeration continues afterwards.
+    expect(paths).toContain("good.ts");
+    expect(paths).toContain("broken");
+    expect(paths.some((p) => p.startsWith("broken/"))).toBe(false);
   });
 });
 
