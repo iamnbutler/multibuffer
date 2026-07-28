@@ -335,9 +335,10 @@ export const multibufferBenchmarks: BenchmarkSuite = {
         // Edit in the middle excerpt (row 505 maps to excerpt 50).
         // ~50 excerpts have editRow >= excEndRow, ~49 have editRow < excStartRow
         // with lineDelta = 0 — all should take the fast path.
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         mbEdit100.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 505 as MultiBufferRow, column: 5 },
           "a",
         );
@@ -358,9 +359,10 @@ export const multibufferBenchmarks: BenchmarkSuite = {
         }
       },
       fn: () => {
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         mbEdit100.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 505 as MultiBufferRow, column: 5 },
           "\n",
         );
@@ -379,9 +381,10 @@ export const multibufferBenchmarks: BenchmarkSuite = {
         }
       },
       fn: () => {
-        // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         mbEdit500.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 2505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
           { row: 2505 as MultiBufferRow, column: 5 },
           "a",
         );
