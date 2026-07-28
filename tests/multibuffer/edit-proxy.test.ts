@@ -296,6 +296,49 @@ describe("MultiBuffer Edit Proxy - Excerpt boundary edits (mm3lh0xz-0duv)", () =
     expect(snap.lines(mbRow(3), mbRow(4))).toEqual([">>>Z"]);
   });
 
+  test("edit in one excerpt: excerpts after it still show correct lines (fast-path correctness)", () => {
+    // Covers the _refreshExcerptsForBuffer fast path: when editRow >= excEndRow,
+    // the excerpt's snapshot reference is updated but textSummary and range are reused.
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const mb = createMultiBuffer();
+    // Three excerpts from the same buffer
+    mb.addExcerpt(buf, excerptRange(0, 2)); // rows 0-1: "A", "B"
+    mb.addExcerpt(buf, excerptRange(2, 4)); // rows 2-3: "C", "D"
+    mb.addExcerpt(buf, excerptRange(4, 5)); // row 4: "E"
+
+    // Edit within the FIRST excerpt (mb row 0)
+    mb.edit(mbPoint(0, 0), mbPoint(0, 0), ">>>");
+
+    const snap = mb.snapshot();
+    // First excerpt: edit applied
+    expect(snap.lines(mbRow(0), mbRow(2))).toEqual([">>>A", "B"]);
+    // Second excerpt: unaffected (editRow < excStartRow, lineDelta = 0 fast path)
+    expect(snap.lines(mbRow(2), mbRow(4))).toEqual(["C", "D"]);
+    // Third excerpt: unaffected (editRow < excStartRow, lineDelta = 0 fast path)
+    expect(snap.lines(mbRow(4), mbRow(5))).toEqual(["E"]);
+  });
+
+  test("edit in last excerpt: excerpts before it still show correct lines (fast-path correctness)", () => {
+    // Covers editRow >= excEndRow fast path: excerpts whose end row is before editRow
+    // get the snapshot update but skip textSummary recomputation.
+    const buf = createBuffer(createBufferId(), "A\nB\nC\nD\nE");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2)); // rows 0-1: "A", "B"
+    mb.addExcerpt(buf, excerptRange(2, 4)); // rows 2-3: "C", "D"
+    mb.addExcerpt(buf, excerptRange(4, 5)); // row 4: "E"
+
+    // Edit within the LAST excerpt (mb row 4)
+    mb.edit(mbPoint(4, 0), mbPoint(4, 0), ">>>");
+
+    const snap = mb.snapshot();
+    // First excerpt: unaffected (editRow >= excEndRow fast path)
+    expect(snap.lines(mbRow(0), mbRow(2))).toEqual(["A", "B"]);
+    // Second excerpt: unaffected (editRow >= excEndRow fast path)
+    expect(snap.lines(mbRow(2), mbRow(4))).toEqual(["C", "D"]);
+    // Third excerpt: edit applied
+    expect(snap.lines(mbRow(4), mbRow(5))).toEqual([">>>E"]);
+  });
+
   test.todo("edit spanning start of first excerpt through end of last excerpt deletes middle entirely", () => {
     // Complex case: three excerpts from the same buffer.
     // Edit from end of first excerpt to start of third excerpt.

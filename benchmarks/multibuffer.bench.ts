@@ -61,6 +61,9 @@ let snap1000: MultiBufferSnapshot;
 let totalRows1000: number;
 let anchors1000: Anchor[];
 
+let mbEdit100: MultiBuffer;
+let mbEdit500: MultiBuffer;
+
 export const multibufferBenchmarks: BenchmarkSuite = {
   name: "MultiBuffer Operations",
   benchmarks: [
@@ -308,6 +311,83 @@ export const multibufferBenchmarks: BenchmarkSuite = {
       targetMs: 10,
       fn: () => {
         snap1000.resolveAnchors(anchors1000);
+      },
+    },
+
+    // --- edit() hot path benchmarks ---
+    // These measure the cost of _refreshExcerptsForBuffer, which runs on every
+    // keypress that mutates text. The optimization skips O(n_chars) textSummary
+    // recomputation for excerpts whose text content is unaffected by the edit.
+    {
+      // Single-char insert (lineDelta = 0): ~99/100 excerpts have editRow outside
+      // their range and benefit from the textSummary skip.
+      name: "edit() - single char insert (100 excerpts × 10 lines, 1 buffer)",
+      iterations: 1000,
+      targetMs: 1,
+      setup: () => {
+        mbEdit100 = createMultiBuffer();
+        const buf = createBuffer(id, generateText(1000));
+        for (let i = 0; i < 100; i++) {
+          mbEdit100.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+      },
+      fn: () => {
+        // Edit in the middle excerpt (row 505 maps to excerpt 50).
+        // ~50 excerpts have editRow >= excEndRow, ~49 have editRow < excStartRow
+        // with lineDelta = 0 — all should take the fast path.
+        mbEdit100.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 505 as MultiBufferRow, column: 5 },
+          "a",
+        );
+      },
+    },
+    {
+      // Newline insert (lineDelta = 1): excerpts AFTER the edit have editRow >= excEndRow
+      // and use the fast path; excerpts BEFORE have editRow < excStartRow with lineDelta != 0
+      // and still call createExcerpt (conservative path until row-shift optimization lands).
+      name: "edit() - newline insert (100 excerpts × 10 lines, 1 buffer)",
+      iterations: 100,
+      targetMs: 1,
+      setup: () => {
+        mbEdit100 = createMultiBuffer();
+        const buf = createBuffer(id, generateText(1000));
+        for (let i = 0; i < 100; i++) {
+          mbEdit100.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+      },
+      fn: () => {
+        mbEdit100.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 505 as MultiBufferRow, column: 5 },
+          "\n",
+        );
+      },
+    },
+    {
+      // 500 excerpts — amplifies the benefit of skipping textSummary recomputation.
+      name: "edit() - single char insert (500 excerpts × 10 lines, 1 buffer)",
+      iterations: 200,
+      targetMs: 5,
+      setup: () => {
+        mbEdit500 = createMultiBuffer();
+        const buf = createBuffer(id, generateText(5000));
+        for (let i = 0; i < 500; i++) {
+          mbEdit500.addExcerpt(buf, range(i * 10, (i + 1) * 10));
+        }
+      },
+      fn: () => {
+        mbEdit500.edit(
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 2505 as MultiBufferRow, column: 5 },
+          // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+          { row: 2505 as MultiBufferRow, column: 5 },
+          "a",
+        );
       },
     },
   ],

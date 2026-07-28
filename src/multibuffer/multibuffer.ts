@@ -1110,11 +1110,33 @@ class MultiBufferImpl implements MultiBuffer {
       const exc = this._excerpts.get(id);
       if (!exc) continue;
 
-      let endRow = exc.range.context.end.row;
+      const excStartRow = exc.range.context.start.row;
+      const excEndRow = exc.range.context.end.row;
+
+      // Optimization: when the edit is known to be outside this excerpt's row range,
+      // the text content at the excerpt's rows is unchanged. Skip the O(n_chars)
+      // computeExcerptSummary call and update only the buffer snapshot reference.
+      //   (a) editRow >= excEndRow: edit starts at or after excerpt end — cannot affect it.
+      //       When editRow >= excEndRow, newSnap.lineCount >= excEndRow is guaranteed
+      //       (a deletion starting after the excerpt cannot shrink the buffer below excEndRow),
+      //       so no range clamping is needed either.
+      //   (b) editRow < excStartRow && lineDelta === 0: edit before excerpt on same line count
+      //       (no row shifts) — excerpt text and range are both unchanged.
+      if (
+        editRow !== undefined &&
+        (editRow >= excEndRow ||
+          (editRow < excStartRow && lineDelta !== undefined && lineDelta === 0))
+      ) {
+        // Only the buffer snapshot reference needs updating — textSummary and range are unchanged.
+        this._excerpts.set(id, { ...exc, buffer: newSnap });
+        continue;
+      }
+
+      let endRow = excEndRow;
 
       // If the edit changed line count and falls within this excerpt, adjust end row
       if (editRow !== undefined && lineDelta !== undefined && lineDelta !== 0) {
-        if (editRow >= exc.range.context.start.row && editRow < exc.range.context.end.row) {
+        if (editRow >= excStartRow && editRow < excEndRow) {
           // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row adjustment
           endRow = (endRow + lineDelta) as BufferRow;
         }
@@ -1128,7 +1150,7 @@ class MultiBufferImpl implements MultiBuffer {
       ) as BufferRow;
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row clamping
       const clampedStartRow = Math.min(
-        exc.range.context.start.row,
+        excStartRow,
         clampedEndRow,
       ) as BufferRow;
       const clampedRange: ExcerptRange = {
