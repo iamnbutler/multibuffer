@@ -21,7 +21,7 @@ import { Editor } from "../../src/editor/editor.ts";
 import { SearchController } from "../../src/editor/search.ts";
 import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
-import { createBufferId, excerptRange, mbPoint, resetCounters } from "../helpers.ts";
+import { createBufferId, excerptRange, mbPoint, mbRow, num, resetCounters } from "../helpers.ts";
 
 beforeEach(() => {
   resetCounters();
@@ -203,11 +203,11 @@ describe("SearchController — multi-excerpt basic search", () => {
     expect(resolved.length).toBe(2);
 
     // First result is in row 0 (excerpt 1)
-    expect(resolved[0]?.start.row).toBe(0);
+    expect(num(resolved[0]?.start.row ?? mbRow(-1))).toBe(0);
     expect(resolved[0]?.start.column).toBe(6); // "hello " = 6 chars
 
     // Second result is in row 1 (excerpt 2)
-    expect(resolved[1]?.start.row).toBe(1);
+    expect(num(resolved[1]?.start.row ?? mbRow(-1))).toBe(1);
     expect(resolved[1]?.start.column).toBe(8); // "another " = 8 chars
   });
 
@@ -217,7 +217,7 @@ describe("SearchController — multi-excerpt basic search", () => {
     expect(count).toBe(1);
 
     const resolved = search.resolveResults();
-    expect(resolved[0]?.start.row).toBe(1); // result in second excerpt
+    expect(num(resolved[0]?.start.row ?? mbRow(-1))).toBe(1); // result in second excerpt
   });
 
   test("case-insensitive search across excerpts", () => {
@@ -325,6 +325,6 @@ describe("SearchController — resolveResultsInViewport multi-excerpt", () => {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
     const visible = search.resolveResultsInViewport(0 as MultiBufferRow, 1 as MultiBufferRow);
     expect(visible.length).toBe(1);
-    expect(visible[0]?.start.row).toBe(0);
+    expect(num(visible[0]?.start.row ?? mbRow(-1))).toBe(0);
   });
 });
