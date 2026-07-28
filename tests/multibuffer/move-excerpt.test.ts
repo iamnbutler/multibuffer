@@ -194,7 +194,7 @@ describe("moveExcerpt — stale insertBefore", () => {
     const bufB = createBuffer(createBufferId(), "BBBB");
     const bufC = createBuffer(createBufferId(), "CCCC");
 
-    const idA = mb.addExcerpt(bufA, excerptRange(0, 1));
+    mb.addExcerpt(bufA, excerptRange(0, 1));
     const idB = mb.addExcerpt(bufB, excerptRange(0, 1));
     const idC = mb.addExcerpt(bufC, excerptRange(0, 1));
 
