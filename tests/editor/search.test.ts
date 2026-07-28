@@ -15,6 +15,8 @@ import {
   excerptRange,
   expectPoint,
   mbPoint,
+  mbRow,
+  num,
   resetCounters,
 } from "../helpers.ts";
 
@@ -552,8 +554,8 @@ describe("SearchController - Multi-excerpt", () => {
     // Display order: buf2 (row 0) before buf1 (row 1+).
     // Without the fix, compareAnchors would sort by slot index: buf1 (0) before buf2 (1),
     // giving results[0].start.row > results[1].start.row — the wrong order.
-    const row0 = resolved[0]!.start.row;
-    const row1 = resolved[1]!.start.row;
+    const row0 = num(resolved[0]?.start.row ?? mbRow(-1));
+    const row1 = num(resolved[1]?.start.row ?? mbRow(-1));
     expect(row0).toBeLessThan(row1);
   });
 });
