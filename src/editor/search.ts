@@ -6,7 +6,7 @@
  * positions automatically adjust as the document changes.
  */
 
-import { compareAnchors, createAnchorRange, resolveAnchorRange } from "../multibuffer/anchor.ts";
+import { createAnchorRange, resolveAnchorRange } from "../multibuffer/anchor.ts";
 import type {
   AnchorRange,
   MultiBufferPoint,
@@ -419,8 +419,16 @@ export class SearchController {
       });
     }
 
-    // Sort by position
-    results.sort((a, b) => compareAnchors(a.range.start, b.range.start));
+    // Sort by display position (row, then column).
+    // compareAnchors orders by slot-map index which does NOT preserve display
+    // order when excerpts have been reordered via moveExcerpt().
+    results.sort((a, b) => {
+      const pa = snap.resolveAnchor(a.range.start);
+      const pb = snap.resolveAnchor(b.range.start);
+      if (!pa || !pb) return 0;
+      if (pa.row !== pb.row) return pa.row - pb.row;
+      return pa.column - pb.column;
+    });
 
     this._results = results;
     this._activeIndex = results.length > 0 ? 0 : -1;
