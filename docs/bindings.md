@@ -15,13 +15,11 @@ Keyboard shortcuts mapped in `src/editor/input-handler.ts`. Mac uses Cmd as the 
 |---------|---------|-------------|
 | `Left` | `moveCursor left` | character |
 | `Opt+Left` | `moveCursor left` | word |
-| `Mod+Left` | `moveCursor left` | line (start) |
-| `Home` | `moveCursor left` | line (start) |
+| `Mod+Left` / `Home` | `moveCursor left` | line (start) |
 | `Mod+Home` | `moveCursor left` | buffer (start) |
 | `Right` | `moveCursor right` | character |
 | `Opt+Right` | `moveCursor right` | word |
-| `Mod+Right` | `moveCursor right` | line (end) |
-| `End` | `moveCursor right` | line (end) |
+| `Mod+Right` / `End` | `moveCursor right` | line (end) |
 | `Mod+End` | `moveCursor right` | buffer (end) |
 | `Up` | `moveCursor up` | character (1 row) |
 | `Mod+Up` | `moveCursor up` | buffer (start) |
@@ -38,7 +36,7 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 |---------|---------|-------|
 | _(text input)_ | `insertText` | Via `input` event (IME-compatible) |
 | `Enter` | `insertNewline` | |
-| `Tab` | `insertTab` | Inserts 2 spaces |
+| `Tab` | `insertTab` | Inserts 2 spaces; indents the selected lines when a selection is active |
 | `Backspace` | `deleteBackward` | character |
 | `Opt+Backspace` | `deleteBackward` | word |
 | `Mod+Backspace` | `deleteBackward` | line (to start) |
@@ -56,6 +54,11 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 | `Opt+Shift+Down` | `duplicateLine down` | Duplicate line below cursor |
 | `Mod+Enter` | `insertLineBelow` | Insert blank line below, move cursor there |
 | `Mod+Shift+Enter` | `insertLineAbove` | Insert blank line above, move cursor there |
+| `Mod+]` | `indentLines` | Indent by 2 spaces |
+| `Shift+Tab` | `dedentLines` | Remove up to 2 leading spaces |
+| `Mod+[` | `dedentLines` | Remove up to 2 leading spaces |
+
+Indent and dedent apply to every line touched by the selection, or the cursor line when the selection is collapsed.
 
 ## Selection
 
@@ -85,20 +88,14 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 
 ## Not Yet Implemented
 
-**Indentation** — `Tab` with selection (indent), `Shift+Tab` / `Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter.
-
-**Comment toggling** — `Mod+/` toggle line comment.
-
-**Find & replace** — `Mod+F` (find), `Mod+G`/`F3` (next), `Mod+Shift+G`/`Shift+F3` (previous), `Mod+H` (replace), `Mod+Shift+H` (replace all).
-
-**Multi-cursor** — `Mod+D` (next occurrence), `Mod+Shift+L` (all occurrences), `Mod+Opt+Up/Down` (add cursor above/below), `Opt+Click` (add cursor at click), `Escape` (collapse to single cursor).
-
-**Bracket pairs** — Auto-close brackets/quotes; `Mod+Shift+\` jump to matching bracket.
-
-**macOS text system** — `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose).
-
-**Scroll** — `Mod+Opt+Up/Down` scroll viewport without moving cursor.
-
-**Text transformation** — `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase).
-
-**Selection expansion** — `Mod+Shift+Arrow` extend selection by word/line.
+| Feature | Planned bindings |
+|---------|------------------|
+| Auto-indent | Inherit leading whitespace on `Enter` |
+| Comment toggling | `Mod+/` toggle line comment |
+| Find & replace | `Mod+F` find, `Mod+G`/`F3` next, `Mod+Shift+G`/`Shift+F3` previous, `Mod+H` replace, `Mod+Shift+H` replace all |
+| Multi-cursor | `Mod+D` next occurrence, `Mod+Shift+L` all occurrences, `Mod+Opt+Up/Down` add cursor above/below, `Opt+Click` add cursor at click, `Escape` collapse to one |
+| Bracket pairs | Auto-close brackets/quotes; `Mod+Shift+\` jump to matching bracket |
+| macOS text system | `Ctrl+A` line start, `Ctrl+E` line end, `Ctrl+K` kill to EOL, `Ctrl+Y` yank, `Ctrl+O` open line, `Ctrl+T` transpose |
+| Scroll | `Mod+Opt+Up/Down` scroll viewport without moving cursor |
+| Text transformation | `Mod+Shift+U` uppercase, `Mod+Shift+L` lowercase |
+| Selection expansion | `Mod+Shift+Arrow` extend selection by word/line |
