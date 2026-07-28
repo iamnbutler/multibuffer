@@ -18,7 +18,7 @@
  * ```
  */
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { createBuffer } from "../buffer/buffer.ts";
 import type { Buffer, BufferId } from "../buffer/types.ts";
 import type { DiffController, DiffControllerOptions } from "../diff/controller.ts";

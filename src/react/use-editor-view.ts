@@ -13,7 +13,7 @@
  * ```
  */
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import type { EditorView, EditorViewOptions } from "../editor/editor-view.ts";
 import { createEditorView } from "../editor/editor-view.ts";
 import type { Keymap } from "../editor/types.ts";
