@@ -576,9 +576,11 @@ describe("resilience", () => {
     const tree = createProjectTree("/root", { adapter: goodDirs });
     const paths = await collectPaths(tree.entries());
 
-    // The inaccessible directory is skipped; enumeration continues
+    // The directory itself is still yielded (the parent readdir succeeded);
+    // only its contents are skipped, and enumeration continues afterwards.
     expect(paths).toContain("good.ts");
-    expect(paths).not.toContain("broken");
+    expect(paths).toContain("broken");
+    expect(paths.some((p) => p.startsWith("broken/"))).toBe(false);
   });
 });
 
