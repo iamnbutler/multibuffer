@@ -18,7 +18,7 @@
  * ```
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { createBuffer } from "../buffer/buffer.ts";
 import type { Buffer, BufferId } from "../buffer/types.ts";
 import type { DiffController, DiffControllerOptions } from "../diff/controller.ts";
@@ -66,7 +66,7 @@ export interface UseDiffViewOptions {
 
 export interface UseDiffViewResult {
   /** Ref to attach to the container element. */
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement>;
   /** The DiffController instance (null during SSR or before mount). */
   controller: DiffController | null;
   /** Whether the old and new text are equal. */
