@@ -618,8 +618,7 @@ export class Editor {
         const range = resolveAnchorRange(snap, primarySel.range);
         if (range) {
           if (!this._edit(snap, range.start, range.end, insertText)) return;
-          const newSnap = this.multiBuffer.snapshot();
-          const newCursor = this._advancePoint(range.start, insertText, newSnap);
+          const newCursor = this._advancePoint(range.start, insertText);
           this._cursor = newCursor;
           const newSel = selectionAtPoint(this.multiBuffer, newCursor);
           this._selections = newSel ? [newSel] : [];
@@ -630,8 +629,7 @@ export class Editor {
       // Insert at cursor
       const cursor = this.cursor;
       if (!this._edit(snap, cursor, cursor, insertText)) return;
-      const newSnap = this.multiBuffer.snapshot();
-      const newCursor = this._advancePoint(cursor, insertText, newSnap);
+      const newCursor = this._advancePoint(cursor, insertText);
       this._cursor = newCursor;
       const newSel = selectionAtPoint(this.multiBuffer, newCursor);
       this._selections = newSel ? [newSel] : [];
@@ -667,7 +665,7 @@ export class Editor {
       this.multiBuffer.edit(start, end, insertText);
       currentSnap = this.multiBuffer.snapshot();
 
-      const newCursor = this._advancePoint(start, insertText, currentSnap);
+      const newCursor = this._advancePoint(start, insertText);
       const newSel = selectionAtPoint(this.multiBuffer, newCursor);
       if (newSel) {
         newSelections.unshift(newSel);
@@ -1666,8 +1664,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     for (let i = entry.edits.length - 1; i >= 0; i--) {
       const edit = entry.edits[i];
       if (!edit) continue;
-      const snap = this.multiBuffer.snapshot();
-      const currentEnd = this._advancePoint(edit.editStart, edit.insertedText, snap);
+      const currentEnd = this._advancePoint(edit.editStart, edit.insertedText);
       inverseOps.push({
         editStart: edit.editStart,
         removedText: edit.insertedText,
@@ -1693,7 +1690,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   private _advancePoint(
     start: MultiBufferPoint,
     text: string,
-    _snap: MultiBufferSnapshot,
+    // Unused. Retained as optional so call sites that still pass a snapshot
+    // keep compiling; remove once no caller supplies one.
+    _snap?: MultiBufferSnapshot,
   ): MultiBufferPoint {
     if (text.length === 0) return start;
 
