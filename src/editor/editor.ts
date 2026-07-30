@@ -1690,6 +1690,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   private _advancePoint(
     start: MultiBufferPoint,
     text: string,
+    // Unused. Retained as optional so call sites that still pass a snapshot
+    // keep compiling; remove once no caller supplies one.
+    _snap?: MultiBufferSnapshot,
   ): MultiBufferPoint {
     if (text.length === 0) return start;
 
