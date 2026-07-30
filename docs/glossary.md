@@ -8,7 +8,7 @@ A reference for project-specific terms and concepts used throughout the codebase
 
 ### Anchor
 
-A stable position within a buffer or multibuffer that survives text edits. Anchors track a byte offset and a [bias](#bias), and are updated by replaying the buffer's edit log when the buffer changes. Used to represent cursor positions and selection endpoints durably.
+A stable position within a buffer or multibuffer that survives text edits. Anchors track a byte offset and a [bias](#bias), and are brought up to date by [anchor resolution](#anchor-resolution). Used to represent cursor positions and selection endpoints durably.
 
 See: `src/multibuffer/anchor.ts`, `src/multibuffer/types.ts`
 
@@ -35,7 +35,9 @@ See: `src/buffer/offset.ts`, `src/multibuffer/anchor.ts`
 
 ### Auto-Indent
 
-A behavior of the `insertNewline` command: the new line automatically receives the same leading whitespace as the current line.
+Inheriting the current line's leading whitespace when opening a new line. Applied by `insertLineBelow` and `insertLineAbove`; plain `insertNewline` (Enter) inserts a bare newline and does *not* auto-indent.
+
+See: `src/editor/editor.ts`
 
 ---
 
@@ -58,7 +60,7 @@ An anchor scoped to a single buffer. Stores the byte offset and bias at creation
 
 ### BufferOffset
 
-A branded number type representing a byte offset within a single buffer. Distinct from [MultiBufferOffset](#multibufferoffset) to prevent mixing coordinate systems at compile time.
+A branded number type representing a byte offset within a single buffer. Distinct from [MultiBufferOffset](#multibufferoffset) — see [Coordinate Systems](#coordinate-systems).
 
 ### BufferPoint
 
@@ -82,13 +84,7 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 ### Closer
 
-An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
-
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+An automated PR triage agent that runs after a review is submitted and decides each pull request's outcome: `ready-to-merge` when CI is green with no blocking reviews, `needs-review` when blocking reviews or unresolved issues exist (also the default when uncertain), or closed if duplicate, spam, or fundamentally broken. Chains after the [Reviewer](#reviewer); draft status is ignored.
 
 See: `.github/workflows/closer.md`
 
@@ -123,12 +119,7 @@ An interface (`src/renderer/types.ts`) describing the full set of visual propert
 
 A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
 
-Key methods:
-
-- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
-- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
-- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
-- `dispose()` — cleans up timers and subscriptions.
+Key methods: `reDiff()` recomputes immediately and returns the new `isEqual` state; `notifyChange()` schedules a debounced re-diff (default 150 ms); `onUpdate(callback)` subscribes to decoration updates and returns an unsubscribe function; `dispose()` cleans up timers and subscriptions.
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
@@ -164,7 +155,7 @@ See: `src/diff/types.ts`, `src/diff/diff.ts`
 
 ### Edit Log
 
-A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since buffer creation. Used for [anchor](#anchor) resolution by replaying edits since an anchor's recorded version to find its current position.
+A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since buffer creation. Supplies the edits replayed during [anchor resolution](#anchor-resolution).
 
 ### EditEntry
 
@@ -192,7 +183,7 @@ Renderer-level metadata for drawing a file header at an excerpt boundary: file p
 
 ### ExcerptId
 
-A branded [SlotKey](#slotkey) that uniquely identifies an excerpt. Generational: if an excerpt is removed and its slot reused, old `ExcerptId` values pointing to that slot are automatically invalid.
+A branded [SlotKey](#slotkey) that uniquely identifies an excerpt. [Generational](#generational-arena), so an id outlived by its excerpt is automatically invalid rather than silently aliasing a new one.
 
 ### ExcerptInfo
 
@@ -210,7 +201,7 @@ The specification for creating an excerpt. Contains:
 
 ### Generational Arena
 
-The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, so a key referring to a freed-and-reused slot is detected as stale in O(1) without call-site bookkeeping.
 
 ### Goal Column
 
@@ -244,7 +235,7 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 
 ### Implementor
 
-An automated AI agent (`.github/workflows/implementor.md`) that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command on any issue. Creates draft pull requests, self-maintains its open PRs for CI failures (delegating complex fixes to `/pr-fix`), and can decompose large issues into sub-issues also labeled `agent:implement`. Every output is prefixed with `[Implementor]` for transparency.
+An automated AI agent that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command. Opens draft pull requests prefixed `[Implementor]`, self-maintains them through CI failures (delegating complex fixes to `/pr-fix`), and can decompose large issues into sub-issues.
 
 See: `.github/workflows/implementor.md`
 
@@ -338,7 +329,7 @@ Given a multibuffer row, binary search finds the containing excerpt; subtracting
 
 ### Read-Only Mode
 
-A mode in which the `Editor` silently ignores all text-mutating commands. Enabled by passing `readOnly: true` to the `Editor` constructor or by calling `editor.setReadOnly(true)` at runtime. While active, `dispatch()` discards any command classified as an edit command — including `insertText`, `cut`, `redo`, `deleteLine`, `moveLine`, `duplicateLine`, `indentLines`, `dedentLines`, and others — while still processing cursor-movement commands. The current state is readable via the `editor.readOnly` getter.
+A mode in which the `Editor` silently ignores all text-mutating commands. Enabled via `readOnly: true` on the constructor or `editor.setReadOnly(true)` at runtime, and readable through the `editor.readOnly` getter. While active, `dispatch()` discards every command classified as an edit (`insertText`, `cut`, `redo`, `deleteLine`, `moveLine`, `duplicateLine`, `indentLines`, `dedentLines`, and others) but still processes cursor movement.
 
 See: `src/editor/editor.ts`
 
@@ -348,14 +339,7 @@ An interface (`src/renderer/types.ts`) that rendering backends implement. A rend
 
 ### Reviewer
 
-An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
-
-- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
-- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
-- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
-- Up to 25 inline review comments per run, prioritising blocking issues first.
-
-Read-only: never writes implementation code or pushes to branches.
+An automated adversarial code reviewer, triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX. Uses `REQUEST_CHANGES` for blocking issues and `COMMENT` for suggestions, posting up to 25 inline comments per run (blocking first), and hardballs every `biome-ignore` suppression — each needs concrete justification or removal. May sparingly file an issue (max 1/run) for antipatterns recurring across reviews. Read-only: never writes implementation code or pushes to branches.
 
 See: `.github/workflows/reviewer.md`
 
@@ -383,7 +367,7 @@ A batch method on `MultiBuffer` (`src/multibuffer/multibuffer.ts`) that atomical
 
 Used by `DiffController.reDiff()` when rebuilding the diff view. Note: `setExcerpts()` does **not** build an anchor replacement chain, so existing [anchors](#anchor) do not survive the call; this matches the prior semantics of `clearExcerpts()` + `addExcerpt()`.
 
-See also: [setExcerptsForBuffer](#setexcerptsforBuffer), [DiffController](#diffcontroller)
+See also: [setExcerptsForBuffer](#setexcerptsforbuffer), [DiffController](#diffcontroller)
 
 ### setExcerptsForBuffer
 
@@ -399,15 +383,15 @@ An optimization flag (`MultiBuffer.isSingleton`) that is `true` when the multibu
 
 ### SlotKey
 
-A `{ index, generation }` pair used to address entries in a [SlotMap](#slotmap). The generation component makes stale keys detectable in O(1).
+A `{ index, generation }` pair used to address entries in a [SlotMap](#slotmap). See [Generational Arena](#generational-arena) for how the generation component works.
 
 ### SlotMap
 
-A generational arena (`src/multibuffer/slot_map.ts`) providing O(1) insert, remove, and lookup with stale-key detection. Used to store excerpts and assign [ExcerptId](#excerptid) values.
+A [generational arena](#generational-arena) (`src/multibuffer/slot_map.ts`) providing O(1) insert, remove, and lookup with stale-key detection. Used to store excerpts and assign [ExcerptId](#excerptid) values.
 
 ### Snapshot Pattern
 
-Both `Buffer` and `MultiBuffer` expose a `snapshot()` method that returns an immutable view of current state. Snapshots can be held concurrently with ongoing mutations; the snapshot remains valid while reflecting the state at the moment it was taken.
+Both `Buffer` and `MultiBuffer` expose a `snapshot()` method returning an immutable view of current state, held safely alongside ongoing mutations. See [BufferSnapshot](#buffersnapshot) and [MultiBufferSnapshot](#multibuffersnapshot) for the read operations each supports.
 
 ### Soft Wrap
 
