@@ -477,14 +477,17 @@ export class Editor {
    * Ranges must be non-overlapping. They are sorted bottom-to-top internally
    * so that earlier positions are not shifted by later edits.
    *
-   * @returns true if at least one replacement was made, false otherwise.
+   * Ranges landing in a non-editable excerpt are skipped, and no edit is made
+   * at all while the editor is read-only.
+   *
+   * @returns the number of ranges actually replaced — 0 if none were.
    */
   replaceRanges(
     ranges: ReadonlyArray<{ start: MultiBufferPoint; end: MultiBufferPoint }>,
     replacement: string,
-  ): boolean {
-    if (this._readOnly) return false;
-    if (ranges.length === 0) return false;
+  ): number {
+    if (this._readOnly) return 0;
+    if (ranges.length === 0) return 0;
 
     const snap = this.multiBuffer.snapshot();
 
@@ -511,7 +514,7 @@ export class Editor {
       editOps.push({ editStart: range.start, removedText, insertedText: replacement });
     }
 
-    if (editOps.length === 0) return false;
+    if (editOps.length === 0) return 0;
 
     this._undoStack.push({
       edits: editOps,
@@ -533,7 +536,7 @@ export class Editor {
       this._selections = newSel ? [newSel] : [];
     }
 
-    return true;
+    return editOps.length;
   }
 
   /** Execute a command. */

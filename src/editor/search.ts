@@ -291,10 +291,10 @@ export class SearchController {
 
     if (resolved.length === 0) return 0;
 
-    // Delegate to editor so the batch is recorded on the undo stack
-    this._editor.replaceRanges(resolved, replacement);
-
-    const count = resolved.length;
+    // Delegate to editor so the batch is recorded on the undo stack.
+    // It declines read-only editors and skips non-editable excerpts, so the
+    // count it reports is what was actually written — not what was matched.
+    const count = this._editor.replaceRanges(resolved, replacement);
 
     // Re-run search to update results
     this._performSearch();

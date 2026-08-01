@@ -329,6 +329,57 @@ describe("SearchController - Replace", () => {
   });
 });
 
+// ─── Replace Guards ─────────────────────────────────────────────────
+
+describe("SearchController - Replace respects write guards", () => {
+  /** Same as setup(), but the editor is read-only. */
+  function readOnlySetup(text: string): { mb: MultiBuffer; search: SearchController } {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    const editor = new Editor(mb, { readOnly: true });
+    return { mb, search: new SearchController(editor) };
+  }
+
+  test("replaceAll does not edit a read-only editor", () => {
+    const { mb, search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    search.replaceAll("qux");
+    expect(getText(mb)).toBe("foo bar foo");
+  });
+
+  test("replaceAll reports 0 replacements when read-only", () => {
+    const { search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    expect(search.replaceAll("qux")).toBe(0);
+  });
+
+  test("replaceActive does not edit a read-only editor", () => {
+    const { mb, search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    search.replaceActive("qux");
+    expect(getText(mb)).toBe("foo bar foo");
+  });
+
+  test("replaceAll skips a non-editable excerpt and counts only what it wrote", () => {
+    const editableBuf = createBuffer(createBufferId(), "foo one");
+    const lockedBuf = createBuffer(createBufferId(), "foo two");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(editableBuf, excerptRange(0, 1));
+    mb.addExcerpt(lockedBuf, excerptRange(0, 1), { editable: false });
+    const search = new SearchController(new Editor(mb));
+
+    expect(search.find("foo")).toBe(2);
+
+    // Only the editable excerpt is rewritten, so only one replacement counts.
+    expect(search.replaceAll("qux")).toBe(1);
+    expect(getText(mb)).toBe("qux one\nfoo two");
+  });
+});
+
 // ─── Anchor Stability ───────────────────────────────────────────────
 
 describe("SearchController - Anchor Stability", () => {
