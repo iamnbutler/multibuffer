@@ -296,6 +296,88 @@ describe("SearchController - Replace", () => {
     expect(count).toBe(3);
     expect(getText(mb)).toBe("line bar one\nline bar two\nline bar three");
   });
+
+  test("replaceAll is undoable as a single step", () => {
+    const { mb, editor, search } = setup("foo bar foo baz foo");
+    search.find("foo");
+    search.replaceAll("qux");
+    expect(getText(mb)).toBe("qux bar qux baz qux");
+
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo bar foo baz foo");
+  });
+
+  test("replaceAll undo does not affect earlier history", () => {
+    const { mb, editor, search } = setup("foo hello foo");
+    // First edit: insert something via the editor
+    editor.setCursor(mbPoint(0, 13));
+    editor.dispatch({ type: "insertText", text: " world" });
+    expect(getText(mb)).toBe("foo hello foo world");
+
+    // Now replace all foo → bar
+    search.find("foo");
+    search.replaceAll("bar");
+    expect(getText(mb)).toBe("bar hello bar world");
+
+    // Undo replaceAll
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo hello foo world");
+
+    // Undo earlier insert
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("foo hello foo");
+  });
+});
+
+// ─── Replace Guards ─────────────────────────────────────────────────
+
+describe("SearchController - Replace respects write guards", () => {
+  /** Same as setup(), but the editor is read-only. */
+  function readOnlySetup(text: string): { mb: MultiBuffer; search: SearchController } {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    const editor = new Editor(mb, { readOnly: true });
+    return { mb, search: new SearchController(editor) };
+  }
+
+  test("replaceAll does not edit a read-only editor", () => {
+    const { mb, search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    search.replaceAll("qux");
+    expect(getText(mb)).toBe("foo bar foo");
+  });
+
+  test("replaceAll reports 0 replacements when read-only", () => {
+    const { search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    expect(search.replaceAll("qux")).toBe(0);
+  });
+
+  test("replaceActive does not edit a read-only editor", () => {
+    const { mb, search } = readOnlySetup("foo bar foo");
+    search.find("foo");
+
+    search.replaceActive("qux");
+    expect(getText(mb)).toBe("foo bar foo");
+  });
+
+  test("replaceAll skips a non-editable excerpt and counts only what it wrote", () => {
+    const editableBuf = createBuffer(createBufferId(), "foo one");
+    const lockedBuf = createBuffer(createBufferId(), "foo two");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(editableBuf, excerptRange(0, 1));
+    mb.addExcerpt(lockedBuf, excerptRange(0, 1), { editable: false });
+    const search = new SearchController(new Editor(mb));
+
+    expect(search.find("foo")).toBe(2);
+
+    // Only the editable excerpt is rewritten, so only one replacement counts.
+    expect(search.replaceAll("qux")).toBe(1);
+    expect(getText(mb)).toBe("qux one\nfoo two");
+  });
 });
 
 // ─── Anchor Stability ───────────────────────────────────────────────

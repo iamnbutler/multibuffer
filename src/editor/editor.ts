@@ -470,6 +470,75 @@ export class Editor {
     return texts.join("");
   }
 
+  /**
+   * Replace multiple ranges with a single replacement string, recording the
+   * batch as one undoable history entry.
+   *
+   * Ranges must be non-overlapping. They are sorted bottom-to-top internally
+   * so that earlier positions are not shifted by later edits.
+   *
+   * Ranges landing in a non-editable excerpt are skipped, and no edit is made
+   * at all while the editor is read-only.
+   *
+   * @returns the number of ranges actually replaced — 0 if none were.
+   */
+  replaceRanges(
+    ranges: ReadonlyArray<{ start: MultiBufferPoint; end: MultiBufferPoint }>,
+    replacement: string,
+  ): number {
+    if (this._readOnly) return 0;
+    if (ranges.length === 0) return 0;
+
+    const snap = this.multiBuffer.snapshot();
+
+    // Sort bottom-to-top so earlier row numbers aren't shifted by later edits
+    const sorted = [...ranges].sort((a, b) => {
+      if (a.start.row !== b.start.row) return b.start.row - a.start.row;
+      return b.start.column - a.start.column;
+    });
+
+    const cursorBefore = this._cursor;
+    const selectionsBefore = this._selections;
+
+    const editOps: EditOp[] = [];
+    let currentSnap = snap;
+
+    for (const range of sorted) {
+      const startBuf = currentSnap.toBufferPoint(range.start);
+      if (startBuf && !startBuf.excerpt.editable) continue;
+
+      const removedText = this._getTextInRange(currentSnap, range.start, range.end);
+      this.multiBuffer.edit(range.start, range.end, replacement);
+      currentSnap = this.multiBuffer.snapshot();
+
+      editOps.push({ editStart: range.start, removedText, insertedText: replacement });
+    }
+
+    if (editOps.length === 0) return 0;
+
+    this._undoStack.push({
+      edits: editOps,
+      cursorBefore,
+      selectionsBefore,
+    });
+    if (this._undoStack.length > Editor._MAX_HISTORY) {
+      this._undoStack.shift();
+    }
+    this._redoStack = [];
+    this._textVersion++;
+
+    // Move cursor to end of the last replacement (lowest in document — last in sorted order)
+    const lastRange = sorted[sorted.length - 1];
+    if (lastRange) {
+      const newCursor = this._advancePoint(lastRange.start, replacement, currentSnap);
+      this._cursor = currentSnap.clipPoint(newCursor, Bias.Left);
+      const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
+      this._selections = newSel ? [newSel] : [];
+    }
+
+    return editOps.length;
+  }
+
   /** Execute a command. */
   dispatch(command: EditorCommand): void {
     // Read-only mode: silently ignore all text-mutating commands.
