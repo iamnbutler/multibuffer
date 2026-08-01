@@ -37,8 +37,9 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 | Binding | Command | Notes |
 |---------|---------|-------|
 | _(text input)_ | `insertText` | Via `input` event (IME-compatible) |
-| `Enter` | `insertNewline` | |
-| `Tab` | `insertTab` | Inserts 2 spaces |
+| `Enter` | `insertNewline` | Auto-indents: new line inherits the current line's leading whitespace |
+| `Tab` | `insertTab` | Inserts 2 spaces; with a selection, indents every selected line instead |
+| `Shift+Tab` | `dedentLines` | Removes up to 2 leading spaces; no-op on an unindented line |
 | `Backspace` | `deleteBackward` | character |
 | `Opt+Backspace` | `deleteBackward` | word |
 | `Mod+Backspace` | `deleteBackward` | line (to start) |
@@ -56,6 +57,8 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 | `Opt+Shift+Down` | `duplicateLine down` | Duplicate line below cursor |
 | `Mod+Enter` | `insertLineBelow` | Insert blank line below, move cursor there |
 | `Mod+Shift+Enter` | `insertLineAbove` | Insert blank line above, move cursor there |
+| `Mod+]` | `indentLines` | Indents every line touched by the selection, or the cursor line when collapsed |
+| `Mod+[` | `dedentLines` | Dedents every line touched by the selection, or the cursor line when collapsed |
 
 ## Selection
 
@@ -84,8 +87,6 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 | `Mod+Y` | `redo` |
 
 ## Not Yet Implemented
-
-**Indentation** — `Tab` with selection (indent), `Shift+Tab` / `Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter.
 
 **Comment toggling** — `Mod+/` toggle line comment.
 
