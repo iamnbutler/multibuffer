@@ -397,6 +397,84 @@ describe("SearchController - resolveResults", () => {
     expect(visible.length).toBe(1);
     expect(visible[0]?.index).toBe(1);
   });
+
+  test("resolveResultsInViewport filters by row within a single excerpt", () => {
+    // A single excerpt spanning the whole document always overlaps the
+    // viewport, so excerpt-level filtering alone excludes nothing.
+    const lines: string[] = [];
+    for (let i = 0; i < 100; i++) {
+      lines.push(`foo line ${i}`);
+    }
+    const { search } = setup(lines.join("\n"));
+    search.find("foo");
+    expect(search.state.count).toBe(100);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(10 as MultiBufferRow, 15 as MultiBufferRow);
+
+    expect(visible.length).toBe(5);
+    expect(visible.map((v) => v.index)).toEqual([10, 11, 12, 13, 14]);
+    for (const v of visible) {
+      expect(v.start.row).toBeGreaterThanOrEqual(10);
+      expect(v.start.row).toBeLessThan(15);
+    }
+  });
+
+  test("resolveResultsInViewport excludes off-screen rows of an overlapping excerpt", () => {
+    // Excerpt spans rows 0-9 and overlaps the viewport, but only some of its
+    // rows are on screen.
+    const buf = createBuffer(createBufferId(), "foo\nfoo\nfoo\nfoo\nfoo");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 5));
+
+    const editor = new Editor(mb);
+    const search = new SearchController(editor);
+    search.find("foo");
+    expect(search.state.count).toBe(5);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(1 as MultiBufferRow, 3 as MultiBufferRow);
+
+    expect(visible.map((v) => v.index)).toEqual([1, 2]);
+  });
+
+  test("resolveResultsInViewport keeps a multi-line match that spans into the viewport", () => {
+    // The match starts above the viewport but is still partially on screen.
+    const { search } = setup("start\nmid\nend\naaa\nbbb");
+    search.find("start[\\s\\S]*end", { regex: true });
+    expect(search.state.count).toBe(1);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(2 as MultiBufferRow, 4 as MultiBufferRow);
+
+    expect(visible.length).toBe(1);
+    expect(visible[0]?.index).toBe(0);
+    expectPoint(visible[0]?.start ?? mbPoint(-1, -1), 0, 0);
+    expectPoint(visible[0]?.end ?? mbPoint(-1, -1), 2, 3);
+  });
+
+  test("resolveResultsInViewport excludes a match ending above the viewport", () => {
+    const { search } = setup("start\nmid\nend\naaa\nbbb");
+    search.find("start[\\s\\S]*end", { regex: true });
+    expect(search.state.count).toBe(1);
+
+    // Viewport begins after the match ends on row 2.
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(3 as MultiBufferRow, 5 as MultiBufferRow);
+
+    expect(visible.length).toBe(0);
+  });
+
+  test("resolveResultsInViewport returns nothing for a viewport past every match", () => {
+    const { search } = setup("foo\nbar\nfoo\nbaz");
+    search.find("foo");
+    expect(search.state.count).toBe(2);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(3 as MultiBufferRow, 4 as MultiBufferRow);
+
+    expect(visible.length).toBe(0);
+  });
 });
 
 // ─── Clear and Dispose ──────────────────────────────────────────────
