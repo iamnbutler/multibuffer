@@ -1,71 +1,63 @@
 # Editor Bindings
 
-Keyboard shortcuts mapped in `src/editor/input-handler.ts`. Mac uses Cmd as the primary modifier; Windows/Linux uses Ctrl (auto-detected via `navigator.platform`).
-
-## Notation
-
-| Symbol | Meaning |
-|--------|---------|
-| `Mod` | Cmd (Mac) / Ctrl (Win/Linux) |
-| `Opt` | Option (Mac) / Alt (Win/Linux) |
+Keyboard shortcuts mapped in `src/editor/input-handler.ts`. Below, `Mod` is Cmd on Mac and Ctrl on Windows/Linux, and `Opt` is Option / Alt; the platform is auto-detected via `navigator.platform`. Consumers can add or override bindings — including multi-key chords — via the `keymap` option on `InputHandler`; consumer bindings win over the defaults.
 
 ## Navigation
 
+Add `Shift+` to any navigation binding to extend the selection instead of moving.
+
 | Binding | Command | Granularity |
 |---------|---------|-------------|
-| `Left` | `moveCursor left` | character |
-| `Opt+Left` | `moveCursor left` | word |
-| `Mod+Left` | `moveCursor left` | line (start) |
-| `Home` | `moveCursor left` | line (start) |
-| `Mod+Home` | `moveCursor left` | buffer (start) |
-| `Right` | `moveCursor right` | character |
-| `Opt+Right` | `moveCursor right` | word |
-| `Mod+Right` | `moveCursor right` | line (end) |
-| `End` | `moveCursor right` | line (end) |
-| `Mod+End` | `moveCursor right` | buffer (end) |
-| `Up` | `moveCursor up` | character (1 row) |
-| `Mod+Up` | `moveCursor up` | buffer (start) |
-| `PageUp` | `moveCursor up` | page |
-| `Down` | `moveCursor down` | character (1 row) |
-| `Mod+Down` | `moveCursor down` | buffer (end) |
-| `PageDown` | `moveCursor down` | page |
-
-All navigation bindings support `Shift+` to extend the selection instead of moving.
+| `Left` / `Right` | `moveCursor` | character |
+| `Opt+Left` / `Opt+Right` | `moveCursor` | word |
+| `Mod+Left` / `Home` | `moveCursor left` | line (start) |
+| `Mod+Right` / `End` | `moveCursor right` | line (end) |
+| `Up` / `Down` | `moveCursor` | character (1 row) |
+| `Mod+Up` / `Mod+Home` | `moveCursor up` | buffer (start) |
+| `Mod+Down` / `Mod+End` | `moveCursor down` | buffer (end) |
+| `PageUp` / `PageDown` | `moveCursor` | page |
 
 ## Editing
 
 | Binding | Command | Notes |
 |---------|---------|-------|
 | _(text input)_ | `insertText` | Via `input` event (IME-compatible) |
-| `Enter` | `insertNewline` | |
-| `Tab` | `insertTab` | Inserts 2 spaces |
-| `Backspace` | `deleteBackward` | character |
-| `Opt+Backspace` | `deleteBackward` | word |
+| `Enter` | `insertNewline` | Plain newline — does not inherit indentation |
+| `Tab` | `insertTab` | Inserts 2 spaces (see Indentation for the selection case) |
+| `Backspace` / `Delete` | `deleteBackward` / `deleteForward` | character |
+| `Opt+Backspace` / `Opt+Delete` | `deleteBackward` / `deleteForward` | word |
 | `Mod+Backspace` | `deleteBackward` | line (to start) |
-| `Delete` | `deleteForward` | character |
-| `Opt+Delete` | `deleteForward` | word |
-| `Mod+Shift+K` | `deleteLine` | Deletes entire line |
+| `Mod+Shift+K` | `deleteLine` | |
+
+## Indentation
+
+Both commands act on every line touched by the selection — or the cursor line if collapsed — as a single undo step.
+
+| Binding | Command | Notes |
+|---------|---------|-------|
+| `Tab` _(with selection)_ / `Mod+]` | `indentLines` | Prepends 2 spaces per line |
+| `Shift+Tab` / `Mod+[` | `dedentLines` | Removes up to 2 leading spaces per line |
 
 ## Line Operations
 
 | Binding | Command | Notes |
 |---------|---------|-------|
-| `Opt+Up` | `moveLine up` | Swap line with line above |
-| `Opt+Down` | `moveLine down` | Swap line with line below |
-| `Opt+Shift+Up` | `duplicateLine up` | Duplicate line above cursor |
-| `Opt+Shift+Down` | `duplicateLine down` | Duplicate line below cursor |
-| `Mod+Enter` | `insertLineBelow` | Insert blank line below, move cursor there |
-| `Mod+Shift+Enter` | `insertLineAbove` | Insert blank line above, move cursor there |
+| `Opt+Up` / `Opt+Down` | `moveLine up` / `down` | Swap with the line above / below |
+| `Opt+Shift+Up` / `Opt+Shift+Down` | `duplicateLine up` / `down` | Copy above / below the cursor |
+| `Mod+Enter` | `insertLineBelow` | Blank line below, inherits current indent |
+| `Mod+Shift+Enter` | `insertLineAbove` | Blank line above, inherits current indent |
 
 ## Selection
 
-| Binding | Command | Notes |
-|---------|---------|-------|
-| `Mod+A` | `selectAll` | |
-| _Click_ | `setCursor` | Places cursor |
-| _Click+Drag_ | `extendSelectionTo` | Drag selection |
-| _Double-click_ | `selectWordAt` | Unicode-aware word selection |
-| _Triple-click_ | `selectLineAt` | Selects entire line |
+Double-click word selection is Unicode-aware.
+
+| Binding | Command |
+|---------|---------|
+| `Mod+A` | `selectAll` |
+| _Click_ | `setCursor` |
+| _Click+Drag_ | `extendSelectionTo` |
+| _Double-click_ | `selectWordAt` |
+| _Triple-click_ | `selectLineAt` |
 
 ## Clipboard
 
@@ -80,25 +72,26 @@ All navigation bindings support `Shift+` to extend the selection instead of movi
 | Binding | Command |
 |---------|---------|
 | `Mod+Z` | `undo` |
-| `Mod+Shift+Z` | `redo` |
-| `Mod+Y` | `redo` |
+| `Mod+Shift+Z` / `Mod+Y` | `redo` |
+
+## Implemented, No Default Binding
+
+These features work but ship unbound — wire them up through the `keymap` option.
+
+| Feature | API | Suggested bindings |
+|---------|-----|--------------------|
+| Find & replace | `SearchController` (`src/editor/search.ts`): `find`, `next`, `prev`, `replaceActive`, `replaceAll` | `Mod+F`, `Mod+G`/`F3`, `Mod+Shift+G`/`Shift+F3`, `Mod+H`, `Mod+Shift+H` |
+| Multi-cursor | `addCursor`, `addCursorAbove`, `addCursorBelow`, `clearExtraCursors` commands | `Opt+Click`, `Mod+Opt+Up`/`Mod+Opt+Down`, `Escape` |
 
 ## Not Yet Implemented
 
-**Indentation** — `Tab` with selection (indent), `Shift+Tab` / `Mod+[` (dedent), `Mod+]` (indent), auto-indent on Enter.
-
-**Comment toggling** — `Mod+/` toggle line comment.
-
-**Find & replace** — `Mod+F` (find), `Mod+G`/`F3` (next), `Mod+Shift+G`/`Shift+F3` (previous), `Mod+H` (replace), `Mod+Shift+H` (replace all).
-
-**Multi-cursor** — `Mod+D` (next occurrence), `Mod+Shift+L` (all occurrences), `Mod+Opt+Up/Down` (add cursor above/below), `Opt+Click` (add cursor at click), `Escape` (collapse to single cursor).
-
-**Bracket pairs** — Auto-close brackets/quotes; `Mod+Shift+\` jump to matching bracket.
-
-**macOS text system** — `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose).
-
-**Scroll** — `Mod+Opt+Up/Down` scroll viewport without moving cursor.
-
-**Text transformation** — `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase).
-
-**Selection expansion** — `Mod+Shift+Arrow` extend selection by word/line.
+| Feature | Planned bindings |
+|---------|------------------|
+| Auto-indent on `Enter` | — |
+| Comment toggling | `Mod+/` |
+| Select next / all occurrences | `Mod+D`, `Mod+Shift+L` |
+| Bracket pairs | Auto-close brackets/quotes; `Mod+Shift+\` jump to match |
+| macOS text system | `Ctrl+A` (line start), `Ctrl+E` (line end), `Ctrl+K` (kill to EOL), `Ctrl+Y` (yank), `Ctrl+O` (open line), `Ctrl+T` (transpose) |
+| Scroll without moving cursor | `Mod+Opt+Up` / `Mod+Opt+Down` |
+| Text transformation | `Mod+Shift+U` (uppercase), `Mod+Shift+L` (lowercase) |
+| Selection expansion by word/line | `Mod+Shift+Arrow` |
