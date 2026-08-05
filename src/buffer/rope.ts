@@ -610,7 +610,18 @@ export class Rope {
     }
 
     const line = linesBeforeChunk + lineInChunk;
-    const col = posInChunk - (lastNlPos + 1);
+    // With a newline before `offset` in this chunk, the line demonstrably starts
+    // here and the column is chunk-relative. Without one, the column is only
+    // chunk-relative if the chunk itself begins a line — otherwise a line longer
+    // than TARGET_CHUNK_SIZE has spilled into it and we must find its real start.
+    let col: number;
+    if (lastNlPos !== -1) {
+      col = posInChunk - (lastNlPos + 1);
+    } else if (this._chunkStartsLine(ci)) {
+      col = posInChunk;
+    } else {
+      col = offset - this._findLineStartOffset(line);
+    }
     return { line, col };
   }
 
@@ -619,25 +630,7 @@ export class Rope {
     if (line <= 0) return Math.min(col, this._length);
     if (line >= this.lineCount) return this._length;
 
-    // Binary search for the chunk containing this line
-    const ci = this._findChunkByLine(line);
-    const chunk = this._chunks[ci];
-    if (!chunk) return 0;
-
-    const chunkStart = this._chunkOffsets[ci] ?? 0;
-    const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
-    const targetLineInChunk = line - linesBeforeChunk;
-
-    // Skip targetLineInChunk newlines using indexOf: O(targetLineInChunk) native calls
-    // instead of O(chars_before_target_line) JS iterations.
-    let lineStart = 0;
-    for (let n = 0; n < targetLineInChunk; n++) {
-      const nlPos = chunk.text.indexOf("\n", lineStart);
-      if (nlPos === -1) break;
-      lineStart = nlPos + 1;
-    }
-
-    return chunkStart + lineStart + col;
+    return this._findLineStartOffset(line) + col;
   }
 
   /** Binary search: find chunk index containing the given UTF-16 code unit offset. */
@@ -670,24 +663,64 @@ export class Rope {
     return lo;
   }
 
-  /** Find the byte offset of the start of a given line. */
+  /**
+   * Find the UTF-16 code unit offset where a given line starts.
+   *
+   * Chunks normally break at newlines, so a chunk usually begins a line and its
+   * newline prefix sum says which one — that is the fast path. But a line longer
+   * than TARGET_CHUNK_SIZE has no newline to break at, so its continuation
+   * chunks begin mid-line and their prefix sums say nothing about where any line
+   * starts. In that case fall back to locating newline #(line-1) directly, since
+   * line `line` begins immediately after it.
+   */
   private _findLineStartOffset(line: number): number {
     if (line <= 0) return 0;
+
     const ci = this._findChunkByLine(line);
     const chunk = this._chunks[ci];
     if (!chunk) return 0;
 
-    const chunkStart = this._chunkOffsets[ci] ?? 0;
-    const linesBeforeChunk = this._chunkNewlinePrefixes[ci] ?? 0;
-    const targetLineInChunk = line - linesBeforeChunk;
+    if (this._chunkStartsLine(ci)) {
+      // Common case: this chunk begins line `_chunkNewlinePrefixes[ci]`, and
+      // line `line` starts inside it, so skip that many newlines from its start.
+      const target = line - (this._chunkNewlinePrefixes[ci] ?? 0);
+      let searchFrom = 0;
+      for (let n = 0; n < target; n++) {
+        const nlPos = chunk.text.indexOf("\n", searchFrom);
+        if (nlPos === -1) return this._length;
+        searchFrom = nlPos + 1;
+      }
+      return (this._chunkOffsets[ci] ?? 0) + searchFrom;
+    }
 
-    // Skip targetLineInChunk newlines using indexOf (same pattern as lineColToOffset).
+    // This chunk starts mid-line, so its newline prefix says nothing about where
+    // line `line` begins. Locate newline #(line-1) instead — line `line` starts
+    // immediately after it.
+    const nlCi = this._findChunkByLine(line - 1);
+    const nlChunk = this._chunks[nlCi];
+    if (!nlChunk) return 0;
+
+    const targetNl = line - 1 - (this._chunkNewlinePrefixes[nlCi] ?? 0);
     let searchFrom = 0;
-    for (let n = 0; n < targetLineInChunk; n++) {
-      const nlPos = chunk.text.indexOf("\n", searchFrom);
-      if (nlPos === -1) return chunkStart + chunk.text.length;
+    for (let n = 0; n <= targetNl; n++) {
+      const nlPos = nlChunk.text.indexOf("\n", searchFrom);
+      if (nlPos === -1) return this._length;
       searchFrom = nlPos + 1;
     }
-    return chunkStart + searchFrom;
+    return (this._chunkOffsets[nlCi] ?? 0) + searchFrom;
+  }
+
+  /**
+   * Whether chunk `ci` begins at the start of a line — true when the preceding
+   * non-empty chunk ends in a newline. O(1) apart from skipping empty chunks,
+   * which only `replace()` can produce.
+   */
+  private _chunkStartsLine(ci: number): boolean {
+    for (let i = ci - 1; i >= 0; i--) {
+      const text = this._chunks[i]?.text;
+      if (text === undefined || text.length === 0) continue;
+      return text.charCodeAt(text.length - 1) === 10;
+    }
+    return true;
   }
 }
