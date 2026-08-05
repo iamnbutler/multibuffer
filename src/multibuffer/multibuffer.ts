@@ -7,7 +7,7 @@
  */
 
 import { adjustOffset } from "../buffer/offset.ts";
-import { createExcerpt, toExcerptInfo } from "./excerpt.ts";
+import { createExcerpt, toExcerptInfo, withExcerptMetadata } from "./excerpt.ts";
 import { SlotMap } from "./slot_map.ts";
 import type {
   Anchor,
@@ -1080,15 +1080,9 @@ class MultiBufferImpl implements MultiBuffer {
     if (!oldExcerpt) return;
 
     // Shallow merge the patch into existing metadata.
-    // Use a struct spread instead of createExcerpt to avoid the O(n)
-    // computeExcerptSummary rope traversal — metadata updates are O(1).
-    const updatedExcerpt: Excerpt = {
-      ...oldExcerpt,
-      metadata: {
-        ...oldExcerpt.metadata,
-        ...patch,
-      },
-    };
+    // Rebuilds the excerpt's lazy textSummary accessor rather than spreading it,
+    // which would read it and force the O(n) traversal — metadata updates stay O(1).
+    const updatedExcerpt = withExcerptMetadata(oldExcerpt, patch);
     this._excerpts.set(excerptId, updatedExcerpt);
     this._markDirty();
   }
