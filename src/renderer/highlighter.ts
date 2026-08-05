@@ -13,6 +13,42 @@ import type {
 import type { LanguageQuery } from "./queries/types.ts";
 import { colorForNodeType } from "./theme.ts";
 
+/**
+ * Index of the first child of `node` that can still reach `targetRow` — the
+ * first child whose `endPosition.row` is at or after it.
+ *
+ * Tree-sitter siblings are in source order and non-overlapping, so their start
+ * and end rows are both non-decreasing. The children touching a given row are
+ * therefore a contiguous span, and its first element can be found by binary
+ * search. Callers pair this with a forward scan that stops at the first child
+ * starting after `targetRow`.
+ *
+ * This exists because `node.child(i)` is a WASM FFI call plus an allocation.
+ * Scanning every child only for the recursive call to reject it costs
+ * O(fanout) per level, which on flat files (generated code, data literals)
+ * makes a single viewport quadratic in document length.
+ *
+ * Only the traversal is shared: each collector's own head logic — code-block
+ * skipping, injection containers, styled parents — stays where it is.
+ */
+export function firstChildReachingRow(node: Node, targetRow: number): number {
+  let lo = 0;
+  let hi = node.childCount;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const child = node.child(mid);
+    // A null child has no position to order by, so treat it as a candidate and
+    // let the caller's existing guard decide. This keeps the binary search a
+    // pure narrowing of the scan: it can only ever start too early, never skip.
+    if (child && child.endPosition.row < targetRow) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
 export interface Token {
   startColumn: number;
   endColumn: number;
@@ -189,12 +225,15 @@ export class Highlighter implements SyntaxHighlighter {
       return;
     }
 
-    // Recurse into children
-    for (let i = 0; i < node.childCount; i++) {
+    // Recurse into the children touching targetRow. They are contiguous, so
+    // binary-search the first and stop at the last instead of materialising
+    // every child for the recursive call to reject (see firstChildReachingRow).
+    const childCount = node.childCount;
+    for (let i = firstChildReachingRow(node, targetRow); i < childCount; i++) {
       const child = node.child(i);
-      if (child) {
-        this._collectTokens(child, targetRow, tokens, colorToPropagate);
-      }
+      if (!child) continue;
+      if (child.startPosition.row > targetRow) break;
+      this._collectTokens(child, targetRow, tokens, colorToPropagate);
     }
   }
 }
