@@ -11,6 +11,7 @@ import type {
 } from "web-tree-sitter";
 import {
   applyTreeEdit,
+  firstChildReachingRow,
   type SyntaxHighlighter,
   type Token,
   type TreeEdit,
@@ -358,12 +359,13 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       return;
     }
 
-    // Recurse into children
-    for (let i = 0; i < node.childCount; i++) {
+    // Recurse into the children touching targetRow — a contiguous span.
+    const childCount = node.childCount;
+    for (let i = firstChildReachingRow(node, targetRow); i < childCount; i++) {
       const child = node.child(i);
-      if (child) {
-        this._collectTokens(child, targetRow, tokens, colorToPropagate);
-      }
+      if (!child) continue;
+      if (child.startPosition.row > targetRow) break;
+      this._collectTokens(child, targetRow, tokens, colorToPropagate);
     }
   }
 
@@ -456,18 +458,19 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       return;
     }
 
-    // Recurse into children
-    for (let i = 0; i < node.childCount; i++) {
+    // Recurse into the children touching targetRow — a contiguous span.
+    const childCount = node.childCount;
+    for (let i = firstChildReachingRow(node, targetRow); i < childCount; i++) {
       const child = node.child(i);
-      if (child) {
-        this._collectTokensWithInjectionSkip(
-          child,
-          targetRow,
-          tokens,
-          colorToPropagate,
-          injectionRanges,
-        );
-      }
+      if (!child) continue;
+      if (child.startPosition.row > targetRow) break;
+      this._collectTokensWithInjectionSkip(
+        child,
+        targetRow,
+        tokens,
+        colorToPropagate,
+        injectionRanges,
+      );
     }
   }
 }

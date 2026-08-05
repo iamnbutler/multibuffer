@@ -24,8 +24,48 @@ function generateLargeSource(lines: number): string {
   ).join("\n");
 }
 
+/**
+ * Generate nested TypeScript-like source.
+ *
+ * `generateLargeSource` emits flat top-level statements, i.e. maximum root
+ * fanout — a shape that overstates per-row `getLineTokens` cost relative to
+ * real code. Nested source is the honest case for the viewport benchmarks.
+ */
+function generateNestedSource(classes: number): string {
+  return Array.from(
+    { length: classes },
+    (_, i) => `class Widget${i} {
+  private items${i}: Map<string, number[]> = new Map();
+
+  add${i}(key: string, value: number): void {
+    if (!this.items${i}.has(key)) {
+      this.items${i}.set(key, []);
+    }
+    this.items${i}.get(key)?.push(value);
+  }
+
+  total${i}(): number {
+    let sum = 0;
+    for (const [, values] of this.items${i}) {
+      for (const v of values) {
+        sum += v > ${i} ? v : 0;
+      }
+    }
+    return sum;
+  }
+}`,
+  ).join("\n\n");
+}
+
 const largeSource1k = generateLargeSource(1000);
 const largeSource5k = generateLargeSource(5000);
+const nestedSource = generateNestedSource(60); // ~1.3K lines
+const flatSource4k = generateLargeSource(4000);
+
+/** Renderers call getLineTokens once per visible row; 50 is a typical viewport. */
+const VIEWPORT_ROWS = 50;
+const nestedMidRow = Math.floor(nestedSource.split("\n").length / 2);
+const flat4kMidRow = 2000;
 
 /**
  * Build symmetric forward (const→let) and reverse (let→const) edit descriptors
@@ -184,6 +224,45 @@ export const highlighterBenchmarks: BenchmarkSuite = {
       },
       fn: () => {
         highlighter.getLineTokens("tokens-1k", 500);
+      },
+    },
+
+    // ── getLineTokens across a whole viewport ───────────────────
+    // The single-row benchmark above measures one row of a *flat* fixture,
+    // which is both the cheapest shape to prune and an unrepresentative one.
+    // Renderers call getLineTokens once per visible row (dom.ts, canvas.ts,
+    // webgpu.ts), so per-viewport cost is what actually lands in a frame.
+    {
+      name: "getLineTokens - 50-row viewport of nested source (~1.3K lines)",
+      iterations: 200,
+      targetMs: 2,
+      setup: () => {
+        highlighter.parseBuffer("viewport-nested", nestedSource);
+      },
+      fn: () => {
+        let sink = 0;
+        for (let r = nestedMidRow; r < nestedMidRow + VIEWPORT_ROWS; r++) {
+          sink += highlighter.getLineTokens("viewport-nested", r).length;
+        }
+        if (sink < 0) throw new Error("unreachable");
+      },
+    },
+
+    // Flat/generated source is the degenerate shape: root fanout grows with
+    // document length, so this is where per-viewport cost scales with N.
+    {
+      name: "getLineTokens - 50-row viewport of flat 4K-line source",
+      iterations: 50,
+      targetMs: 5,
+      setup: () => {
+        highlighter.parseBuffer("viewport-flat4k", flatSource4k);
+      },
+      fn: () => {
+        let sink = 0;
+        for (let r = flat4kMidRow; r < flat4kMidRow + VIEWPORT_ROWS; r++) {
+          sink += highlighter.getLineTokens("viewport-flat4k", r).length;
+        }
+        if (sink < 0) throw new Error("unreachable");
       },
     },
   ],
