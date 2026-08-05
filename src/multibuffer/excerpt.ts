@@ -75,6 +75,36 @@ function computeExcerptSummary(
   };
 }
 
+/**
+ * Attach a lazily-computed, memoised `textSummary` to an excerpt's other fields.
+ *
+ * `computeExcerptSummary` walks every line in the range, and `createExcerpt` is
+ * called for every excerpt of a buffer on every edit (see
+ * `_refreshExcerptsForBuffer`), which puts that walk on the keystroke path.
+ *
+ * Deferring it is safe rather than merely cheaper: the summary is a pure
+ * function of the captured snapshot and range, both immutable, so the value a
+ * late reader gets is the same one an eager computation would have produced.
+ * There is no staleness window to reason about.
+ *
+ * `base` must not itself carry a `textSummary` accessor — spreading one would
+ * invoke it and defeat the deferral.
+ */
+function withLazyTextSummary(
+  base: Omit<Excerpt, "textSummary">,
+  buffer: BufferSnapshot,
+  range: ExcerptRange,
+): Excerpt {
+  let summary: TextSummary | undefined;
+  return {
+    ...base,
+    get textSummary(): TextSummary {
+      summary ??= computeExcerptSummary(buffer, range);
+      return summary;
+    },
+  };
+}
+
 /** Number of lines an excerpt occupies in the multibuffer view. */
 export function excerptLineCount(excerpt: Excerpt): number {
   const rangeLines =
@@ -101,16 +131,45 @@ export function createExcerpt(
     );
   }
 
-  return {
-    id,
-    bufferId: buffer.id,
+  return withLazyTextSummary(
+    {
+      id,
+      bufferId: buffer.id,
+      buffer,
+      range,
+      hasTrailingNewline,
+      editable,
+      metadata,
+    },
     buffer,
     range,
-    hasTrailingNewline,
-    editable,
-    textSummary: computeExcerptSummary(buffer, range),
-    metadata,
-  };
+  );
+}
+
+/**
+ * Return a copy of `excerpt` with `patch` shallow-merged into its metadata.
+ *
+ * Spreading an excerpt directly would read its `textSummary` accessor and force
+ * the traversal this module defers, so metadata updates rebuild the accessor
+ * instead. The snapshot and range are unchanged, so the summary is too.
+ */
+export function withExcerptMetadata(
+  excerpt: Excerpt,
+  patch: Partial<ExcerptMetadata>,
+): Excerpt {
+  return withLazyTextSummary(
+    {
+      id: excerpt.id,
+      bufferId: excerpt.bufferId,
+      buffer: excerpt.buffer,
+      range: excerpt.range,
+      hasTrailingNewline: excerpt.hasTrailingNewline,
+      editable: excerpt.editable,
+      metadata: { ...excerpt.metadata, ...patch },
+    },
+    excerpt.buffer,
+    excerpt.range,
+  );
 }
 
 /**
