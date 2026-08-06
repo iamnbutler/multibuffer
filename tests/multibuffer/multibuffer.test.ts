@@ -1046,10 +1046,12 @@ describe("MultiBuffer - Performance", () => {
     }
     const snap = mb.snapshot();
 
-    const { durationMs } = time(() => {
+    // Use benchmark() to get a stable average over multiple iterations
+    // rather than a single timing that may be skewed by JIT warm-up.
+    const result = benchmark(() => {
       snap.lines(mbRow(500), mbRow(550)); // 50 lines
-    });
-    expect(durationMs).toBeLessThan(1);
+    }, 100);
+    expect(result.avgMs).toBeLessThan(1);
   });
 
   test("anchor resolution is fast", () => {
