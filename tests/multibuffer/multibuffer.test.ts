@@ -1056,9 +1056,11 @@ describe("MultiBuffer - Performance", () => {
 
     // Use benchmark() to get a stable average over multiple iterations
     // rather than a single timing that may be skewed by JIT warm-up.
+    // Take the default iteration count: warmup is min(100, iterations / 10),
+    // so passing an explicit 100 would warm up only 10 times.
     const result = benchmark(() => {
       snap.lines(mbRow(500), mbRow(550)); // 50 lines
-    }, 100);
+    });
     expect(result.avgMs).toBeLessThan(1);
   });
 
