@@ -399,6 +399,58 @@ describe("SearchController - resolveResults", () => {
   });
 });
 
+// ─── Match Positions (line-offset mapping) ──────────────────────────
+
+describe("SearchController - match positions", () => {
+  test("resolves the row of every match in a many-line document", () => {
+    // A match on each line: an off-by-one in line-offset computation shifts rows.
+    const rows = 50;
+    const text = Array.from({ length: rows }, (_, i) => `line ${i} target`).join("\n");
+    const { search } = setup(text);
+
+    expect(search.find("target")).toBe(rows);
+
+    // "line " + i + " " => the column depends on the digit count of i
+    const resolved = search.resolveResults();
+    expect(resolved.map((r) => r?.start)).toEqual(
+      Array.from({ length: rows }, (_, i) => mbPoint(i, `line ${i} `.length)),
+    );
+  });
+
+  test("resolves positions across empty and varying-length lines", () => {
+    // Empty lines contribute a newline but no content - a classic off-by-one trap.
+    const { search } = setup("hit\n\n\nhit\nxxxxxxxxxx hit\n\nhit");
+    expect(search.find("hit")).toBe(4);
+
+    const resolved = search.resolveResults();
+    expect(resolved.map((r) => r?.start)).toEqual([
+      mbPoint(0, 0),
+      mbPoint(3, 0),
+      mbPoint(4, 11),
+      mbPoint(6, 0),
+    ]);
+  });
+
+  test("resolves a match on the final line with no trailing newline", () => {
+    const { search } = setup("alpha\nbeta\ngamma");
+    expect(search.find("gamma")).toBe(1);
+
+    const resolved = search.resolveResults();
+    expectPoint(resolved[0]?.start ?? mbPoint(-1, -1), 2, 0);
+    expectPoint(resolved[0]?.end ?? mbPoint(-1, -1), 2, 5);
+  });
+
+  test("resolves positions after lines containing astral-plane characters", () => {
+    // Emoji are 2 UTF-16 code units: line offsets are code-unit based, so a
+    // line-length-derived offset must agree with a scan of the joined text.
+    const { search } = setup("🎉🎉\nhit\n🎉 mid 🎉\nhit");
+    expect(search.find("hit")).toBe(2);
+
+    const resolved = search.resolveResults();
+    expect(resolved.map((r) => r?.start)).toEqual([mbPoint(1, 0), mbPoint(3, 0)]);
+  });
+});
+
 // ─── Clear and Dispose ──────────────────────────────────────────────
 
 describe("SearchController - Clear and Dispose", () => {

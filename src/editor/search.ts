@@ -390,7 +390,8 @@ export class SearchController {
   private _performSearch(): void {
     const snap = this._editor.multiBuffer.snapshot();
     const mb = this._editor.multiBuffer;
-    const fullText = this._getFullText(snap);
+    const lines = this._getLines(snap);
+    const fullText = lines.join("\n");
 
     if (!fullText || !this._query) {
       this._results = [];
@@ -399,7 +400,7 @@ export class SearchController {
     }
 
     const matches = this._findMatches(fullText);
-    const lineOffsets = this._computeLineOffsets(fullText);
+    const lineOffsets = this._computeLineOffsets(lines);
 
     const results: SearchResult[] = [];
     for (const match of matches) {
@@ -426,10 +427,9 @@ export class SearchController {
     this._activeIndex = results.length > 0 ? 0 : -1;
   }
 
-  private _getFullText(snap: MultiBufferSnapshot): string {
+  private _getLines(snap: MultiBufferSnapshot): readonly string[] {
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
-    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
-    return lines.join("\n");
+    return snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
   }
 
   private _findMatches(text: string): Array<{ start: number; end: number; text: string }> {
@@ -474,12 +474,21 @@ export class SearchController {
     return matches;
   }
 
-  private _computeLineOffsets(text: string): number[] {
+  /**
+   * Start offset of each row within `lines.join("\n")`.
+   *
+   * Derived from the line lengths rather than by scanning the joined text, so
+   * this costs O(rows) instead of O(characters) - the search re-runs on every
+   * text change, so this sits on the keypress path.
+   */
+  private _computeLineOffsets(lines: readonly string[]): number[] {
     const offsets: number[] = [0];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === "\n") {
-        offsets.push(i + 1);
-      }
+    let offset = 0;
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      if (line === undefined) break;
+      offset += line.length + 1; // +1 for the joining newline
+      offsets.push(offset);
     }
     return offsets;
   }
