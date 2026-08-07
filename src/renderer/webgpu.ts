@@ -1126,7 +1126,7 @@ export class WebGpuRenderer implements Renderer {
     container.appendChild(span);
     const width = span.getBoundingClientRect().width / 10;
     container.removeChild(span);
-    return width;
+    return width || 8; // Fallback to 8 if measurement fails
   }
 
   private _getLineText(row: MultiBufferRow): string {
