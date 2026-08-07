@@ -216,8 +216,12 @@ describe("MultiBuffer - Row Navigation", () => {
     const early = benchmark(() => snap.excerptAt(mbRow(50)), 1000);
     const late = benchmark(() => snap.excerptAt(mbRow(9950)), 1000);
 
-    // Binary search: late lookup should be within 3x of early
-    expect(late.avgMs).toBeLessThan(early.avgMs * 3 + 0.001);
+    // Binary search: late lookup should be within 3x of early.
+    // Compare minMs rather than avgMs: benchmark() times every iteration
+    // separately, so a single scheduler preemption lands wholly inside one
+    // sample and shifts the mean by more than the entire tolerance. The
+    // minimum is the intrinsic cost of the lookup.
+    expect(late.minMs).toBeLessThan(early.minMs * 3 + 0.001);
   });
 });
 
@@ -1035,7 +1039,11 @@ describe("MultiBuffer - Performance", () => {
     const early = benchmark(() => snap.excerptAt(mbRow(50)), 1000);
     const late = benchmark(() => snap.excerptAt(mbRow(9950)), 1000);
 
-    expect(late.avgMs).toBeLessThan(early.avgMs * 3 + 0.001);
+    // Compare minMs rather than avgMs: benchmark() times every iteration
+    // separately, so a single scheduler preemption lands wholly inside one
+    // sample and shifts the mean by more than the entire tolerance. The
+    // minimum is the intrinsic cost of the lookup.
+    expect(late.minMs).toBeLessThan(early.minMs * 3 + 0.001);
   });
 
   test("lines() fetches visible lines in <1ms", () => {
