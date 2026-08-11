@@ -18,6 +18,7 @@ import { type BenchmarkSuite, runBenchmarks } from "./harness.ts";
 import { highlighterBenchmarks } from "./highlighter.bench.ts";
 import { multibufferBenchmarks } from "./multibuffer.bench.ts";
 import { rendererBenchmarks } from "./renderer.bench.ts";
+import { searchBenchmarks } from "./search.bench.ts";
 import { tileMapBenchmarks } from "./tile-map.bench.ts";
 import { viewportBenchmarks } from "./viewport.bench.ts";
 import { wrapMapBenchmarks } from "./wrapmap.bench.ts";
@@ -32,6 +33,7 @@ const suites: BenchmarkSuite[] = [
   rendererBenchmarks,
   tileMapBenchmarks,
   editorBenchmarks,
+  searchBenchmarks,
   diffBenchmarks,
   diffControllerBenchmarks,
   highlighterBenchmarks,

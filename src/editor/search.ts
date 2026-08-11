@@ -390,7 +390,9 @@ export class SearchController {
   private _performSearch(): void {
     const snap = this._editor.multiBuffer.snapshot();
     const mb = this._editor.multiBuffer;
-    const fullText = this._getFullText(snap);
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
+    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
+    const fullText = lines.join("\n");
 
     if (!fullText || !this._query) {
       this._results = [];
@@ -399,7 +401,7 @@ export class SearchController {
     }
 
     const matches = this._findMatches(fullText);
-    const lineOffsets = this._computeLineOffsets(fullText);
+    const lineOffsets = this._computeLineOffsetsFromLines(lines);
 
     const results: SearchResult[] = [];
     for (const match of matches) {
@@ -424,12 +426,6 @@ export class SearchController {
 
     this._results = results;
     this._activeIndex = results.length > 0 ? 0 : -1;
-  }
-
-  private _getFullText(snap: MultiBufferSnapshot): string {
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row range
-    const lines = snap.lines(0 as MultiBufferRow, snap.lineCount as MultiBufferRow);
-    return lines.join("\n");
   }
 
   private _findMatches(text: string): Array<{ start: number; end: number; text: string }> {
@@ -474,12 +470,17 @@ export class SearchController {
     return matches;
   }
 
-  private _computeLineOffsets(text: string): number[] {
+  /**
+   * Compute character-start offsets for each line in `lines.join("\n")`.
+   * Runs in O(L) — one pass over line lengths — instead of the O(T) text scan
+   * that `_computeLineOffsets` used to do after the join, where T = total chars.
+   */
+  private _computeLineOffsetsFromLines(lines: readonly string[]): number[] {
     const offsets: number[] = [0];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === "\n") {
-        offsets.push(i + 1);
-      }
+    let offset = 0;
+    for (let i = 0; i < lines.length - 1; i++) {
+      offset += (lines[i] ?? "").length + 1; // +1 for the "\n" added by join()
+      offsets.push(offset);
     }
     return offsets;
   }
