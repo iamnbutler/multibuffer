@@ -475,7 +475,7 @@ export class SearchController {
    * Runs in O(L) — one pass over line lengths — instead of the O(T) text scan
    * that `_computeLineOffsets` used to do after the join, where T = total chars.
    */
-  private _computeLineOffsetsFromLines(lines: string[]): number[] {
+  private _computeLineOffsetsFromLines(lines: readonly string[]): number[] {
     const offsets: number[] = [0];
     let offset = 0;
     for (let i = 0; i < lines.length - 1; i++) {
