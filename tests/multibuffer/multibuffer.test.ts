@@ -1290,6 +1290,23 @@ describe("MultiBuffer - Snapshot version", () => {
     expect(v1).toBeGreaterThan(v0);
   });
 
+  test("version does not change when clearExcerpts has nothing to clear", () => {
+    const mb = createMultiBuffer();
+    const v0 = mb.snapshot().version;
+    mb.clearExcerpts();
+    expect(mb.snapshot().version).toBe(v0);
+  });
+
+  test("version does not change on a second, redundant clearExcerpts", () => {
+    const mb = createMultiBuffer();
+    const buf = createBuffer(createBufferId(), generateText(5));
+    mb.addExcerpt(buf, excerptRange(0, 5));
+    mb.clearExcerpts(); // real clear — bumps (asserted above)
+    const v0 = mb.snapshot().version;
+    mb.clearExcerpts(); // already empty — must be a no-op
+    expect(mb.snapshot().version).toBe(v0);
+  });
+
   test("version changes after setExcerpts", () => {
     const mb = createMultiBuffer();
     const buf1 = createBuffer(createBufferId(), generateText(5));

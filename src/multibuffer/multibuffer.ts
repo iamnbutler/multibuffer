@@ -782,6 +782,11 @@ class MultiBufferImpl implements MultiBuffer {
 
   clearExcerpts(): readonly ExcerptId[] {
     const oldIds = [...this._order];
+    // Nothing to clear — skip the version bump so callers that re-render on
+    // version change are not woken by a no-op. Mirrors the early return in
+    // addExcerpts(). Every path that populates _bufferToExcerpts also pushes
+    // to _order, so an empty _order means there is no reverse index to clear.
+    if (oldIds.length === 0) return oldIds;
     for (const id of oldIds) {
       this._excerpts.remove(id);
     }
