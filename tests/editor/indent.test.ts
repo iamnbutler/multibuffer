@@ -27,6 +27,23 @@ function setup(text: string): { mb: MultiBuffer; editor: Editor } {
   return { mb, editor };
 }
 
+/**
+ * Create an editor backed by three separate excerpts, each from its own buffer
+ * and each followed by a trailing newline.
+ *
+ * Layout for `["A", "B", "C"]` with 3 lines per excerpt:
+ *   rows 0-2 = A, row 3 = blank, rows 4-6 = B, row 7 = blank, rows 8-10 = C
+ */
+function setupThreeExcerpts(texts: readonly string[]): { mb: MultiBuffer; editor: Editor } {
+  const mb = createMultiBuffer();
+  for (const text of texts) {
+    const buf = createBuffer(createBufferId(), text);
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length), { hasTrailingNewline: true });
+  }
+  const editor = new Editor(mb);
+  return { mb, editor };
+}
+
 /** Read the full text content from the multibuffer snapshot. */
 function getText(mb: MultiBuffer): string {
   const snap = mb.snapshot();
@@ -238,5 +255,55 @@ describe("dedentLines", () => {
     editor.dispatch({ type: "addCursor", at: mbPoint(2, 3) });
     editor.dispatch({ type: "dedentLines" });
     expectPoint(editor.cursor, 2, 1);
+  });
+});
+
+// ─── Multi-excerpt regression ───────────────────────────────────────
+//
+// Spanning the rows between the outermost cursors is not merely an
+// over-indent when the span crosses excerpt boundaries: the single edit
+// rewrites the excerpt separators too, which inserts spurious blank rows
+// and detaches trailing content. These cases lock down the boundary.
+
+describe("indentLines/dedentLines across excerpts", () => {
+  test("one cursor per excerpt indents only those rows and preserves separators", () => {
+    const { mb, editor } = setupThreeExcerpts(["A0\nA1\nA2", "B0\nB1\nB2", "C0\nC1\nC2"]);
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(4, 0) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(8, 0) });
+    expect(editor.selections.length).toBe(3);
+
+    editor.dispatch({ type: "indentLines" });
+
+    // Only the three cursor rows gain indentation. Every separator row stays a
+    // single blank line and no rows are added.
+    expect(getText(mb)).toBe("  A0\nA1\nA2\n\n  B0\nB1\nB2\n\n  C0\nC1\nC2\n");
+    expect(editor.selections.length).toBe(3);
+  });
+
+  test("one cursor per excerpt dedents only those rows and preserves separators", () => {
+    const { mb, editor } = setupThreeExcerpts(["  A0\n  A1\nA2", "  B0\nB1\nB2", "  C0\nC1\nC2"]);
+    editor.setCursor(mbPoint(0, 2));
+    editor.dispatch({ type: "addCursor", at: mbPoint(4, 2) });
+    editor.dispatch({ type: "addCursor", at: mbPoint(8, 2) });
+    expect(editor.selections.length).toBe(3);
+
+    editor.dispatch({ type: "dedentLines" });
+
+    // Row 1 ("  A1") is indented but has no cursor, so it must keep its indent.
+    expect(getText(mb)).toBe("A0\n  A1\nA2\n\nB0\nB1\nB2\n\nC0\nC1\nC2\n");
+    expect(editor.selections.length).toBe(3);
+  });
+
+  test("adjacent cursors either side of an excerpt boundary do not merge excerpts", () => {
+    const { mb, editor } = setupThreeExcerpts(["A0\nA1\nA2", "B0\nB1\nB2"]);
+    // Row 2 is the last row of excerpt A; row 4 is the first row of excerpt B.
+    editor.setCursor(mbPoint(2, 0));
+    editor.dispatch({ type: "addCursor", at: mbPoint(4, 0) });
+
+    editor.dispatch({ type: "indentLines" });
+
+    // The blank separator at row 3 must survive un-indented and un-duplicated.
+    expect(getText(mb)).toBe("A0\nA1\n  A2\n\n  B0\nB1\nB2\n");
   });
 });
