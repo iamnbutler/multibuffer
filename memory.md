@@ -3,7 +3,7 @@
 ## CRITICAL: memory push size
 (1) push_repo_memory validator counts .git (~34KB) so it ALWAYS fails. IGNORE. (2) push job measures the GIT PATCH vs MAX_PATCH_SIZE=10240. REAL — silently ate the 2026-08-09 memory (#698).
 RULE: NEVER full-rewrite this file — use surgical Edit calls; git patches only changed lines (08-13: 5.2KB file, 5.9KB patch. 08-14: 7.4KB file, 6.5KB patch = 63% of cap). A full rewrite costs old+new bytes, so >5KB file = >10KB patch = LOST RUN.
-✅ 08-15: compacted old findings as planned. Keep doing this: squeeze the oldest finding to 1 line whenever adding a new one, and CHECK `git diff|wc -c` <10240 BEFORE finishing.
+✅ 08-15/16: compacted old findings as planned. Keep doing this: squeeze the oldest finding to 1 line whenever adding a new one, and CHECK `git diff|wc -c` <10240 BEFORE finishing.
 Maintainer fix: raise max-patch-size in daily-test-improver.md:61 (ceiling 100KB).
 
 ## Commands (revalidated 2026-08-12)
@@ -11,10 +11,10 @@ bun test 2265p/3skip/6todo/0fail (2274 in 76 files, ~3.1s); typecheck clean; lin
 lint: biome + no-type-assertion.grit -> use row()/mbRow() from tests/helpers.ts, never `n as BufferRow`.
 FLAKE still on main: "Buffer Performance > line access is O(1)". ALWAYS repeat runs before blaming a mutation. #611 fixes.
 
-## State 08-15
-main ce545ec (unmoved 146d); 0 PRs merged repo-wide since 08-01. Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690) reconfirmed 08-15, ZERO human comments ever (#690's 5 = all bot); no #667 checkbox ticked. #611 open. #373=maintainer's, lint-blocked.
-POSTURE: NO NEW PRs; findings -> #667 BODY. Did not comment anywhere 08-15 (mine already newest).
-⚠️ #667 body 55.8KB vs ~65.5KB cap = ~3 runs headroom. Sept rollover resets; else trim oldest Run History.
+## State 08-16
+main ce545ec (unmoved 147d); 0 PRs merged repo-wide since 08-01. Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690) reconfirmed 08-16, ZERO human comments ever (#690's 5 = all bot); no #667 checkbox ticked. #611 open. #373=maintainer's, lint-blocked.
+POSTURE: NO NEW PRs; findings -> #667 BODY. Did not comment anywhere 08-15/16 (mine already newest).
+✅ #667 body TRIMMED 08-16: condensed bugs #1/#2 to ~1.4KB each + folded Run History 08-01..06 into 1 block. 56.9KB -> 57.4KB even after adding a 5.9KB finding = ~8KB headroom. Repeat this recipe when it tightens again.
 Aug=#667 (Sept rollover 09-01). charset=#696. memory-fail=#698.
 
 ## Gotchas
@@ -26,6 +26,7 @@ MUTATION RECIPE: cp src to /tmp, python3 script patches it, run arms, restore, A
 API: snap.excerpts = ARRAY PROPERTY not fn; ExcerptInfo{startRow,endRow}.
 
 ## Findings (detail in #667)
+08-16 REAL SRC BUG #4 = WORST YET, DATA CORRUPTION (detail #667). _findChunkByLine returns LAST chunk w/ nlPrefix<=arg. SAFE for "chunk holding n-th newline" (line/lines/lineIterator - prefix[ci+1]>n so no overshoot). UNSAFE for "chunk where line L starts" (lineColToOffset :623, _findLineStartOffset :676): 0-newline chunks keep same prefix -> walks past them. Needs line >=1024 units starting ON a chunk boundary. 2nd indep defect: offsetToLineCol :613 col=posInChunk-(lastNlPos+1); lastNlPos==-1 => col measured from CHUNK start -> col resets to 0 each boundary; 1029/2062 offsets wrong. E2E: mb.edit(mbPoint(1,0),..,"INSERTED") on `before\n+x*2048+\nafter` lands at 1031 not 7 = SPLICES INTO MIDDLE OF LINE. Also Buffer.pointToOffset/offsetToPoint, createAnchor. FIX VERIFIED: _findLineStartOffset uses _findChunkByLine(line-1)+scan to that nl; lineColToOffset = that+col; offsetToLineCol falls back to it when lastNlPos==-1 BUT guard O(1) first (prev chunk ends in \n => col=posInChunk) else +8% perf. 41i/44d net -3. 0 fail/460898 oracle asserts, 39 docs (232773 fail without); 2265p; tc+lint clean; perf +3.3/+3.9% (~7-10ns) A/B both arm orders. 3 regression tests fail-without/pass-with. WHY MISSED: 4 round-trip tests on this exact pair (rope.property :135/:160, rope.fuzz :250/:288, unicode.fuzz :372) ALL cap at 50-100 chars = always 1 chunk. rope.test.ts:74 builds the EXACT trigger string but asserts only line(0/1/2) = the SAFE family.
 08-15 REAL SRC BUG #3 (rope bytes, detail #667): textToChunks (rope.ts:42) cuts at exactly 1024 units (backs to newline only if one in range) -> splits surrogate pair; byteLength (:130) scans each chunk alone -> 4+3=7 not 4. Repro "a"*1023+emoji+"b"*100 = 1130 vs TextEncoder 1127. ONLY .bytes wrong. Sweep 1020-26: only 1023. Needs >=1024 units NO newline (so 300 rand fuzz caught 0). computeExcerptSummary fast path :51 vs slow :61 DISAGREE on identical text. FIX 4 lines in textToChunks (end<len && charCodeAt(end-1) in D800-DBFF -> end--), covers all 4 ctor sites. VERIFIED 2267p + typecheck + lint; 700-assert harness 0 fail w/ guard, 4 without; 2 regression tests both dirs. WHY MISSED: 3 multi-chunk tests all PURE ASCII; all bytes asserts <=15B single-chunk; byteLength has NO direct test.
 08-14 REAL SRC BUG #2 (cursor): cursor.ts:136 up-branch resolves at FIRST visual row; ascending must use LAST. Down :121 first = CORRECT -> branches being IDENTICAL is the tell. Only bites when dest soft-wraps. FIX 2 lines (first + visualRowsForLine - 1) VERIFIED green. Reachable editor.ts:973/:1033. Detail #667.
 08-14 wrapLineCount (wrap-map.ts:183) = dead code, 1 occurrence (its def). Low prio.
@@ -33,14 +34,15 @@ API: snap.excerpts = ARRAY PROPERTY not fn; ExcerptInfo{startRow,endRow}.
 08-13 mergeExcerptRanges (excerpt.ts:144, ~44 LOC public API) = ZERO prod call sites, tests-only. Don't invest.
 08-12 SLOTMAP: set() has ZERO test call sites (set0 vs insert36/remove17/get15). Deleting gen guard (slot_map.ts:100) survives all 2274. Repro: insert A, remove, insert B, set(staleA) -> clean false/"B", mutant true/"CLOBBERED". Prod: multibuffer.ts:697/733/829/891. FIX=4-line twin of :131; VERIFIED. Other guards: remove-gen-bump 10, no-recycle 3, keysCompare 2, get/has/clear 1 each (get+has = SAME test :77).
 08-12 DISPROVEN: offset.ts SOLID 6/6 caught. DO NOT RE-AUDIT.
-08-11 REACT: 5 severe mutations to use-diff-view.ts survive all tests+typecheck (incl. old/newText swap => diffs BACKWARDS). react.test.ts=16 tests: 4 export checks, 12 tautologies, 845 LOC undefended. react-dom sole blocker. RETRACTED item 14 (no zero-dep path).
+08-11 REACT: 5 severe mutations to use-diff-view.ts survive all tests+tc (incl old/newText swap=>diffs BACKWARDS). 16 tests defend 0 of 845 LOC. react-dom sole blocker; item 14 RETRACTED (no zero-dep path).
 #696 charset: fc.string()=printable ASCII, no \n -> rope/buffer fuzz line props run single-line. Fix verified.
 multibuffer.fuzz Prop1 oracle self-referential (1-line fix verified). Prop4 vacuous: 0/6 mutants, proposed oracle 6/6; M5 (`>=`->`>` at multibuffer.ts:545) SURVIVES ALL TESTS = real off-by-one; test query (5,15)->(5,20) closes it.
 Timing flakes: 3 causes solved (#667 items 12/15). outlier-driven -> min/median right; stable-gap (~6x) -> widening right. Never blanket-policy.
 DISPROVEN: "delete the *.property.test.ts files" — rope.property is the only generated multi-line rope coverage.
 
-next (if posture lifts): 3 SRC fixes+tests all verified (rope bytes/cursor up/search order, need maintainer OK), slot_map set() test (ready), #696 impl, excerptBoundaries (5,15)->(5,20).
-AUDIT LESSONS: (1) comparators over IDENTITY fields where POSITION meant. (2) TWO FEATURES w/ solid describe blocks that NEVER INTERSECT — grep both markers co-occurring in one test body. Found 08-14 AND 08-15 bugs this way. (3) mirror-image branches (up/down) textually IDENTICAL = suspect. (4) SIZE THRESHOLDS (chunk/page/tier): does any test cross it with INTERESTING content? "x".repeat(2048) hits multi-chunk but nothing a boundary can cut. (5) docstring "equivalent to X but faster" => diff vs X on adversarial input.
-Audited+clean: offset.ts(6/6), keysCompare, replaceAll:301, wrap-map pure fns, rope byteLength.
-UNAUDITED: rope line/lines/slice multi-chunk boundaries, cursor moveWord/movePage (movePage ignores wrapping - may be intended), WrapMap lazy/_segCharStart.
+next (if posture lifts): 4 SRC fixes+tests all verified (lineColToOffset/rope bytes/cursor up/search order — ALL need maintainer OK; #4 is the one to push, it corrupts data), slot_map set() test (ready), #696 impl (add SIZE dim not just charset), excerptBoundaries (5,15)->(5,20).
+AUDIT LESSONS: (1) comparators over IDENTITY fields where POSITION meant. (2) TWO FEATURES w/ solid describe blocks that NEVER INTERSECT — grep both markers co-occurring in one test body. Found 08-14 + 08-15 bugs. (3) mirror-image branches (up/down) textually IDENTICAL = suspect. (4) SIZE THRESHOLDS (chunk/page/tier): does any test cross it with INTERESTING content? "x".repeat(2048) hits multi-chunk but nothing a boundary can cut; also CHECK GENERATOR MAX SIZE vs the threshold (all repo generators cap at 100 vs 1024 chunk = whole class unreachable). (5) docstring "equivalent to X but faster" => diff vs X on adversarial input. (6) ONE PRIVATE HELPER, SEVERAL CALLERS: read its postcondition once, check each caller's question against it — correct for its documented query, silently wrong for a neighbouring one. Found 08-16.
+METHOD (4 src bugs in 4 runs): take an UNAUDITED item, write a from-scratch ABSOLUTE oracle over adversarial shapes, sweep EVERY offset/row. A/B perf in ONE process (import baseline copy as 2nd module from repo root), swap arm order to rule out JIT artifacts.
+Audited+clean: offset.ts(6/6), keysCompare, replaceAll:301, wrap-map pure fns, rope byteLength, rope line/lines/slice/text multi-chunk (all correct — verified vs oracle 08-16).
+UNAUDITED: cursor moveWord/movePage (movePage ignores wrapping - may be intended), WrapMap lazy/_segCharStart, rope insert/delete/replace chunk-boundary rebuild, tile-map.
 NOTE: probes must live in REPO ROOT (bun can't resolve ./src from /tmp); rm + git checkout after.
