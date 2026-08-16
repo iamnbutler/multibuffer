@@ -39,8 +39,8 @@ import type {
  *   console.log(entry.path);
  * }
  *
- * // Lazy expand directories
- * for await (const entry of tree.children('/')) {
+ * // Lazy expand directories ('' or '.' is the root; '/' is outside it)
+ * for await (const entry of tree.children('')) {
  *   if (entry.type === 'directory') {
  *     // Only expanded when iterated
  *     for await (const child of entry.children()) {
@@ -107,6 +107,14 @@ class ProjectTreeImpl implements ProjectTree {
       return undefined;
     }
 
+    // Cheapest depth rejection first: nothing of either type is visible
+    // deeper than the file rule allows, so we can answer without touching
+    // the filesystem. Directories are re-checked below, once we know the
+    // entry is one (the rule is stricter for them).
+    if (!this.withinMaxDepth(relativePath, false)) {
+      return undefined;
+    }
+
     try {
       // Check if it exists by trying to stat or readdir
       if (this.adapter.stat) {
@@ -115,6 +123,9 @@ class ProjectTreeImpl implements ProjectTree {
         try {
           await this.adapter.readdir(absolutePath);
           // It's a directory
+          if (!this.withinMaxDepth(relativePath, true)) {
+            return undefined;
+          }
           return this.createDirectoryEntry(
             absolutePath,
             relativePath,
@@ -138,6 +149,9 @@ class ProjectTreeImpl implements ProjectTree {
       // Without stat, try readdir to check if it's a directory
       try {
         await this.adapter.readdir(absolutePath);
+        if (!this.withinMaxDepth(relativePath, true)) {
+          return undefined;
+        }
         return this.createDirectoryEntry(
           absolutePath,
           relativePath,
@@ -204,6 +218,14 @@ class ProjectTreeImpl implements ProjectTree {
     relativePath: string,
     depth: number,
   ): AsyncIterable<ProjectEntry> {
+    // Check depth limit. `entries()` enforces this in walkDirectory before it
+    // recurses, but `children()` and the lazy `entry.children()` enter at a
+    // caller-supplied path at arbitrary depth, so the rule has to hold here
+    // too or they hand out entries that `entries()` refuses.
+    if (this.maxDepth !== undefined && depth > this.maxDepth) {
+      return;
+    }
+
     // Check if directory should be traversed
     if (
       relativePath !== "" &&
@@ -295,6 +317,29 @@ class ProjectTreeImpl implements ProjectTree {
         );
       }
     }
+  }
+
+  /**
+   * Check whether an entry at this relative path is inside the depth budget.
+   *
+   * Mirrors the rule `entries()` already produces, which is asymmetric: a
+   * directory is only listed when traversal would descend into it, while the
+   * files it contains are listed one level deeper. Root-level directories are
+   * always listed so `maxDepth: 0` still gives a "root only" view, and the
+   * root itself always resolves — it is the view, not a member of it.
+   */
+  private withinMaxDepth(relativePath: string, isDirectory: boolean): boolean {
+    if (this.maxDepth === undefined) {
+      return true;
+    }
+    if (relativePath === "") {
+      return true;
+    }
+    const depth = relativePath.split("/").length;
+    if (!isDirectory) {
+      return depth <= this.maxDepth + 1;
+    }
+    return depth <= this.maxDepth || (depth === 1 && this.maxDepth >= 0);
   }
 
   /**

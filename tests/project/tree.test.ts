@@ -404,6 +404,104 @@ describe("createProjectTree", () => {
       expect(paths).toContain("file.ts");
       expect(paths).not.toContain("src/index.ts");
     });
+
+    /**
+     * `maxDepth` bounds the view, not just `entries()`. Every accessor has to
+     * agree about what is in that view, otherwise `has()` reports paths that
+     * no traversal can reach and `children()` hands out entries `entries()`
+     * refuses.
+     */
+    describe("maxDepth applies to every accessor, not just entries()", () => {
+      const deepFs = {
+        "/root": { type: "directory" },
+        "/root/top.ts": { type: "file" },
+        "/root/a": { type: "directory" },
+        "/root/a/shallow.ts": { type: "file" },
+        "/root/a/b": { type: "directory" },
+        "/root/a/b/mid.ts": { type: "file" },
+        "/root/a/b/c": { type: "directory" },
+        "/root/a/b/c/deep.ts": { type: "file" },
+      } as const;
+
+      test("get/has refuse files below the depth budget", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 1 });
+
+        // Inside the budget — entries() yields these.
+        expect(await tree.has("top.ts")).toBe(true);
+        expect(await tree.has("a/shallow.ts")).toBe(true);
+
+        // Below it — entries() never yields these.
+        expect(await tree.has("a/b/mid.ts")).toBe(false);
+        expect(await tree.has("a/b/c/deep.ts")).toBe(false);
+        expect(await tree.get("a/b/mid.ts")).toBeUndefined();
+      });
+
+      test("get/has apply the stricter directory rule", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 1 });
+
+        // A file one level below a listed directory is still listed, but the
+        // directory at that same depth is not — the asymmetry entries() has.
+        expect(await tree.has("a/shallow.ts")).toBe(true);
+        expect(await tree.has("a/b")).toBe(false);
+      });
+
+      test("root-level directories and the root itself still resolve at maxDepth 0", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 0 });
+
+        // "root only" view: top-level entries of both kinds are still visible.
+        expect(await tree.has("a")).toBe(true);
+        expect(await tree.has("top.ts")).toBe(true);
+        expect((await tree.get(""))?.type).toBe("directory");
+
+        expect(await tree.has("a/shallow.ts")).toBe(false);
+      });
+
+      test("children() does not yield files below the depth budget", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 0 });
+
+        // maxDepth 0 lists "a" but nothing inside it.
+        expect(await collectPaths(tree.children(""))).toEqual(["a", "top.ts"]);
+        expect(await collectPaths(tree.children("a"))).toEqual([]);
+      });
+
+      test("children() on a directory below the budget yields nothing", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 1 });
+
+        // "a/b" is not in the view, so nothing under it can be either.
+        expect(await tree.has("a/b")).toBe(false);
+        expect(await collectPaths(tree.children("a/b"))).toEqual([]);
+        expect(await collectPaths(tree.children("a/b/c"))).toEqual([]);
+      });
+
+      test("the lazy children() on a yielded directory obeys the budget", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter, maxDepth: 1 });
+
+        const entries = await collectEntries(tree.entries());
+        const dir = entries.find((e) => e.relativePath === "a");
+        expect(dir?.type).toBe("directory");
+        if (dir?.type !== "directory") return;
+
+        // Files one level down are in the view; the directory beside them is not.
+        expect(await collectPaths(dir.children())).toEqual(["a/shallow.ts"]);
+      });
+
+      test("unbounded trees are unaffected", async () => {
+        const adapter = createMemoryFsAdapter(deepFs);
+        const tree = createProjectTree("/root", { adapter });
+
+        expect(await tree.has("a/b/c/deep.ts")).toBe(true);
+        expect(await tree.has("a/b/c")).toBe(true);
+        expect(await collectPaths(tree.children("a/b/c"))).toEqual([
+          "a/b/c/deep.ts",
+        ]);
+      });
+    });
   });
 
   describe("entry properties", () => {
