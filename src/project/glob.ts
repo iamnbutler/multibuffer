@@ -266,11 +266,26 @@ export function shouldTraverseDirectory(
     if (matcher(pattern, dirPath)) {
       return false;
     }
-    // Check if pattern is just a directory name (like "node_modules")
-    if (!pattern.includes("/") && !pattern.includes("*")) {
-      // Simple name pattern - check if it matches the last component
-      const dirName = dirPath.split("/").pop() ?? dirPath;
-      if (dirName === pattern) {
+    // Literal (non-glob) patterns name a directory, so they exclude that
+    // directory *and everything under it*. Checking only the directory itself
+    // is not enough: children() and get() take a caller-supplied path, so they
+    // can be pointed straight at "node_modules/pkg" without ever traversing
+    // "node_modules" and being turned away there.
+    if (
+      !pattern.includes("*") &&
+      !pattern.includes("?") &&
+      !pattern.includes("[")
+    ) {
+      if (pattern.includes("/")) {
+        // Multi-component pattern (like "src/generated"): match the path
+        // itself or any descendant of it.
+        if (dirPath === pattern || dirPath.startsWith(`${pattern}/`)) {
+          return false;
+        }
+      } else if (dirPath.split("/").includes(pattern)) {
+        // Simple name pattern (like "node_modules"): match the name at any
+        // depth, and everything beneath it. Splitting on "/" keeps this on
+        // path boundaries, so "node_modules_old" is not excluded.
         return false;
       }
     }

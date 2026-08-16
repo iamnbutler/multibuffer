@@ -223,6 +223,36 @@ describe("shouldTraverseDirectory", () => {
     expect(shouldTraverseDirectory("deep/nested", ["**/*.ts"], [])).toBe(true);
   });
 
+  test("skip directories nested inside an excluded directory", () => {
+    expect(
+      shouldTraverseDirectory("node_modules/pkg", [], ["node_modules"]),
+    ).toBe(false);
+    expect(
+      shouldTraverseDirectory("node_modules/pkg/sub", [], ["node_modules"]),
+    ).toBe(false);
+    // Multi-component exclude patterns exclude their descendants too.
+    expect(
+      shouldTraverseDirectory("src/generated/deep", [], ["src/generated"]),
+    ).toBe(false);
+  });
+
+  test("a nested directory matching an excluded name is still skipped", () => {
+    expect(
+      shouldTraverseDirectory("src/node_modules", [], ["node_modules"]),
+    ).toBe(false);
+    // ...along with everything beneath it.
+    expect(
+      shouldTraverseDirectory("src/node_modules/inner", [], ["node_modules"]),
+    ).toBe(false);
+  });
+
+  test("non-boundary prefixes are not treated as excluded ancestors", () => {
+    expect(
+      shouldTraverseDirectory("node_modules_old", [], ["node_modules"]),
+    ).toBe(true);
+    expect(shouldTraverseDirectory("distribution", [], ["dist"])).toBe(true);
+  });
+
   test("excluded directory takes precedence", () => {
     expect(
       shouldTraverseDirectory("node_modules", ["**/*.ts"], ["node_modules"]),

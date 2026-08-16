@@ -177,6 +177,74 @@ describe("createProjectTree", () => {
       expect(paths).not.toContain("node_modules/pkg");
     });
 
+    test("children() does not descend into an excluded directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+        "/root/node_modules": { type: "directory" },
+        "/root/node_modules/pkg": { type: "directory" },
+        "/root/node_modules/pkg/sub": { type: "directory" },
+        "/root/node_modules/pkg/index.js": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        exclude: ["node_modules"],
+      });
+
+      // children() takes a caller-supplied path, so it can be pointed at a
+      // directory nested inside an excluded one without ever traversing the
+      // excluded directory itself. It must refuse, as entries() does.
+      expect(await collectPaths(tree.children("node_modules"))).toEqual([]);
+      expect(await collectPaths(tree.children("node_modules/pkg"))).toEqual([]);
+    });
+
+    test("children() does not descend into a nested excluded directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+        "/root/src/node_modules": { type: "directory" },
+        "/root/src/node_modules/inner": { type: "directory" },
+        "/root/src/node_modules/inner/x.js": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        exclude: ["node_modules"],
+      });
+
+      // entries() refuses everything under src/node_modules, so children()
+      // must refuse it too — at any depth, not just at the excluded directory.
+      expect(await collectPaths(tree.entries())).toEqual(["src", "src/index.ts"]);
+      expect(await collectPaths(tree.children("src/node_modules"))).toEqual([]);
+      expect(
+        await collectPaths(tree.children("src/node_modules/inner")),
+      ).toEqual([]);
+    });
+
+    test("children() agrees with get() inside an excluded directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/node_modules": { type: "directory" },
+        "/root/node_modules/pkg": { type: "directory" },
+        "/root/node_modules/pkg/sub": { type: "directory" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        exclude: ["node_modules"],
+      });
+
+      // get() reports the nested directory as absent, so children() must not
+      // hand one out.
+      expect(await tree.get("node_modules/pkg/sub")).toBeUndefined();
+      expect(await collectPaths(tree.children("node_modules/pkg"))).not.toContain(
+        "node_modules/pkg/sub",
+      );
+    });
+
     test("excludes files by pattern", async () => {
       const adapter = createMemoryFsAdapter({
         "/root": { type: "directory" },
