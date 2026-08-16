@@ -548,3 +548,70 @@ describe("Cursor - Visual Row Movement Across Excerpt Headers (issue #89)", () =
     expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "up", "character", wrapMap), 1, 0);
   });
 });
+
+describe("Cursor - Visual Row Movement Across Excerpt Headers With Wrapping", () => {
+  // A header skip must still move exactly one *visual* row. When the row on the
+  // far side of the header soft-wraps, "up" has to land on its last segment —
+  // the segment visually adjacent to the header — not its first.
+  //
+  // Excerpt 1: "a", "b", 20-char line → rows 0, 1, 2 (row 2 wraps into 2
+  // segments at wrapWidth 10) + row 3 (header). Excerpt 2: rows 4, 5, 6.
+  const WRAPPED = "LONGLINEAAAABBBBCCCC"; // 20 chars → segments [0..10), [10..20)
+
+  function setupWrappedBeforeHeader() {
+    const buf1 = createBuffer(createBufferId(), `a\nb\n${WRAPPED}`);
+    const buf2 = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    return mb;
+  }
+
+  test("moveCursorVisual up across header lands on the last segment of a wrapped row", () => {
+    const snap = setupWrappedBeforeHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+    // Row 2's second segment starts at column 10. Up from (4,0) skips the
+    // header and must land there, not at column 0 two visual rows higher.
+    expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "up", "character", wrapMap), 2, 10);
+  });
+
+  test("moveCursorVisual up across header preserves the visual column", () => {
+    const snap = setupWrappedBeforeHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+    expectPoint(moveCursorVisual(snap, mbPoint(4, 1), "up", "character", wrapMap), 2, 11);
+  });
+
+  test("down then up across a header returns to the starting position", () => {
+    const snap = setupWrappedBeforeHeader().snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+    const start = mbPoint(2, 10); // start of row 2's last segment
+    const down = moveCursorVisual(snap, start, "down", "character", wrapMap);
+    expectPoint(down, 4, 0);
+    expectPoint(moveCursorVisual(snap, down, "up", "character", wrapMap), 2, 10);
+  });
+
+  test("moveCursorVisual up across a header with three segments lands on the third", () => {
+    const buf1 = createBuffer(createBufferId(), `a\nb\n${WRAPPED}DDDDEEEE`); // 28 chars → 3 segments
+    const buf2 = createBuffer(createBufferId(), "x\ny\nz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    const snap = mb.snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+    // Segments start at 0, 10, 20 — up must reach the third.
+    expectPoint(moveCursorVisual(snap, mbPoint(4, 0), "up", "character", wrapMap), 2, 20);
+  });
+
+  test("moveCursorVisual down across a header still lands on the first segment", () => {
+    // Guard against over-correcting: approached from above, the first segment of
+    // the next excerpt's opening row is the visually adjacent one.
+    const buf1 = createBuffer(createBufferId(), "a\nb\nc");
+    const buf2 = createBuffer(createBufferId(), `${WRAPPED}\ny\nz`);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    const snap = mb.snapshot();
+    const wrapMap = new WrapMap(snap, 10);
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 0), "down", "character", wrapMap), 4, 0);
+  });
+});

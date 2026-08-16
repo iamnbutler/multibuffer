@@ -132,9 +132,14 @@ function moveVisualRow(
   // Skip trailing newline rows (excerpt headers) just like moveCharacter does
   const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "up", lineCount);
   if (skippedRow !== target.row) {
-    // Re-resolve on the skipped-to row so visualColInSegment is applied correctly
+    // Re-resolve on the skipped-to row so visualColInSegment is applied correctly.
+    // Moving up must land on that row's *last* visual segment — the one visually
+    // adjacent to the separator we just skipped — not its first. Only the "down"
+    // branch above wants the first segment, because it approaches from above.
     const skippedFirstVisualRow = wrapMap.bufferRowToFirstVisualRow(skippedRow);
-    return resolveTargetVisualRow(snapshot, wrapMap, skippedFirstVisualRow, visualColInSegment, lineCount);
+    const skippedLastVisualRow =
+      skippedFirstVisualRow + wrapMap.visualRowsForLine(skippedRow) - 1;
+    return resolveTargetVisualRow(snapshot, wrapMap, skippedLastVisualRow, visualColInSegment, lineCount);
   }
   return target;
 }
