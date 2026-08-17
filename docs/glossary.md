@@ -76,6 +76,12 @@ An immutable snapshot of a buffer's state at a point in time. Snapshots support 
 
 ## C
 
+### CanvasRenderer
+
+A [Renderer](#renderer) implementation that draws text onto a `<canvas>` element through the 2D context, as an alternative to the DOM renderer. It handles its own scrolling, [hit testing](#hit-test), and mouse events, and uses a [GlyphAtlas](#glyphatlas) to cache rendered characters. The [WrapMap](#wrapmap) is built lazily so large documents stay responsive. Created via `createCanvasRenderer()`.
+
+See: `src/renderer/canvas.ts`
+
 ### Clipping
 
 The operation of clamping an out-of-bounds point or offset to the nearest valid position within a buffer or multibuffer. Clipping respects [bias](#bias): `Bias.Right` keeps the position at the end of a line rather than beyond it; `Bias.Left` keeps it before the boundary.
@@ -206,11 +212,27 @@ The specification for creating an excerpt. Contains:
 
 ---
 
+## F
+
+### FsAdapter
+
+The filesystem abstraction behind [ProjectTree](#projecttree), which decouples project discovery from any particular runtime. It requires a single `readdir(path)` method returning directory entries, plus an optional `stat(path)` for size and modification time. Bun and Node use the built-in `createFsAdapter()`; a browser can implement it over the File System Access API or a virtual filesystem, and tests use `createMemoryFsAdapter()` with an in-memory tree.
+
+See: `src/project/types.ts`, `src/project/adapter.ts`
+
+---
+
 ## G
 
 ### Generational Arena
 
 The data structure underlying [SlotMap](#slotmap). Each slot carries a generation counter that increments on reuse, making stale keys detectable in O(1) without call-site bookkeeping.
+
+### GlyphAtlas
+
+A texture cache of pre-rendered character bitmaps shared by the [CanvasRenderer](#canvasrenderer) and [WebGpuRenderer](#webgpurenderer). Glyphs are packed into a single growable `OffscreenCanvas` (bounded by `maxSize`), so drawing a line becomes a series of blits from the atlas rather than per-character text rasterization. Printable ASCII is pre-populated and other characters are added on demand. A `version` counter and dirty flag let the GPU texture be re-uploaded only when the atlas actually changes. Created via `createGlyphAtlas()`.
+
+See: `src/renderer/glyph-atlas.ts`
 
 ### Goal Column
 
@@ -233,6 +255,12 @@ See also: [Decoration](#decoration), [DecorationStyle](#decorationstyle), [Gutte
 ---
 
 ## H
+
+### HighlightClient
+
+The main-thread half of the worker-based syntax highlighting pipeline. It extends `SyntaxHighlighter` with async methods — `init()`, `parseBufferAsync()`, and `getTokensAsync()` — that post messages to the highlight worker so tree-sitter parsing never blocks input. Token results are cached per buffer, and stale responses are rejected when a newer request has superseded them. Created via `createHighlightClient(workerUrl)`; `createNoOpHighlightClient()` provides an inert stand-in where no worker is available.
+
+See: `src/worker/highlight-client.ts`, `src/worker/highlight-worker.ts`
 
 ### Hit Test
 
@@ -260,6 +288,12 @@ An optimization in `Highlighter.parseBuffer()` (`src/renderer/highlighter.ts`) w
 
 See: `src/renderer/highlighter.ts`, [TreeEdit](#treeedit)
 
+### InjectionHighlighter
+
+A `SyntaxHighlighter` implementation that adds [language injection](#language-injection) support on top of tree-sitter parsing. It keeps one parser per language, detects injection ranges while parsing a buffer, and parses each embedded region with its own language. Token lookup uses a row → injection-range index for O(1) access, and tokens from injected trees are shifted by a row offset back into buffer coordinates. Languages must be registered before use so they are available to injections.
+
+See: `src/renderer/injection-highlighter.ts`, [Language Injection](#language-injection)
+
 ### InputHandler
 
 A class (`src/editor/input-handler.ts`) that captures keyboard input via a hidden off-screen `<textarea>` element. Using a textarea rather than raw `keydown` listeners enables IME (Input Method Editor) composition for CJK and other complex scripts. On each keyboard event, `InputHandler` calls [keyEventToCommand](#keyeventtocommand) to produce an `EditorCommand`; if no command matches, the `input` event carries the typed text instead. Exposes `mount(container)`, `unmount()`, `focus()`, and `blur()`.
@@ -275,6 +309,12 @@ A function (`src/editor/input-handler.ts`) that translates a raw `KeyboardEvent`
 ---
 
 ## L
+
+### Language Injection
+
+Highlighting a region of a file with a different language grammar than the surrounding text — for example YAML frontmatter inside a Markdown document, or a fenced code block. Parsing the host language identifies the injected ranges; each range is then parsed by the injected language's own parser, and the resulting tokens are mapped back onto the host buffer's rows. Implemented by [InjectionHighlighter](#injectionhighlighter).
+
+See: `src/renderer/injection-highlighter.ts`
 
 ### Line Pooling
 
@@ -331,6 +371,12 @@ MultiBufferPoint → ExcerptInfo → BufferPoint
 ```
 
 Given a multibuffer row, binary search finds the containing excerpt; subtracting the excerpt's start row gives the buffer-relative row.
+
+### ProjectTree
+
+The data-layer interface for discovering files in a directory, used to back file-tree UIs. It exposes `root`, `entries()`, `children(path)`, `get(path)`, and `has(path)`. Both `entries()` and `children()` return async iterables that walk directories only as they are consumed, so large repositories are enumerated lazily rather than up front. Entries are a discriminated union of file and directory records keyed on `type`. The filesystem is reached through an [FsAdapter](#fsadapter), and a tree is created via `createProjectTree()`. The module is data-only — consumers supply their own rendering.
+
+See: `src/project/types.ts`, `src/project/tree.ts`
 
 ---
 
@@ -432,6 +478,12 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
 Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
 
+### TileManager
+
+Tracks dirty regions for partial redraws by dividing the document into fixed-height tiles of `linesPerTile` rows (default 10). Invalidations mark the covering tiles dirty in a `Set`, coalescing repeated marks within a frame, so a render pass repaints only the affected tiles instead of the whole [viewport](#viewport). Each invalidation carries an `InvalidationReason` — `edit`, `selection`, `scroll`, `theme`, `resize`, or `initial`. Typical use is `setViewport()` on scroll or resize, `markDirty()` on change, `getDirtyTiles()` before painting, and `clearDirty()` afterward.
+
+See: `src/renderer/tile-map.ts`
+
 ### Trailing Newline (synthetic)
 
 An artificial newline appended after an excerpt's last line to visually separate it from the next excerpt. Tracked by `Excerpt.hasTrailingNewline`. Position calculations must account for this: the excerpt's effective line count is one greater than its buffer range, but the extra line contains no editable content.
@@ -457,6 +509,12 @@ A bounded list of `HistoryEntry` values recording buffer and cursor state before
 
 See also: [EditorCommand](#editorcommand)
 
+### useEditorView
+
+A React hook that mounts an `EditorView` into a container element and manages its lifecycle: created on mount, destroyed on unmount, and skipped entirely during SSR when no `document` exists. It returns `containerRef` to attach to a `<div>`, the `view` instance (`null` before mount), and `setDecorations`/`setTheme` for imperative updates. The `text` option is uncontrolled — it seeds the initial content and later changes are ignored — while `readOnly`, `theme`, and `decorations` are synchronized on update without tearing down the view.
+
+See: `src/react/use-editor-view.ts`
+
 ---
 
 ## V
@@ -468,6 +526,12 @@ The currently visible rectangular window into the multibuffer: `startRow`, `endR
 ---
 
 ## W
+
+### WebGpuRenderer
+
+A [Renderer](#renderer) implementation that draws text through the WebGPU API, sampling characters from a [GlyphAtlas](#glyphatlas) uploaded as a GPU texture. Documents longer than `LAZY_WRAP_THRESHOLD` (5000 lines) build their [WrapMap](#wrapmap) lazily, completing `WRAP_CHUNK_SIZE` (2000) buffer rows per animation frame so the main thread is never blocked. Use `isWebGpuAvailable()` to feature-detect before selecting this backend; `createWebGpuRenderer()` constructs it.
+
+See: `src/renderer/webgpu.ts`
 
 ### WrapMap
 
