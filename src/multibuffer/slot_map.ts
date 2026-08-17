@@ -19,11 +19,24 @@ export interface SlotKey {
   readonly generation: number;
 }
 
-interface Slot<V> {
+/**
+ * An occupied slot. `value` is a `V`, never widened to `V | undefined`, so the
+ * iterators can yield it without narrowing on the value itself — a slot holding
+ * a legitimately `undefined` value is still occupied.
+ */
+interface OccupiedSlot<V> {
   generation: number;
-  value: V | undefined;
-  occupied: boolean;
+  occupied: true;
+  value: V;
 }
+
+/** A freed slot. Holds no value, so a removed entry is not retained. */
+interface EmptySlot {
+  generation: number;
+  occupied: false;
+}
+
+type Slot<V> = OccupiedSlot<V> | EmptySlot;
 
 /**
  * A generational arena that maps keys to values.
@@ -57,9 +70,8 @@ export class SlotMap<V> {
       index = freeIndex;
       const slot = this.slotAt(index);
       if (slot) {
-        slot.value = value;
-        slot.occupied = true;
         generation = slot.generation;
+        this.slots[index] = { generation, value, occupied: true };
       } else {
         generation = 0;
       }
@@ -115,9 +127,7 @@ export class SlotMap<V> {
     }
 
     const value = slot.value;
-    slot.value = undefined;
-    slot.occupied = false;
-    slot.generation++;
+    this.slots[key.index] = { generation: slot.generation + 1, occupied: false };
     this.freeList.push(key.index);
     this._size--;
     return value;
@@ -129,7 +139,7 @@ export class SlotMap<V> {
   *entries(): IterableIterator<[SlotKey, V]> {
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slotAt(i);
-      if (slot?.occupied && slot.value !== undefined) {
+      if (slot?.occupied) {
         yield [{ index: i, generation: slot.generation }, slot.value];
       }
     }
@@ -140,7 +150,7 @@ export class SlotMap<V> {
    */
   *values(): IterableIterator<V> {
     for (const slot of this.slots) {
-      if (slot.occupied && slot.value !== undefined) {
+      if (slot.occupied) {
         yield slot.value;
       }
     }
@@ -165,9 +175,7 @@ export class SlotMap<V> {
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slotAt(i);
       if (slot?.occupied) {
-        slot.value = undefined;
-        slot.occupied = false;
-        slot.generation++;
+        this.slots[i] = { generation: slot.generation + 1, occupied: false };
         this.freeList.push(i);
       }
     }

@@ -305,3 +305,56 @@ describe("SlotMap - Performance Characteristics", () => {
     expect(checkMs).toBeLessThan(5);
   });
 });
+
+describe("SlotMap - undefined is a value, not an absence", () => {
+  test("entries yields a slot whose value is undefined", () => {
+    const map = new SlotMap<string | undefined>();
+    map.insert("a");
+    map.insert(undefined);
+
+    expect(map.size).toBe(2);
+    expect([...map.entries()].length).toBe(2);
+  });
+
+  test("values yields undefined occupants in slot order", () => {
+    const map = new SlotMap<string | undefined>();
+    map.insert(undefined);
+    map.insert("b");
+
+    expect([...map.values()]).toEqual([undefined, "b"]);
+  });
+
+  test("keys and entries agree on which slots are live", () => {
+    const map = new SlotMap<number | undefined>();
+    map.insert(1);
+    map.insert(undefined);
+    map.insert(3);
+
+    const keys = [...map.keys()];
+    const entryKeys = [...map.entries()].map(([k]) => k);
+
+    expect(entryKeys).toEqual(keys);
+  });
+
+  test("set to undefined does not evict the entry", () => {
+    const map = new SlotMap<string | undefined>();
+    const key = map.insert("a");
+
+    expect(map.set(key, undefined)).toBe(true);
+    expect(map.has(key)).toBe(true);
+    expect(map.size).toBe(1);
+    expect([...map.entries()].length).toBe(1);
+  });
+
+  test("removing an undefined occupant still frees the slot", () => {
+    const map = new SlotMap<string | undefined>();
+    const key = map.insert(undefined);
+    map.remove(key);
+
+    expect(map.size).toBe(0);
+    expect(map.has(key)).toBe(false);
+    expect([...map.keys()].length).toBe(0);
+    expect([...map.entries()].length).toBe(0);
+    expect([...map.values()].length).toBe(0);
+  });
+});
