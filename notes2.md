@@ -1,0 +1,21 @@
+SIZE-WATCH: memory.md 10206/10240 and notes.md 9976/10240 are BOTH AT CAP. Append HERE. When this file nears ~9KB, start notes3.md — a NEW FILE is the cheapest patch shape (no context lines, no deletions). Do NOT try to trim the older two: deletions cost patch bytes and the 10KB PATCH cap is the binding limit (see notes.md 0809/0810).
+
+0817:T1+T2+T3verify+T4+T5+T7 run:32051487182. main STILL ce545ec, 88 SA boxes ALL unticked, still 0 human comments EVER (every other actor is a bot). tests 2265/0 NO flake (cum 11/44=25.0%), typecheck0, lint1info, bench 118/118. With PR#685 applied: 2278/0, bench 120/120.
+
+**0817-BIGGEST FINDING: getLineTokens is O(doc) PER RENDERED ROW; all 3 renderers call it once per visible line with NO caching (dom.ts:579, canvas.ts:520, webgpu.ts:481) => frame cost is O(viewport x doc). Flat 50-row frame on main: 17.4ms@500ln / 37.2ms@1K / 165.5ms@4K. main CANNOT hold 16.7ms past ~500 lines.** Already my issue #672 -> RepoAssist PR#685 (binary-search the child scan). Verified it: flat single-row main 166us@250 -> 3243us@4000 (LINEAR), PR flat 9.8->14.7us => 16.9x/28.8x/56.2x/113x/220x. Nested (pinned row) 2.0x->4.2x only. Recommended MERGE.
+
+**0817-NEW HEURISTIC (inverts the old one): a target with LOW slack is a signal too.** I found this because `getLineTokens - middle line of 1K` sat at 0.816ms vs a <1ms target = only 1.22x slack, the TIGHTEST in the suite. Old rule (notes.md line 2) is ">=3x slack hides O(n)". Both are true: high slack hides growth, and a near-miss on a SINGLE-ITEM benchmark means the PER-ITEM cost is already at budget — so anything calling it in a loop is dead. **Scan the bench output for ratios at BOTH extremes.**
+
+**0817-ROUTINE THAT PAID OFF BIG (reuse): run a PR's NEW benchmarks against MAIN's implementation.** `git checkout pr/N -- benchmarks/... ` then `git checkout main -- src/...`. Gave the single most compelling line available: **main FAILS the bench the fix adds, 162.4ms vs <5ms target (32x), while the PR passes at 0.789ms.** Much stronger than any before/after table because it uses the repo's own acceptance criterion. Do this for every perf PR that adds a bench.
+
+0817-TOOL: to A/B two versions of a module that HAS relative imports (unlike rope.ts which has none), `git show main:src/x.ts > a.ts; git show pr/N:src/x.ts > b.ts` then sed-rewrite `from "./dep.ts"` -> absolute `/home/runner/work/multibuffer/multibuffer/src/.../dep.ts`. Both then load in ONE process => can INTERLEAVE rounds. highlighter.ts only needed ./queries/types.ts + ./theme.ts rewritten.
+
+**0817-10th ATTRIBUTION CATCH, again my own fixture.** Nested numbers came out NON-MONOTONE (pr 16.65us@2000 -> 7.54us@4000) and I nearly reported 9.2x. Cause: `Math.floor(n/2)` landed on a bare `}` (1 token) at n=4000 vs a declaration (10 tokens) elsewhere — timing a DIFFERENT ROW. Fix: pin the target row by CONTENT (`while(!lines[row].startsWith("  const v")) row++`) and print row text + token count per n. **Non-monotone output is the tell — always print what the fixture actually selected.**
+
+0817-CROSS-HARNESS: my /tmp fixture said 165.5ms for the flat-4K 50-row frame, repo harness said 162.4ms = 1.9% agreement. Two independently built harnesses agreeing is worth stating in the comment; contrast 0816 where two harnesses disagreed 60 vs 155us on text() and only the RANKING held.
+
+0817-#685 STATE: draft, base=ce545ec (merge-base == main HEAD, NOT an orphan), 4 files +465-21, **check-runs total_count=0 = CI HAS NEVER RUN ON IT** (same as 0805). So my local run is the ONLY test evidence that exists — say so, it raises the comment's value. Commented ONCE (it had ZERO comments). Posted NOTHING on #672 (#685 closes it; would be a dup).
+
+0817-MY OWN CORRECTNESS CHECK (independent of the PR's 11,155 rows): every row of a flat + nested doc plus out-of-range (-5,-1,n+10,99999) = 1008 rows / 8664 tokens byte-identical. Cheap to do (JSON.stringify both token arrays), and worth doing separately rather than trusting the PR's own corpus.
+
+0817-BACKLOG GAP RECORDED in #670: **no benchmark anywhere measures a WHOLE VIEWPORT** — every render-path bench samples ONE row, which is exactly how a 162ms frame passed unnoticed. #685 adds the first two.
