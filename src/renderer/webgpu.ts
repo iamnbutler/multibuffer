@@ -13,6 +13,7 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
+import { computeCursorRect } from "./dom.ts";
 import { createGlyphAtlas, type GlyphAtlas } from "./glyph-atlas.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
@@ -567,18 +568,22 @@ export class WebGpuRenderer implements Renderer {
     // Add cursor rectangle
     if (this._cursorPoint && this._focused) {
       const cursorColor = parseColor(resolveColor(this._theme.cursor, this._theme));
-      const cursorX = gutterWidth + this._cursorPoint.column * charWidth;
-      const visualRow = this._wrapMap
-        ? this._wrapMap.bufferRowToFirstVisualRow(this._cursorPoint.row)
-        : this._cursorPoint.row;
-      const cursorY = visualRow * lineHeight;
+      const cursorRect = computeCursorRect(
+        this._cursorPoint,
+        this._getLineText(this._cursorPoint.row),
+        lineHeight,
+        charWidth,
+        gutterWidth,
+        this._measurements.wrapWidth ?? 0,
+        this._wrapMap,
+      );
 
       if (rectCount < MAX_RECTS) {
         const baseIdx = rectCount * 8;
-        rectData[baseIdx + 0] = cursorX;
-        rectData[baseIdx + 1] = cursorY;
+        rectData[baseIdx + 0] = cursorRect.x;
+        rectData[baseIdx + 1] = cursorRect.y;
         rectData[baseIdx + 2] = 2; // cursor width
-        rectData[baseIdx + 3] = lineHeight;
+        rectData[baseIdx + 3] = cursorRect.height;
         rectData[baseIdx + 4] = cursorColor[0];
         rectData[baseIdx + 5] = cursorColor[1];
         rectData[baseIdx + 6] = cursorColor[2];
