@@ -11,7 +11,7 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import { sliceTokensToRange } from "./dom.ts";
+import { computeCursorRect, sliceTokensToRange } from "./dom.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
   calculateContentHeight,
@@ -820,24 +820,23 @@ export class CanvasRenderer implements Renderer {
     if (!cursorPoint) return;
 
     const cursorRow = cursorPoint.row;
-    const cursorCol = cursorPoint.column;
 
     if (cursorRow < state.viewport.startRow || cursorRow >= state.viewport.endRow) return;
 
-    const lineText = this._getLineText(
+    const rect = computeCursorRect(
+      cursorPoint,
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      cursorRow as MultiBufferRow,
+      this._getLineText(cursorRow as MultiBufferRow),
+      lineHeight,
+      this._charWidth,
+      gutterWidth,
+      this._measurements.wrapWidth ?? 0,
+      this._wrapMap,
     );
-    const visualRow = this._wrapMap
-      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-      ? this._wrapMap.bufferRowToFirstVisualRow(cursorRow as MultiBufferRow)
-      : cursorRow;
-    const screenY = (visualRow - Math.floor(state.viewport.scrollTop / lineHeight)) * lineHeight;
-
-    const cursorX = gutterWidth + charColToVisualCol(lineText.slice(0, cursorCol), cursorCol) * this._charWidth;
+    const screenY = rect.y - Math.floor(state.viewport.scrollTop / lineHeight) * lineHeight;
 
     ctx.fillStyle = this._resolveColor(this._theme.cursor);
-    ctx.fillRect(cursorX, screenY, 2, lineHeight); // 2px wide cursor
+    ctx.fillRect(rect.x, screenY, 2, rect.height); // 2px wide cursor
   }
 
   scrollTo(target: ScrollTarget): void {
@@ -1231,17 +1230,19 @@ export class CanvasRenderer implements Renderer {
 
     if (cursor.row < viewport.startRow || cursor.row >= viewport.endRow) return;
 
-    const lineText = this._getLineText(cursor.row);
-    const visualRow = this._wrapMap
-      ? this._wrapMap.bufferRowToFirstVisualRow(cursor.row)
-      : cursor.row;
-    const screenY = (visualRow - Math.floor(viewport.scrollTop / lineHeight)) * lineHeight;
-
-    const cursorX =
-      gutterWidth + charColToVisualCol(lineText.slice(0, cursor.column), cursor.column) * this._charWidth;
+    const rect = computeCursorRect(
+      cursor,
+      this._getLineText(cursor.row),
+      lineHeight,
+      this._charWidth,
+      gutterWidth,
+      this._measurements.wrapWidth ?? 0,
+      this._wrapMap,
+    );
+    const screenY = rect.y - Math.floor(viewport.scrollTop / lineHeight) * lineHeight;
 
     ctx.fillStyle = this._theme.cursor;
-    ctx.fillRect(cursorX, screenY, 2, lineHeight);
+    ctx.fillRect(rect.x, screenY, 2, rect.height);
   }
 
   private _hitTestFromEvent(e: MouseEvent): { row: MultiBufferRow; column: number } | undefined {

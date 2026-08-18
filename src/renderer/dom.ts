@@ -92,6 +92,69 @@ interface SelectionRect {
   height: number;
 }
 
+/** Position and height of the cursor caret, in content-space pixels. */
+export interface CursorRect {
+  x: number;
+  y: number;
+  height: number;
+}
+
+/**
+ * Compute the cursor caret position for a multibuffer point.
+ * Pure function — no DOM side-effects. Shared by every renderer so that the
+ * caret lands on the same wrapped segment that hitTest() maps a click back to.
+ *
+ * When `wrapWidth > 0`, the caret is placed on the wrapped segment that
+ * contains `point.column`, at a column measured *relative to that segment* —
+ * not at the line's first visual row and full-line column.
+ *
+ * @param point      - Cursor position
+ * @param lineText   - Text of `point.row`
+ * @param lineHeight - Visual line height in pixels
+ * @param charWidth  - Character width in pixels
+ * @param gutterWidth - Gutter width in pixels
+ * @param wrapWidth  - Wrap width in visual columns (0 = no wrap)
+ * @param wrapMap    - Pre-built WrapMap for the snapshot (null if no wrapping)
+ */
+export function computeCursorRect(
+  point: MultiBufferPoint,
+  lineText: string,
+  lineHeight: number,
+  charWidth: number,
+  gutterWidth: number,
+  wrapWidth: number,
+  wrapMap: WrapMap | null,
+): CursorRect {
+  const visualRow = wrapMap ? wrapMap.bufferRowToFirstVisualRow(point.row) : point.row;
+
+  // Convert char column to visual position, accounting for wide chars and wrapping
+  let displayRow = visualRow;
+  let displayVisualCol: number;
+  if (wrapWidth > 0 && wrapMap) {
+    // Use cached segment char-start offsets — avoids wrapLine() recomputation
+    // on every cursor repaint (called after every keypress and mouse click).
+    const totalSegs = wrapMap.visualRowsForLine(point.row);
+    let segIdx = 0;
+    for (let s = 1; s < totalSegs; s++) {
+      if (wrapMap.segmentCharStart(point.row, s) > point.column) break;
+      segIdx = s;
+    }
+    displayRow = visualRow + segIdx;
+    const charOffset = wrapMap.segmentCharStart(point.row, segIdx);
+    const segEnd =
+      segIdx + 1 < totalSegs ? wrapMap.segmentCharStart(point.row, segIdx + 1) : lineText.length;
+    displayVisualCol = charColToVisualCol(lineText.slice(charOffset, segEnd), point.column - charOffset);
+  } else {
+    displayVisualCol = charColToVisualCol(lineText, point.column);
+  }
+
+  return {
+    x: gutterWidth + displayVisualCol * charWidth,
+    y: displayRow * lineHeight,
+    height: lineHeight,
+  };
+}
+
 /**
  * Compute the set of axis-aligned highlight rects for a selection range.
  * Pure function — no DOM side-effects. Used by renderSelection() and tests.
@@ -1104,46 +1167,20 @@ export class DomRenderer implements Renderer {
       return;
     }
 
-    const { lineHeight } = this._measurements;
-    const gutterWidth = this._getEffectiveGutterWidth();
-    const charWidth = this._charWidth;
-    const visualRow = this._wrapMap
-      ? this._wrapMap.bufferRowToFirstVisualRow(point.row)
-      : point.row;
-
-    // Convert char column to visual position, accounting for wide chars and wrapping
-    const wrapWidth = this._measurements.wrapWidth ?? 0;
-    const lineText = this._getLineText(point.row);
-    let displayRow = visualRow;
-    let displayVisualCol: number;
-    if (wrapWidth > 0 && this._wrapMap) {
-      // Use cached segment char-start offsets — avoids wrapLine() recomputation
-      // on every cursor repaint (called after every keypress and mouse click).
-      const wm = this._wrapMap;
-      const totalSegs = wm.visualRowsForLine(point.row);
-      let segIdx = 0;
-      for (let s = 1; s < totalSegs; s++) {
-        if (wm.segmentCharStart(point.row, s) > point.column) break;
-        segIdx = s;
-      }
-      displayRow = visualRow + segIdx;
-      const charOffset = wm.segmentCharStart(point.row, segIdx);
-      const segEnd =
-        segIdx + 1 < totalSegs
-          ? wm.segmentCharStart(point.row, segIdx + 1)
-          : lineText.length;
-      displayVisualCol = charColToVisualCol(lineText.slice(charOffset, segEnd), point.column - charOffset);
-    } else {
-      displayVisualCol = charColToVisualCol(lineText, point.column);
-    }
-
-    const x = gutterWidth + displayVisualCol * charWidth;
-    const y = displayRow * lineHeight;
+    const { x, y, height } = computeCursorRect(
+      point,
+      this._getLineText(point.row),
+      this._measurements.lineHeight,
+      this._charWidth,
+      this._getEffectiveGutterWidth(),
+      this._measurements.wrapWidth ?? 0,
+      this._wrapMap,
+    );
 
     this._cursorEl.style.display = "block";
     this._cursorEl.style.left = `${x}px`;
     this._cursorEl.style.top = `${y}px`;
-    this._cursorEl.style.height = `${lineHeight}px`;
+    this._cursorEl.style.height = `${height}px`;
     this._cursorEl.style.animation = this._blinkAnimationStr;
   }
 
