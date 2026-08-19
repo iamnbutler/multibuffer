@@ -446,7 +446,10 @@ export class Rope {
   slice(start: number, end: number): string {
     if (start >= end || start >= this._length) return "";
     const clampedStart = Math.max(0, start);
-    const clampedEnd = Math.min(end, this._length);
+    // Clamp low as well as high: a negative `end` would otherwise reach
+    // `String.prototype.slice`, which reinterprets it as an offset from the
+    // end of the chunk and returns plausible-but-wrong text.
+    const clampedEnd = Math.max(0, Math.min(end, this._length));
 
     const startCi = this._findChunkByOffset(clampedStart);
     const startChunk = this._chunks[startCi];
