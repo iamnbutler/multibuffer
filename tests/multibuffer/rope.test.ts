@@ -235,6 +235,19 @@ describe("Rope - Slice", () => {
     const r = Rope.from("ABC");
     expect(r.slice(2, 2)).toBe("");
   });
+
+  test("slice with negative end returns empty, not text from the end", () => {
+    const r = Rope.from("Hello\nWorld");
+    expect(r.slice(-5, -2)).toBe("");
+    expect(r.slice(-99, -5)).toBe("");
+    expect(r.slice(-1, 0)).toBe("");
+  });
+
+  test("slice with negative end across chunk boundaries", () => {
+    const r = Rope.from("x".repeat(5000));
+    expect(r.slice(-10, -1)).toBe("");
+    expect(r.slice(0, -1)).toBe("");
+  });
 });
 
 describe("Rope - Stress", () => {

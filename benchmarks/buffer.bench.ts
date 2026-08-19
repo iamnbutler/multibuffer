@@ -9,6 +9,7 @@
  */
 
 import { createBuffer } from "../src/buffer/buffer.ts";
+import { Rope } from "../src/buffer/rope.ts";
 import type { Buffer, BufferId, BufferOffset, BufferRow, BufferSnapshot } from "../src/multibuffer/types.ts";
 import { Bias } from "../src/multibuffer/types.ts";
 import type { BenchmarkSuite } from "./harness.ts";
@@ -26,6 +27,9 @@ const id = "bench-buffer" as BufferId;
 let snapshot10k: BufferSnapshot;
 let mutableBuf1k: Buffer;
 let mutableBuf10k: Buffer;
+let rope10k: Rope;
+let lateOffset10k: number;
+let midOffset10k: number;
 
 export const bufferBenchmarks: BenchmarkSuite = {
   name: "Buffer Operations",
@@ -180,6 +184,37 @@ export const bufferBenchmarks: BenchmarkSuite = {
       fn: () => {
         // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
         mutableBuf10k.insert(500 as BufferOffset, "X");
+      },
+    },
+    {
+      // 1-char slice is the surrogate-pair check pattern in BufferSnapshot.clipOffset.
+      // Previous linear-chunk-walk made this O(n_chunks) at late offsets.
+      name: "Rope.slice 1-char near end (clipOffset pattern)",
+      iterations: 100_000,
+      targetMs: 0.001,
+      setup: () => {
+        rope10k = Rope.from(generateText(10_000));
+        lateOffset10k = rope10k.length - 100;
+        midOffset10k = Math.floor(rope10k.length / 2);
+      },
+      fn: () => {
+        rope10k.slice(lateOffset10k, lateOffset10k + 1);
+      },
+    },
+    {
+      name: "Rope.slice 1-char near middle",
+      iterations: 100_000,
+      targetMs: 0.001,
+      fn: () => {
+        rope10k.slice(midOffset10k, midOffset10k + 1);
+      },
+    },
+    {
+      name: "Rope.slice 1KB near middle",
+      iterations: 100_000,
+      targetMs: 0.01,
+      fn: () => {
+        rope10k.slice(midOffset10k, midOffset10k + 1024);
       },
     },
     {
