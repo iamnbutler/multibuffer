@@ -77,6 +77,18 @@ export class SearchController {
   private _options: SearchOptions = {};
   private _results: SearchResult[] = [];
   private _activeIndex = -1;
+  /** Widest row span of any result, used to bound viewport filtering. */
+  private _maxResultRowSpan = 0;
+  /**
+   * Snapshot version `_maxResultRowSpan` was measured against. The span is a
+   * plain row count, so unlike the anchors in `_results` it does not survive
+   * edits: a mutation that routes around this editor (`multiBuffer.edit()`,
+   * or a second Editor over the same MultiBuffer) leaves no `textChange` to
+   * recompute it. A stale span that is too *small* narrows the window and
+   * drops a match spanning in from above, so narrowing is only applied when
+   * this matches the snapshot being resolved.
+   */
+  private _searchedVersion = -1;
   private _textChangeHandler: ((snap: MultiBufferSnapshot) => void) | null = null;
   private _disposed = false;
 
@@ -125,6 +137,8 @@ export class SearchController {
     this._query = query;
     this._options = { ...options };
     this._results = [];
+    this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
 
     if (!query) {
@@ -151,6 +165,8 @@ export class SearchController {
     this._query = "";
     this._options = {};
     this._results = [];
+    this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
     this._unsubscribeFromTextChanges();
   }
@@ -332,6 +348,10 @@ export class SearchController {
    * Resolve results visible in a viewport range.
    * More efficient than resolveResults() for large result sets.
    *
+   * A result is visible when its rows intersect [startRow, endRow), so a
+   * multi-line match starting above the viewport still counts if it spans
+   * into it.
+   *
    * @param startRow - First visible row
    * @param endRow - Last visible row (exclusive)
    * @returns Array of resolved ranges for visible results
@@ -347,14 +367,29 @@ export class SearchController {
     const startAnchors = this._results.map((r) => r.range.start);
     const resolvedStarts = snap.resolveAnchorsInViewport(startAnchors, startRow, endRow);
 
+    // resolveAnchorsInViewport rejects at excerpt granularity, so an excerpt
+    // that merely overlaps the viewport still yields its off-screen rows.
+    // A match can only reach the viewport from above by spanning at least as
+    // many rows as the widest match found, which bounds how far back the end
+    // anchor is worth resolving.
+    // Only narrow when the span was measured against this very snapshot; a
+    // stale span can be too small, which would drop a visible match.
+    const lowestVisibleStartRow =
+      snap.version === this._searchedVersion
+        ? startRow - this._maxResultRowSpan
+        : Number.NEGATIVE_INFINITY;
+
     for (let i = 0; i < this._results.length; i++) {
       const startPoint = resolvedStarts[i];
       if (!startPoint) continue;
+      if (startPoint.row >= endRow || startPoint.row < lowestVisibleStartRow) continue;
 
       const result = this._results[i];
       if (!result) continue;
       const endPoint = snap.resolveAnchor(result.range.end);
       if (!endPoint) continue;
+      // Ends above the viewport, so no part of it is on screen.
+      if (endPoint.row < startRow) continue;
 
       visible.push({ start: startPoint, end: endPoint, index: i });
     }
@@ -371,6 +406,8 @@ export class SearchController {
     this._disposed = true;
     this._unsubscribeFromTextChanges();
     this._results = [];
+    this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
   }
 
@@ -394,6 +431,8 @@ export class SearchController {
 
     if (!fullText || !this._query) {
       this._results = [];
+      this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
       this._activeIndex = -1;
       return;
     }
@@ -402,6 +441,7 @@ export class SearchController {
     const lineOffsets = this._computeLineOffsets(fullText);
 
     const results: SearchResult[] = [];
+    let maxRowSpan = 0;
     for (const match of matches) {
       const startPoint = this._offsetToPoint(match.start, lineOffsets, snap);
       const endPoint = this._offsetToPoint(match.end, lineOffsets, snap);
@@ -413,6 +453,9 @@ export class SearchController {
 
       if (!startAnchor || !endAnchor) continue;
 
+      const rowSpan = endPoint.row - startPoint.row;
+      if (rowSpan > maxRowSpan) maxRowSpan = rowSpan;
+
       results.push({
         range: createAnchorRange(startAnchor, endAnchor),
         matchedText: match.text,
@@ -423,6 +466,8 @@ export class SearchController {
     results.sort((a, b) => compareAnchors(a.range.start, b.range.start));
 
     this._results = results;
+    this._maxResultRowSpan = maxRowSpan;
+    this._searchedVersion = snap.version;
     this._activeIndex = results.length > 0 ? 0 : -1;
   }
 
