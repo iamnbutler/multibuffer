@@ -64,7 +64,9 @@ export class Editor {
    * Allows the cursor to return to its original column after passing through
    * shorter lines (e.g. col 10 → col 3 on short line → col 10 on next long line).
    */
-  private _goalColumn: number | undefined = undefined;
+  // Per-cursor goal columns for vertical movement (null = cleared).
+  // Index-parallel to _selections; sticky across short-line traversals.
+  private _goalColumns: number[] | null = null;
   private _readOnly: boolean;
   private _bracketMatching: boolean;
   /**
@@ -183,7 +185,7 @@ export class Editor {
 
   /** Set cursor to a specific point (e.g. from mouse click). Clears multi-cursor. */
   setCursor(point: MultiBufferPoint): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const snap = this.multiBuffer.snapshot();
     const clipped = snap.clipPoint(point, Bias.Left);
     const prevCursor = this._cursor;
@@ -203,7 +205,7 @@ export class Editor {
 
   /** Extend selection from current anchor to a new point (for mouse drag). */
   extendSelectionTo(point: MultiBufferPoint): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const primarySelection = this._selections[this._selections.length - 1];
     if (!primarySelection) {
       this.setCursor(point);
@@ -257,7 +259,7 @@ export class Editor {
 
   /** Select the word at a point (for double-click). Clears multi-cursor. */
   selectWordAt(point: MultiBufferPoint): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const snap = this.multiBuffer.snapshot();
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
@@ -333,7 +335,7 @@ export class Editor {
 
   /** Select the entire line at a point (for triple-click). Clears multi-cursor. */
   selectLineAt(point: MultiBufferPoint): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const snap = this.multiBuffer.snapshot();
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const nextRow = Math.min(point.row + 1, snap.lineCount) as MultiBufferRow;
@@ -592,7 +594,7 @@ export class Editor {
   }
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
 
     if (this._selections.length === 0) return;
 
@@ -697,7 +699,7 @@ export class Editor {
   }
 
   private _deleteBackward(snap: MultiBufferSnapshot, granularity: Granularity): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     if (this._selections.length === 0) return;
 
     // For single selection, use the original path
@@ -826,7 +828,7 @@ export class Editor {
   }
 
   private _deleteForward(snap: MultiBufferSnapshot, granularity: Granularity): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     if (this._selections.length === 0) return;
 
     // For single selection, use the original path
@@ -939,13 +941,30 @@ export class Editor {
   ): void {
     if (this._selections.length === 0) return;
 
+    // On the first vertical movement, capture each cursor's current column as its
+    // individual goal column so short lines don't permanently displace any cursor.
+    if ((direction === "up" || direction === "down") && this._goalColumns === null) {
+      this._goalColumns = this._selections.map((sel) => {
+        const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+        return snap.resolveAnchor(ha)?.column ?? this._cursor.column;
+      });
+    }
+
     const newSelections: Selection[] = [];
     const wrapMap = this._getWrapMap(snap);
+    let hadNonCollapsed = false;
+    // Goal column keyed by the selection object it belongs to, so the mapping
+    // survives the reordering _mergeSelections performs.
+    const goalBySelection = new Map<Selection, number>();
 
-    for (const sel of this._selections) {
+    for (let i = 0; i < this._selections.length; i++) {
+      const sel = this._selections[i];
+      if (!sel) continue;
+
       // If there's a non-collapsed selection and we're moving without shift,
       // collapse to the appropriate end first
       if (!isCollapsed(snap, sel)) {
+        hadNonCollapsed = true;
         if (direction === "left" || direction === "up") {
           const start = snap.resolveAnchor(sel.range.start);
           if (start) {
@@ -972,8 +991,7 @@ export class Editor {
         if (wrapMap && granularity === "character") {
           newCursor = moveCursorVisual(snap, cursor, direction, granularity, wrapMap);
         } else {
-          // Use goal column or cursor column
-          const goalCol = this._goalColumn ?? cursor.column;
+          const goalCol = this._goalColumns?.[i] ?? cursor.column;
           const effectiveCursor: MultiBufferPoint = { row: cursor.row, column: goalCol };
           newCursor = moveCursor(snap, effectiveCursor, direction, granularity);
         }
@@ -982,20 +1000,30 @@ export class Editor {
       }
 
       const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-      if (newSel) newSelections.push(newSel);
+      if (newSel) {
+        newSelections.push(newSel);
+        const goal = this._goalColumns?.[i];
+        if (goal !== undefined) goalBySelection.set(newSel, goal);
+      }
     }
 
-    // Handle goal column
+    // Handle goal columns
     if (direction === "up" || direction === "down") {
-      if (this._goalColumn === undefined) {
-        this._goalColumn = this._cursor.column;
-      }
+      // If any non-collapsed selection was collapsed, the index mapping is broken.
+      if (hadNonCollapsed) this._goalColumns = null;
+      // Otherwise keep _goalColumns so the next vertical movement reuses the same
+      // original columns (sticky column behaviour through short lines).
     } else {
-      this._goalColumn = undefined;
+      this._goalColumns = null;
     }
 
     // Merge overlapping selections
     this._selections = this._mergeSelections(newSelections, snap);
+    // _mergeSelections sorts by document position, so it can reorder the array
+    // without changing its length. Re-key by selection identity rather than by
+    // index; a selection the merge created (or one that was dropped) is absent
+    // from the map, which clears the goal columns.
+    this._goalColumns = _remapGoalColumns(this._goalColumns, this._selections, goalBySelection);
 
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
@@ -1015,13 +1043,20 @@ export class Editor {
 
     const wrapMap = this._getWrapMap(snap);
     const newSelections: Selection[] = [];
+    const goalBySelection = new Map<Selection, number>();
 
-    // For vertical movement, set goal column from primary cursor if not set
-    if ((direction === "up" || direction === "down") && this._goalColumn === undefined) {
-      this._goalColumn = this._cursor.column;
+    // Capture per-cursor goal columns on first vertical movement
+    if ((direction === "up" || direction === "down") && this._goalColumns === null) {
+      this._goalColumns = this._selections.map((sel) => {
+        const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+        return snap.resolveAnchor(ha)?.column ?? this._cursor.column;
+      });
     }
 
-    for (const sel of this._selections) {
+    for (let i = 0; i < this._selections.length; i++) {
+      const sel = this._selections[i];
+      if (!sel) continue;
+
       const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
       const headPoint = snap.resolveAnchor(headAnchor);
       if (!headPoint) continue;
@@ -1032,7 +1067,7 @@ export class Editor {
         if (wrapMap && granularity === "character") {
           newHeadPoint = moveCursorVisual(snap, headPoint, direction, granularity, wrapMap);
         } else {
-          const goalCol = this._goalColumn ?? headPoint.column;
+          const goalCol = this._goalColumns?.[i] ?? headPoint.column;
           const effectiveHead: MultiBufferPoint = { row: headPoint.row, column: goalCol };
           newHeadPoint = moveCursor(snap, effectiveHead, direction, granularity);
         }
@@ -1058,15 +1093,19 @@ export class Editor {
         newSel = createSelection(createAnchorRange(anchorEnd, newHeadAnchor), "end");
       }
       newSelections.push(newSel);
+      const goal = this._goalColumns?.[i];
+      if (goal !== undefined) goalBySelection.set(newSel, goal);
     }
 
-    // Horizontal extend resets goal column
+    // Horizontal movement clears the goal columns
     if (direction === "left" || direction === "right") {
-      this._goalColumn = undefined;
+      this._goalColumns = null;
     }
 
     // Merge overlapping selections
     this._selections = this._mergeSelections(newSelections, snap);
+    // See the note in _moveCursor: the merge reorders, so re-key by identity.
+    this._goalColumns = _remapGoalColumns(this._goalColumns, this._selections, goalBySelection);
 
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
@@ -1078,7 +1117,7 @@ export class Editor {
   }
 
   private _selectAll(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const sel = selectAll(snap, this.multiBuffer);
     if (sel) {
       // Select all clears multi-cursor to a single selection
@@ -1090,7 +1129,7 @@ export class Editor {
   }
 
   private _collapseSelection(snap: MultiBufferSnapshot, to: "start" | "end"): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     if (this._selections.length === 0) return;
 
     const newSelections: Selection[] = [];
@@ -1112,7 +1151,7 @@ export class Editor {
   }
 
   private _deleteLine(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
 
     // Collect unique rows from all selections
     const rowSet = new Set<number>();
@@ -1219,7 +1258,7 @@ export class Editor {
   }
 
 private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const cursor = this.cursor;
     const row = cursor.row;
     const lineCount = snap.lineCount;
@@ -1272,7 +1311,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   }
 
   private _duplicateLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const cursor = this.cursor;
     const row = cursor.row;
 
@@ -1300,7 +1339,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   }
 
   private _insertLineBelow(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const cursor = this.cursor;
     const row = cursor.row;
 
@@ -1323,7 +1362,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   }
 
   private _insertLineAbove(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const cursor = this.cursor;
     const row = cursor.row;
 
@@ -1348,7 +1387,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
    * by prepending 2 spaces to each. Uses a single _edit() for atomic undo.
    */
   private _indentLines(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const { startRow, endRow } = this._affectedRows(snap);
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
@@ -1377,7 +1416,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
    * by removing up to 2 leading spaces from each. Uses a single _edit() for atomic undo.
    */
   private _dedentLines(snap: MultiBufferSnapshot): void {
-    this._goalColumn = undefined;
+    this._goalColumns = null;
     const { startRow, endRow } = this._affectedRows(snap);
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
@@ -1890,6 +1929,30 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
     return merged;
   }
+}
+
+/**
+ * Re-key per-cursor goal columns onto the post-merge selection array.
+ *
+ * `_mergeSelections()` sorts by document position, so the array it returns is a
+ * permutation of the selections handed to it — index-parallel bookkeeping does
+ * not survive it. Every selection the merge preserved is the same object, so
+ * identity is an exact key; a selection the merge synthesised (or dropped) has
+ * no entry, and the goal columns are cleared rather than silently misaligned.
+ */
+function _remapGoalColumns(
+  goalColumns: number[] | null,
+  selections: Selection[],
+  goalBySelection: Map<Selection, number>,
+): number[] | null {
+  if (goalColumns === null) return null;
+  const remapped: number[] = [];
+  for (const sel of selections) {
+    const goal = goalBySelection.get(sel);
+    if (goal === undefined) return null;
+    remapped.push(goal);
+  }
+  return remapped;
 }
 
 /** Returns true if two MultiBufferPoints are at the same row and column. */

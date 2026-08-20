@@ -248,6 +248,146 @@ describe("Multi-cursor - clearing", () => {
   });
 });
 
+// ─── Goal column (per-cursor sticky columns) ──────────────────────
+
+describe("Multi-cursor - goal column (per-cursor sticky columns)", () => {
+  test("each cursor restores its own goal column after traversing a short line", () => {
+    // row 0: "AAAAAA" (6 chars) — cursors at col 1 and col 5
+    // row 1: "BB"     (2 chars) — both cursors clamp to col 2 or less
+    // row 2: "CCCCCC" (6 chars) — each cursor should restore its original goal col
+    const editor = setup("AAAAAA\nBB\nCCCCCC");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+
+    const snap = editor.multiBuffer.snapshot();
+    const cols = editor.selections.map((sel) => {
+      const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+      return snap.resolveAnchor(ha)?.column;
+    });
+    expect(cols).toContain(1);
+    expect(cols).toContain(5);
+  });
+
+  test("goal column is independent when cursors start at col 0 and col 3", () => {
+    // row 0: "AAAA" (4 chars) — cursors at col 0 and col 3
+    // row 1: "B"    (1 char)  — both cursors clamp
+    // row 2: "CCCC" (4 chars) — each cursor restores its own goal col
+    const editor = setup("AAAA\nB\nCCCC");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 0) });
+
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+
+    const snap = editor.multiBuffer.snapshot();
+    const cols = editor.selections.map((sel) => {
+      const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+      return snap.resolveAnchor(ha)?.column;
+    });
+    expect(cols).toContain(0);
+    expect(cols).toContain(3);
+  });
+
+  test("extendSelection preserves per-cursor goal column through short lines", () => {
+    // Cursors start on rows 0 and 3 so the growing selections stay disjoint.
+    // Two selections extended from the same row would overlap and merge into
+    // one, which necessarily discards their separate goal columns.
+    // rows 0/3: 6 chars — heads start at col 5 and col 2
+    // rows 1/4: 1 char  — both heads clamp to col 1
+    // rows 2/5: 6 chars — each head restores its own goal col
+    const editor = setup("AAAAAA\nB\nCCCCCC\nDDDDDD\nE\nFFFFFF");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(3, 2) });
+
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+
+    expect(editor.selections.length).toBe(2);
+    const snap = editor.multiBuffer.snapshot();
+    const headCols = editor.selections.map((sel) => {
+      const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+      return snap.resolveAnchor(ha)?.column;
+    });
+    expect(headCols).toContain(5);
+    expect(headCols).toContain(2);
+  });
+
+  test("extendSelection merges overlapping selections and drops their goal columns", () => {
+    // Both cursors sit on row 0, so the first extension makes the selections
+    // overlap and they merge into a single selection spanning both anchors.
+    const editor = setup("AAAAAA\nBB\nCCCCCC");
+    editor.setCursor(mbPoint(0, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(editor.selections.length).toBe(1);
+
+    editor.dispatch({ type: "extendSelection", direction: "down", granularity: "character" });
+    expect(editor.selections.length).toBe(1);
+
+    const snap = editor.multiBuffer.snapshot();
+    const sel = editor.selections[0];
+    expect(sel).toBeDefined();
+    if (!sel) return;
+    // The merged selection keeps the leftmost anchor and tracks the column it
+    // clamped to on the short row — the two original goal columns are gone.
+    expect(snap.resolveAnchor(sel.range.start)?.column).toBe(1);
+    expect(num(snap.resolveAnchor(sel.range.end)?.row ?? mbRow(0))).toBe(2);
+  });
+
+  test("goal column resets after horizontal move", () => {
+    const editor = setup("AAAA\nBB\nCCCC");
+    editor.setCursor(mbPoint(0, 3));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    // Go down (goal columns captured), then move right (goal columns cleared)
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "right", granularity: "character" });
+    // Go down again — goal columns should be freshly captured from current positions
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+
+    const snap = editor.multiBuffer.snapshot();
+    const rows = editor.selections.map((sel) => {
+      const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+      return num(snap.resolveAnchor(ha)?.row ?? mbRow(0));
+    });
+    // All cursors should have moved to row 2
+    expect(rows.every((r) => r === 2)).toBe(true);
+  });
+
+  test("goal columns follow their cursor when addCursor is used out of document order", () => {
+    // `addCursor` appends, so `_selections` is in insertion order — here the
+    // reverse of document order. `_mergeSelections` sorts by position, which
+    // permutes the array without changing its length, so goal columns tracked
+    // by index alone would swap between the two cursors on the second move.
+    const editor = setup("abcdefgh\nabcdefgh\nabcdefgh\nabcdefgh\nabcdefgh");
+    editor.setCursor(mbPoint(2, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+
+    const snap = editor.multiBuffer.snapshot();
+    const positions = editor.selections
+      .map((sel) => {
+        const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+        const p = snap.resolveAnchor(ha);
+        return { row: num(p?.row ?? mbRow(0)), column: p?.column };
+      })
+      .sort((a, b) => a.row - b.row);
+
+    // The cursor that started at column 1 keeps column 1; the one that started
+    // at column 5 keeps column 5.
+    expect(positions).toEqual([
+      { row: 2, column: 1 },
+      { row: 4, column: 5 },
+    ]);
+  });
+});
+
 // ─── Selection accessor backward compatibility ─────────────────────
 
 describe("Multi-cursor - backward compatibility", () => {
