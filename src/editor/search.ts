@@ -79,6 +79,16 @@ export class SearchController {
   private _activeIndex = -1;
   /** Widest row span of any result, used to bound viewport filtering. */
   private _maxResultRowSpan = 0;
+  /**
+   * Snapshot version `_maxResultRowSpan` was measured against. The span is a
+   * plain row count, so unlike the anchors in `_results` it does not survive
+   * edits: a mutation that routes around this editor (`multiBuffer.edit()`,
+   * or a second Editor over the same MultiBuffer) leaves no `textChange` to
+   * recompute it. A stale span that is too *small* narrows the window and
+   * drops a match spanning in from above, so narrowing is only applied when
+   * this matches the snapshot being resolved.
+   */
+  private _searchedVersion = -1;
   private _textChangeHandler: ((snap: MultiBufferSnapshot) => void) | null = null;
   private _disposed = false;
 
@@ -128,6 +138,7 @@ export class SearchController {
     this._options = { ...options };
     this._results = [];
     this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
 
     if (!query) {
@@ -155,6 +166,7 @@ export class SearchController {
     this._options = {};
     this._results = [];
     this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
     this._unsubscribeFromTextChanges();
   }
@@ -360,7 +372,12 @@ export class SearchController {
     // A match can only reach the viewport from above by spanning at least as
     // many rows as the widest match found, which bounds how far back the end
     // anchor is worth resolving.
-    const lowestVisibleStartRow = startRow - this._maxResultRowSpan;
+    // Only narrow when the span was measured against this very snapshot; a
+    // stale span can be too small, which would drop a visible match.
+    const lowestVisibleStartRow =
+      snap.version === this._searchedVersion
+        ? startRow - this._maxResultRowSpan
+        : Number.NEGATIVE_INFINITY;
 
     for (let i = 0; i < this._results.length; i++) {
       const startPoint = resolvedStarts[i];
@@ -390,6 +407,7 @@ export class SearchController {
     this._unsubscribeFromTextChanges();
     this._results = [];
     this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
     this._activeIndex = -1;
   }
 
@@ -414,6 +432,7 @@ export class SearchController {
     if (!fullText || !this._query) {
       this._results = [];
       this._maxResultRowSpan = 0;
+    this._searchedVersion = -1;
       this._activeIndex = -1;
       return;
     }
@@ -448,6 +467,7 @@ export class SearchController {
 
     this._results = results;
     this._maxResultRowSpan = maxRowSpan;
+    this._searchedVersion = snap.version;
     this._activeIndex = results.length > 0 ? 0 : -1;
   }
 

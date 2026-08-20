@@ -475,6 +475,34 @@ describe("SearchController - resolveResults", () => {
 
     expect(visible.length).toBe(0);
   });
+
+  test("resolveResultsInViewport keeps a match whose span grew since the search", () => {
+    // The row span used to bound the filter is a plain number, so it does not
+    // survive edits the way the result anchors do. Editing through the
+    // MultiBuffer bypasses the Editor, so no textChange refreshes it — the
+    // span must not be trusted to narrow a newer snapshot.
+    const { mb, search } = setup("aaa\nTOxxDO\nbbb\nccc\nddd");
+    search.find("TO[\\s\\S]*?DO", { regex: true });
+    expect(search.state.count).toBe(1);
+
+    // Match sits on row 1 only, so it is not visible in [2, 4).
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    expect(search.resolveResultsInViewport(2 as MultiBufferRow, 4 as MultiBufferRow).length).toBe(0);
+
+    // Split the match across rows 1-2. The match itself is unchanged — the
+    // same range still matches the query — but it now reaches into [2, 4).
+    mb.edit(mbPoint(1, 4), mbPoint(1, 4), "\n");
+
+    const resolved = search.resolveResults();
+    expectPoint(resolved[0]?.start ?? mbPoint(-1, -1), 1, 0);
+    expectPoint(resolved[0]?.end ?? mbPoint(-1, -1), 2, 2);
+
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in test
+    const visible = search.resolveResultsInViewport(2 as MultiBufferRow, 4 as MultiBufferRow);
+
+    expect(visible.length).toBe(1);
+    expect(visible[0]?.index).toBe(0);
+  });
 });
 
 // ─── Clear and Dispose ──────────────────────────────────────────────
