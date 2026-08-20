@@ -647,9 +647,8 @@ export class Editor {
     let currentSnap = snap;
 
     for (const { start, end } of resolved) {
-      // Check editability
-      const startBuf = currentSnap.toBufferPoint(start);
-      if (startBuf && !startBuf.excerpt.editable) continue;
+      // Check editability of the whole range, not just where it starts
+      if (!this._rangeIsEditable(currentSnap, start, end)) continue;
 
       let insertText = text;
       if (text === "\n") {
@@ -786,8 +785,7 @@ export class Editor {
     let currentSnap = snap;
 
     for (const { start, end } of deleteRanges) {
-      const startBuf = currentSnap.toBufferPoint(start);
-      if (startBuf && !startBuf.excerpt.editable) continue;
+      if (!this._rangeIsEditable(currentSnap, start, end)) continue;
 
       const removedText = this._getTextInRange(currentSnap, start, end);
       edits.push({ editStart: start, removedText, insertedText: "" });
@@ -895,8 +893,7 @@ export class Editor {
     let currentSnap = snap;
 
     for (const { start, end } of deleteRanges) {
-      const startBuf = currentSnap.toBufferPoint(start);
-      if (startBuf && !startBuf.excerpt.editable) continue;
+      if (!this._rangeIsEditable(currentSnap, start, end)) continue;
 
       const removedText = this._getTextInRange(currentSnap, start, end);
       edits.push({ editStart: start, removedText, insertedText: "" });
@@ -1176,10 +1173,7 @@ export class Editor {
       }
 
       // Check editability of both endpoints (range may span excerpt boundary)
-      const startBuf = currentSnap.toBufferPoint(deleteStart);
-      if (startBuf && !startBuf.excerpt.editable) continue;
-      const endBuf = currentSnap.toBufferPoint(deleteEnd);
-      if (endBuf && !endBuf.excerpt.editable) continue;
+      if (!this._rangeIsEditable(currentSnap, deleteStart, deleteEnd)) continue;
 
       const removedText = this._getTextInRange(currentSnap, deleteStart, deleteEnd);
       edits.push({ editStart: deleteStart, removedText, insertedText: "" });
@@ -1490,6 +1484,34 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const lastLine = (lines[lines.length - 1] ?? "").slice(0, end.column);
     const middleLines = lines.slice(1, -1);
     return [firstLine, ...middleLines, lastLine].join("\n");
+  }
+
+  /**
+   * True when every excerpt the range [start, end] touches is editable.
+   *
+   * Mirrors the three checks in `_edit()` — start point, end point, and every
+   * excerpt spanned in between. The multi-selection edit paths write through
+   * `multiBuffer.edit()` directly rather than through `_edit()`, so they need
+   * the same test; checking only the start lets a selection that begins in an
+   * editable excerpt and ends in a non-editable one through.
+   */
+  private _rangeIsEditable(
+    snap: MultiBufferSnapshot,
+    start: MultiBufferPoint,
+    end: MultiBufferPoint,
+  ): boolean {
+    const startBuf = snap.toBufferPoint(start);
+    if (startBuf && !startBuf.excerpt.editable) return false;
+    const endBuf = snap.toBufferPoint(end);
+    if (endBuf && !endBuf.excerpt.editable) return false;
+    if (!startBuf || !endBuf) return true;
+    if (startBuf.excerpt.id.index === endBuf.excerpt.id.index) return true;
+    for (const exc of snap.excerpts) {
+      if (exc.startRow >= startBuf.excerpt.startRow && exc.startRow <= endBuf.excerpt.startRow) {
+        if (!exc.editable) return false;
+      }
+    }
+    return true;
   }
 
   /**
