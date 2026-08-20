@@ -357,6 +357,35 @@ describe("Multi-cursor - goal column (per-cursor sticky columns)", () => {
     // All cursors should have moved to row 2
     expect(rows.every((r) => r === 2)).toBe(true);
   });
+
+  test("goal columns follow their cursor when addCursor is used out of document order", () => {
+    // `addCursor` appends, so `_selections` is in insertion order — here the
+    // reverse of document order. `_mergeSelections` sorts by position, which
+    // permutes the array without changing its length, so goal columns tracked
+    // by index alone would swap between the two cursors on the second move.
+    const editor = setup("abcdefgh\nabcdefgh\nabcdefgh\nabcdefgh\nabcdefgh");
+    editor.setCursor(mbPoint(2, 5));
+    editor.dispatch({ type: "addCursor", at: mbPoint(0, 1) });
+
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+    editor.dispatch({ type: "moveCursor", direction: "down", granularity: "character" });
+
+    const snap = editor.multiBuffer.snapshot();
+    const positions = editor.selections
+      .map((sel) => {
+        const ha = sel.head === "end" ? sel.range.end : sel.range.start;
+        const p = snap.resolveAnchor(ha);
+        return { row: num(p?.row ?? mbRow(0)), column: p?.column };
+      })
+      .sort((a, b) => a.row - b.row);
+
+    // The cursor that started at column 1 keeps column 1; the one that started
+    // at column 5 keeps column 5.
+    expect(positions).toEqual([
+      { row: 2, column: 1 },
+      { row: 4, column: 5 },
+    ]);
+  });
 });
 
 // ─── Selection accessor backward compatibility ─────────────────────

@@ -953,6 +953,9 @@ export class Editor {
     const newSelections: Selection[] = [];
     const wrapMap = this._getWrapMap(snap);
     let hadNonCollapsed = false;
+    // Goal column keyed by the selection object it belongs to, so the mapping
+    // survives the reordering _mergeSelections performs.
+    const goalBySelection = new Map<Selection, number>();
 
     for (let i = 0; i < this._selections.length; i++) {
       const sel = this._selections[i];
@@ -997,7 +1000,11 @@ export class Editor {
       }
 
       const newSel = selectionAtPoint(this.multiBuffer, newCursor);
-      if (newSel) newSelections.push(newSel);
+      if (newSel) {
+        newSelections.push(newSel);
+        const goal = this._goalColumns?.[i];
+        if (goal !== undefined) goalBySelection.set(newSel, goal);
+      }
     }
 
     // Handle goal columns
@@ -1011,12 +1018,12 @@ export class Editor {
     }
 
     // Merge overlapping selections
-    const prevCount = this._selections.length;
     this._selections = this._mergeSelections(newSelections, snap);
-    // Merging changes count → goal columns are misaligned; clear them.
-    if (this._goalColumns !== null && this._selections.length !== prevCount) {
-      this._goalColumns = null;
-    }
+    // _mergeSelections sorts by document position, so it can reorder the array
+    // without changing its length. Re-key by selection identity rather than by
+    // index; a selection the merge created (or one that was dropped) is absent
+    // from the map, which clears the goal columns.
+    this._goalColumns = _remapGoalColumns(this._goalColumns, this._selections, goalBySelection);
 
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
@@ -1036,6 +1043,7 @@ export class Editor {
 
     const wrapMap = this._getWrapMap(snap);
     const newSelections: Selection[] = [];
+    const goalBySelection = new Map<Selection, number>();
 
     // Capture per-cursor goal columns on first vertical movement
     if ((direction === "up" || direction === "down") && this._goalColumns === null) {
@@ -1085,19 +1093,19 @@ export class Editor {
         newSel = createSelection(createAnchorRange(anchorEnd, newHeadAnchor), "end");
       }
       newSelections.push(newSel);
+      const goal = this._goalColumns?.[i];
+      if (goal !== undefined) goalBySelection.set(newSel, goal);
     }
 
-    // Clear goal columns for horizontal movement or if selection count changes after merge
+    // Horizontal movement clears the goal columns
     if (direction === "left" || direction === "right") {
       this._goalColumns = null;
     }
 
     // Merge overlapping selections
-    const prevCount = this._selections.length;
     this._selections = this._mergeSelections(newSelections, snap);
-    if (this._goalColumns !== null && this._selections.length !== prevCount) {
-      this._goalColumns = null;
-    }
+    // See the note in _moveCursor: the merge reorders, so re-key by identity.
+    this._goalColumns = _remapGoalColumns(this._goalColumns, this._selections, goalBySelection);
 
     // Update primary cursor
     const primarySel = this._selections[this._selections.length - 1];
@@ -1921,6 +1929,30 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
 
     return merged;
   }
+}
+
+/**
+ * Re-key per-cursor goal columns onto the post-merge selection array.
+ *
+ * `_mergeSelections()` sorts by document position, so the array it returns is a
+ * permutation of the selections handed to it — index-parallel bookkeeping does
+ * not survive it. Every selection the merge preserved is the same object, so
+ * identity is an exact key; a selection the merge synthesised (or dropped) has
+ * no entry, and the goal columns are cleared rather than silently misaligned.
+ */
+function _remapGoalColumns(
+  goalColumns: number[] | null,
+  selections: Selection[],
+  goalBySelection: Map<Selection, number>,
+): number[] | null {
+  if (goalColumns === null) return null;
+  const remapped: number[] = [];
+  for (const sel of selections) {
+    const goal = goalBySelection.get(sel);
+    if (goal === undefined) return null;
+    remapped.push(goal);
+  }
+  return remapped;
 }
 
 /** Returns true if two MultiBufferPoints are at the same row and column. */
