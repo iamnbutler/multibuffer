@@ -383,7 +383,7 @@ A batch method on `MultiBuffer` (`src/multibuffer/multibuffer.ts`) that atomical
 
 Used by `DiffController.reDiff()` when rebuilding the diff view. Note: `setExcerpts()` does **not** build an anchor replacement chain, so existing [anchors](#anchor) do not survive the call; this matches the prior semantics of `clearExcerpts()` + `addExcerpt()`.
 
-See also: [setExcerptsForBuffer](#setexcerptsforBuffer), [DiffController](#diffcontroller)
+See also: [setExcerptsForBuffer](#setexcerptsforbuffer), [DiffController](#diffcontroller)
 
 ### setExcerptsForBuffer
 
