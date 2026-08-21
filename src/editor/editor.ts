@@ -36,6 +36,20 @@ interface EditOp {
 }
 
 /**
+ * A selection recorded as resolved points rather than anchors.
+ *
+ * History must record where the selection *was*, so it cannot hold anchors:
+ * anchors track the document through subsequent edits, so by the time an entry
+ * is undone they no longer denote the pre-edit range. `cursorBefore` is a plain
+ * point for the same reason.
+ */
+interface SelectionSnapshot {
+  readonly start: MultiBufferPoint;
+  readonly end: MultiBufferPoint;
+  readonly head: "start" | "end";
+}
+
+/**
  * A history entry for undo/redo. Contains one or more edit operations
  * stored in application order. Cross-excerpt edits produce multiple ops
  * (applied bottom-to-top so higher excerpts' rows aren't shifted).
@@ -43,7 +57,7 @@ interface EditOp {
 interface HistoryEntry {
   readonly edits: ReadonlyArray<EditOp>;
   readonly cursorBefore: MultiBufferPoint;
-  readonly selectionsBefore: readonly Selection[];
+  readonly selectionsBefore: readonly SelectionSnapshot[];
 }
 
 export class Editor {
@@ -592,6 +606,8 @@ export class Editor {
   }
 
   private _insertText(snap: MultiBufferSnapshot, text: string): void {
+    // Must run before anything mutates — see _captureSelections.
+    const selectionsBefore = this._captureSelections(snap);
     this._goalColumn = undefined;
 
     if (this._selections.length === 0) return;
@@ -678,7 +694,7 @@ export class Editor {
       this._undoStack.push({
         edits,
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -697,6 +713,8 @@ export class Editor {
   }
 
   private _deleteBackward(snap: MultiBufferSnapshot, granularity: Granularity): void {
+    // Must run before anything mutates — see _captureSelections.
+    const selectionsBefore = this._captureSelections(snap);
     this._goalColumn = undefined;
     if (this._selections.length === 0) return;
 
@@ -805,7 +823,7 @@ export class Editor {
       this._undoStack.push({
         edits,
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -826,6 +844,8 @@ export class Editor {
   }
 
   private _deleteForward(snap: MultiBufferSnapshot, granularity: Granularity): void {
+    // Must run before anything mutates — see _captureSelections.
+    const selectionsBefore = this._captureSelections(snap);
     this._goalColumn = undefined;
     if (this._selections.length === 0) return;
 
@@ -914,7 +934,7 @@ export class Editor {
       this._undoStack.push({
         edits,
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1112,6 +1132,8 @@ export class Editor {
   }
 
   private _deleteLine(snap: MultiBufferSnapshot): void {
+    // Must run before anything mutates — see _captureSelections.
+    const selectionsBefore = this._captureSelections(snap);
     this._goalColumn = undefined;
 
     // Collect unique rows from all selections
@@ -1198,7 +1220,7 @@ export class Editor {
       this._undoStack.push({
         edits,
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1508,6 +1530,8 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     /** Pre-computed removed text. When provided, skips the `_getTextInRange` call for single-excerpt edits. */
     knownRemovedText?: string,
   ): boolean {
+    // Must run before anything mutates — see _captureSelections.
+    const selectionsBefore = this._captureSelections(snap);
     const startBuf = snap.toBufferPoint(start);
     const endBuf = snap.toBufferPoint(end);
 
@@ -1525,7 +1549,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.push({
         edits: [{ editStart: start, removedText, insertedText: newText }],
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1549,7 +1573,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
       this._undoStack.push({
         edits: [{ editStart: start, removedText, insertedText: newText }],
         cursorBefore: this._cursor,
-        selectionsBefore: this._selections,
+        selectionsBefore,
       });
       if (this._undoStack.length > Editor._MAX_HISTORY) {
         this._undoStack.shift();
@@ -1579,7 +1603,7 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._undoStack.push({
       edits: editOps,
       cursorBefore: this._cursor,
-      selectionsBefore: this._selections,
+      selectionsBefore,
     });
     if (this._undoStack.length > Editor._MAX_HISTORY) {
       this._undoStack.shift();
@@ -1654,6 +1678,36 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
   }
 
   /**
+   * Resolve the current selections into plain points.
+   *
+   * Must be called before the edit is applied. `resolveAnchor()` reports an
+   * anchor's position in the *current* document rather than in the snapshot it
+   * is given, so resolving after the edit — with any snapshot, including one
+   * taken beforehand — records where the selection ended up, not where it was.
+   */
+  private _captureSelections(snap: MultiBufferSnapshot): SelectionSnapshot[] {
+    const out: SelectionSnapshot[] = [];
+    for (const sel of this._selections) {
+      const start = snap.resolveAnchor(sel.range.start);
+      const end = snap.resolveAnchor(sel.range.end);
+      if (start && end) out.push({ start, end, head: sel.head });
+    }
+    return out;
+  }
+
+  /** Rebuild selections from recorded points against the current document. */
+  private _restoreSelections(recorded: readonly SelectionSnapshot[]): Selection[] {
+    const out: Selection[] = [];
+    for (const rec of recorded) {
+      const startAnchor = this.multiBuffer.createAnchor(rec.start, Bias.Left);
+      const endAnchor = this.multiBuffer.createAnchor(rec.end, Bias.Right);
+      if (!startAnchor || !endAnchor) continue;
+      out.push(createSelection(createAnchorRange(startAnchor, endAnchor), rec.head));
+    }
+    return out;
+  }
+
+  /**
    * Apply the inverse of a history entry. Returns the inverse entry
    * so the caller can push it onto the opposite stack.
    * Processes edits in reverse order — each inverse restores the state
@@ -1661,6 +1715,9 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
    */
   private _applyInverse(entry: HistoryEntry): HistoryEntry {
     const inverseOps: EditOp[] = [];
+    // Resolve before applying the inverse edits, so the returned entry records
+    // the selection as it is now rather than as the inverse leaves it.
+    const selectionsBefore = this._captureSelections(this.multiBuffer.snapshot());
 
     // Apply inversions in reverse of application order
     for (let i = entry.edits.length - 1; i >= 0; i--) {
@@ -1680,10 +1737,10 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     const inverse: HistoryEntry = {
       edits: inverseOps,
       cursorBefore: this._cursor,
-      selectionsBefore: this._selections,
+      selectionsBefore,
     };
     this._cursor = entry.cursorBefore;
-    this._selections = [...entry.selectionsBefore];
+    this._selections = this._restoreSelections(entry.selectionsBefore);
     return inverse;
   }
 
