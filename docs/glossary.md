@@ -8,7 +8,7 @@ A reference for project-specific terms and concepts used throughout the codebase
 
 ### Anchor
 
-A stable position within a buffer or multibuffer that survives text edits. Anchors track a byte offset and a [bias](#bias), and are updated by replaying the buffer's edit log when the buffer changes. Used to represent cursor positions and selection endpoints durably.
+A stable position within a buffer or multibuffer that survives text edits. Anchors track an [offset](#coordinate-systems) and a [bias](#bias), and are brought up to date by [anchor resolution](#anchor-resolution). Used to represent cursor positions and selection endpoints durably.
 
 See: `src/multibuffer/anchor.ts`, `src/multibuffer/types.ts`
 
@@ -22,20 +22,17 @@ The process of converting an anchor to a current [MultiBufferPoint](#multibuffer
 
 ### adjustOffset
 
-A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values. Applies `adjustOffsetSingle` for each edit in turn, respecting [Bias](#bias) to resolve ambiguous positions at edit boundaries:
+A pure function (`src/buffer/offset.ts`) that advances a `BufferOffset` through a chronological sequence of `EditEntry` values, applying `adjustOffsetSingle` for each edit in turn. Offsets before an edit pass through unchanged, and offsets after its deleted range shift by `insertedLength − deletedLength`. At the edit start, [Bias](#bias) resolves the ambiguity: `Bias.Right` jumps past the inserted text, while `Bias.Left` — like any offset inside the deleted range — clamps to the edit start.
 
-- Offsets before the edit pass through unchanged.
-- Offsets after the edit's deleted range are shifted by `insertedLength − deletedLength`.
-- Offsets at the edit start with `Bias.Right` jump past inserted text.
-- Offsets at the edit start with `Bias.Left`, or within the deleted range, clamp to the edit start.
-
-Used by multibuffer anchor resolution when replaying edits since an anchor's recorded version.
+Used by [anchor resolution](#anchor-resolution).
 
 See: `src/buffer/offset.ts`, `src/multibuffer/anchor.ts`
 
 ### Auto-Indent
 
-A behavior of the `insertNewline` command: the new line automatically receives the same leading whitespace as the current line.
+Inheriting the current line's leading whitespace when opening a new line. Implemented only in `_insertLineBelow` and `_insertLineAbove` (`Mod+Enter` / `Mod+Shift+Enter`), which copy the leading spaces matched by `/^( +)/` and place the cursor after them.
+
+Note: `insertNewline` (`Enter`) does **not** auto-indent — it inserts a bare `"\n"` (`src/editor/editor.ts`). The in-code comments claiming otherwise are stale.
 
 ---
 
@@ -43,10 +40,7 @@ A behavior of the `insertNewline` command: the new line automatically receives t
 
 ### Bias
 
-A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds.
-
-- `Bias.Left` — stays left of inserted text; clips to the position before a boundary.
-- `Bias.Right` — advances past inserted text; clips to the position at or after a boundary.
+A hint controlling behavior at position boundaries — when text is inserted at an anchor's offset or a point is clipped to valid bounds. `Bias.Left` stays left of inserted text and clips to the position before a boundary; `Bias.Right` advances past inserted text and clips to the position at or after it.
 
 ### Buffer
 
@@ -54,11 +48,11 @@ A mutable object representing a single file's text content, backed by a [rope](#
 
 ### BufferAnchor
 
-An anchor scoped to a single buffer. Stores the byte offset and bias at creation time plus the buffer `version`, allowing it to be adjusted forward to the current version via `editsSince`.
+An [anchor](#anchor) scoped to a single buffer. Stores the offset and bias at creation time plus the buffer `version`, allowing it to be adjusted forward to the current version via `editsSince`.
 
 ### BufferOffset
 
-A branded number type representing a byte offset within a single buffer. Distinct from [MultiBufferOffset](#multibufferoffset) to prevent mixing coordinate systems at compile time.
+A branded number type representing a [UTF-16 code unit offset](#coordinate-systems) within a single buffer. Distinct from [MultiBufferOffset](#multibufferoffset) to prevent mixing coordinate systems at compile time.
 
 ### BufferPoint
 
@@ -84,22 +78,15 @@ The operation of clamping an out-of-bounds point or offset to the nearest valid 
 
 An automated PR triage agent (`.github/workflows/closer.md`). Runs after a review is submitted and decides the outcome for each pull request:
 
-- Applies the `ready-to-merge` label when CI is green and no blocking reviews remain.
-- Applies the `needs-review` label when blocking reviews or unresolved issues exist.
-- Closes PRs that are duplicate, spam, or fundamentally broken.
-
-Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
+It labels a PR `ready-to-merge` when CI is green and no blocking reviews remain, `needs-review` when blocking reviews or unresolved issues exist, and closes PRs that are duplicate, spam, or fundamentally broken. Defaults to `needs-review` when uncertain. Chains naturally after the [Reviewer](#reviewer). Draft status is irrelevant — all PRs are triaged on their code and review state alone.
 
 See: `.github/workflows/closer.md`
 
 ### Coordinate Systems
 
-The project uses two distinct coordinate spaces:
+The project uses two distinct coordinate spaces, and branded types enforce that they are never accidentally mixed. **Buffer coordinates** (`BufferRow`, `BufferOffset`, `BufferPoint`) address a position within a single source file; **multibuffer coordinates** (`MultiBufferRow`, `MultiBufferOffset`, `MultiBufferPoint`) address a position within the unified scrollable view across all excerpts.
 
-- **Buffer coordinates** — row/column or byte offset within a single source file (`BufferRow`, `BufferOffset`, `BufferPoint`).
-- **Multibuffer coordinates** — row/column or byte offset within the unified scrollable view across all excerpts (`MultiBufferRow`, `MultiBufferOffset`, `MultiBufferPoint`).
-
-Branded types enforce that these are never accidentally mixed.
+In both spaces, offsets are **UTF-16 code unit offsets** — never byte offsets. A supplementary code point such as an emoji contributes 2 units. The one genuinely byte-valued field in the codebase is [`TextSummary.bytes`](#textsummary), which is a UTF-8 count documented for display only and must not be used for position arithmetic.
 
 ---
 
@@ -113,22 +100,17 @@ See also: [indentLines](#indentlines)
 
 ### Decoration
 
-A visual annotation applied to a range of text in the renderer. Each decoration specifies a `MultiBufferRange` and optionally a CSS class name and a partial [`DecorationStyle`](#decorationstyle). The DOM renderer builds a per-row lookup during each render pass; when two decorations overlap the same row, the later entry in the array wins.
+A visual annotation applied to a range of text in the renderer: a required `range` (`MultiBufferRange`) plus optional `className` and `style` (a partial [`DecorationStyle`](#decorationstyle)). The DOM renderer builds a per-row lookup during each render pass; when two decorations overlap the same row, the later entry in the array wins.
 
 ### DecorationStyle
 
-An interface (`src/renderer/types.ts`) describing the full set of visual properties a [Decoration](#decoration) can apply to a row: `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, `textDecoration`, and gutter-specific fields `gutterBackground`, `gutterColor`, `gutterSign`, and `gutterSignColor`. Decorations accept a `Partial<DecorationStyle>`, so any subset of fields may be specified.
+An interface (`src/renderer/types.ts`) describing the full set of visual properties a [Decoration](#decoration) can apply to a row: text properties `backgroundColor`, `color`, `borderColor`, `fontWeight`, `fontStyle`, and `textDecoration`; gutter properties `gutterBackground`, `gutterColor`, `gutterSign`, and `gutterSignColor`; and the optional `isHunkSeparator`, which makes the gutter span the full width with no line number (used for diff hunk separators). Decorations accept a `Partial<DecorationStyle>`, so any subset may be specified.
 
 ### DiffController
 
 A stateful controller (`src/diff/controller.ts`) that manages a live diff view between two [buffers](#buffer). Created by `createDiffController(oldBuffer, newBuffer, options)`. Maintains a [MultiBuffer](#multibuffer) whose excerpts are rebuilt from the old and new buffers on each diff, along with a set of [decorations](#decoration) for visual styling.
 
-Key methods:
-
-- `reDiff()` — recomputes the diff immediately; returns the new `isEqual` state.
-- `notifyChange()` — schedules a debounced re-diff (default 150 ms).
-- `onUpdate(callback)` — subscribes to decoration updates; returns an unsubscribe function.
-- `dispose()` — cleans up timers and subscriptions.
+Key methods: `reDiff()` recomputes the diff immediately and returns the new `isEqual` state; `notifyChange()` schedules a debounced re-diff (default 150 ms); `onUpdate(callback)` subscribes to decoration updates and returns an unsubscribe function; `dispose()` cleans up timers and subscriptions.
 
 See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
@@ -140,15 +122,11 @@ See: `src/diff/types.ts`
 
 ### DiffKind
 
-The type of change a [DiffLine](#diffline) represents:
-
-- `"equal"` — the line is unchanged between old and new.
-- `"insert"` — the line was added in the new version (has no `oldRow`).
-- `"delete"` — the line was removed from the old version (has no `newRow`).
+The type of change a [DiffLine](#diffline) represents: `"equal"` (unchanged between old and new), `"insert"` (added in the new version), or `"delete"` (removed from the old version).
 
 ### DiffLine
 
-A single line in a diff result, carrying its [DiffKind](#diffkind), `text`, and source row numbers (`oldRow` from the old buffer, `newRow` from the new buffer). Insert lines have `oldRow: undefined`; delete lines have `newRow: undefined`.
+A single line in a diff result, carrying its [DiffKind](#diffkind), `text`, and source row numbers (`oldRow` from the old buffer, `newRow` from the new buffer). Only the rows that exist are populated: insert lines have `oldRow: undefined`, delete lines have `newRow: undefined`.
 
 See: `src/diff/types.ts`
 
@@ -164,7 +142,7 @@ See: `src/diff/types.ts`, `src/diff/diff.ts`
 
 ### Edit Log
 
-A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since buffer creation. Used for [anchor](#anchor) resolution by replaying edits since an anchor's recorded version to find its current position.
+A per-buffer list of [EditEntry](#editentry) values recording every insert and delete since buffer creation. Consumed by [anchor resolution](#anchor-resolution) via `editsSince`.
 
 ### EditEntry
 
@@ -192,7 +170,7 @@ Renderer-level metadata for drawing a file header at an excerpt boundary: file p
 
 ### ExcerptId
 
-A branded [SlotKey](#slotkey) that uniquely identifies an excerpt. Generational: if an excerpt is removed and its slot reused, old `ExcerptId` values pointing to that slot are automatically invalid.
+A branded [SlotKey](#slotkey) that uniquely identifies an excerpt. Because it is [generational](#generational-arena), an `ExcerptId` left over from a removed excerpt is detectably invalid even after its slot is reused.
 
 ### ExcerptInfo
 
@@ -200,9 +178,7 @@ The public view of an excerpt, exposed to consumers. Contains the excerpt's `id`
 
 ### ExcerptRange
 
-The specification for creating an excerpt. Contains:
-- `context` — the full `BufferRange` to display (including any surrounding context lines).
-- `primary` — the highlighted sub-range within `context`.
+The specification for creating an excerpt: `context`, the full `BufferRange` to display including any surrounding context lines, and `primary`, the highlighted sub-range within it.
 
 ---
 
@@ -244,7 +220,9 @@ Converting pixel coordinates `(x, y)` from a mouse event into a `{ row, column }
 
 ### Implementor
 
-An automated AI agent (`.github/workflows/implementor.md`) that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command on any issue. Creates draft pull requests, self-maintains its open PRs for CI failures (delegating complex fixes to `/pr-fix`), and can decompose large issues into sub-issues also labeled `agent:implement`. Every output is prefixed with `[Implementor]` for transparency.
+An automated AI agent (`.github/workflows/implementor.md`) that picks up GitHub issues labeled `agent:implement` and implements them following the project's TDD discipline — Types, then Tests, then Implementation. Runs twice daily (7 am/2 pm UTC) or on demand via the `/implement` slash command on any issue. Creates draft pull requests, self-maintains its open PRs for CI failures, and can decompose large issues into sub-issues also labeled `agent:implement`. Every output is prefixed with `[Implementor]` for transparency.
+
+> The workflow also instructs the agent to delegate complex CI fixes by commenting `/pr-fix`. No `pr-fix` workflow exists in `.github/workflows/`, so that delegation is currently inert.
 
 See: `.github/workflows/implementor.md`
 
@@ -294,7 +272,7 @@ A collection of [excerpts](#excerpt) from one or more buffers, presented as a si
 
 ### MultiBufferOffset
 
-A branded byte offset within the multibuffer's unified view. Distinct from [BufferOffset](#bufferoffset).
+A branded [UTF-16 code unit offset](#coordinate-systems) within the multibuffer's unified view. Distinct from [BufferOffset](#bufferoffset).
 
 ### MultiBufferPoint
 
@@ -320,7 +298,7 @@ See also: [DiffResult](#diffresult), [DiffHunk](#diffhunk)
 
 ### Prefix Sum
 
-An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk byte offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
+An array where entry `i` holds the cumulative total of entries `0..i`. Used by [Rope](#rope) (chunk start offsets) and [WrapMap](#wrapmap) (visual row offsets) for O(1) forward lookup and O(log n) reverse lookup via binary search.
 
 ### Position Translation
 
@@ -350,18 +328,13 @@ An interface (`src/renderer/types.ts`) that rendering backends implement. A rend
 
 An automated adversarial code reviewer (`.github/workflows/reviewer.md`). Triggered on every PR event (opened, synchronize, ready_for_review) and via the `/review` slash command. Enforces the project's four priorities in order: accuracy, performance, consistency, public API UX.
 
-- Uses `REQUEST_CHANGES` for blocking issues; `COMMENT` for non-blocking suggestions.
-- Hardballs every `biome-ignore` suppression — suppressions must have concrete justification (or be rewritten to avoid needing one).
-- Can sparingly create issues (max 1/run) for antipatterns recurring across multiple reviews.
-- Up to 25 inline review comments per run, prioritising blocking issues first.
-
-Read-only: never writes implementation code or pushes to branches.
+It uses `REQUEST_CHANGES` for blocking issues and `COMMENT` for non-blocking suggestions, leaving up to 25 inline comments per run with blocking issues first, and may sparingly open an issue (max 1/run) for antipatterns recurring across reviews. Every `biome-ignore` suppression is hardballed — it must carry concrete justification or be rewritten to avoid needing one. Read-only: never writes implementation code or pushes to branches.
 
 See: `.github/workflows/reviewer.md`
 
 ### Rope
 
-The text storage structure backing each [buffer](#buffer). Splits text into fixed-size chunks (≤ 1024 bytes, preferring newline boundaries); insert/delete/replace return new Rope instances with structural sharing of unchanged chunks. Caches chunk byte offsets as a prefix-sum array for O(log n) line↔offset conversion.
+The text storage structure backing each [buffer](#buffer). Splits text into chunks of at most 1024 [UTF-16 code units](#coordinate-systems), breaking at newline boundaries where possible; insert/delete/replace return new Rope instances with structural sharing of unchanged chunks. Caches chunk start offsets as a [prefix-sum](#prefix-sum) array for O(log n) line↔offset conversion.
 
 ---
 
@@ -383,7 +356,7 @@ A batch method on `MultiBuffer` (`src/multibuffer/multibuffer.ts`) that atomical
 
 Used by `DiffController.reDiff()` when rebuilding the diff view. Note: `setExcerpts()` does **not** build an anchor replacement chain, so existing [anchors](#anchor) do not survive the call; this matches the prior semantics of `clearExcerpts()` + `addExcerpt()`.
 
-See also: [setExcerptsForBuffer](#setexcerptsforBuffer), [DiffController](#diffcontroller)
+See also: [setExcerptsForBuffer](#setexcerptsforbuffer), [DiffController](#diffcontroller)
 
 ### setExcerptsForBuffer
 
@@ -399,11 +372,11 @@ An optimization flag (`MultiBuffer.isSingleton`) that is `true` when the multibu
 
 ### SlotKey
 
-A `{ index, generation }` pair used to address entries in a [SlotMap](#slotmap). The generation component makes stale keys detectable in O(1).
+A `{ index, generation }` pair used to address entries in a [SlotMap](#slotmap). See [Generational Arena](#generational-arena) for the role of `generation`.
 
 ### SlotMap
 
-A generational arena (`src/multibuffer/slot_map.ts`) providing O(1) insert, remove, and lookup with stale-key detection. Used to store excerpts and assign [ExcerptId](#excerptid) values.
+A [generational arena](#generational-arena) (`src/multibuffer/slot_map.ts`) providing O(1) insert, remove, and lookup. Used to store excerpts and assign [ExcerptId](#excerptid) values.
 
 ### Snapshot Pattern
 
@@ -415,10 +388,7 @@ Displaying a single logical line across multiple visual rows when it exceeds the
 
 ### Surrogate Pair Snapping
 
-The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction:
-
-- `Bias.Left` — steps back to the high surrogate (the position *before* the supplementary character).
-- `Bias.Right` — steps past the low surrogate (the position *after* the supplementary character).
+The behavior of `clipPoint` and `clipOffset` (`src/buffer/buffer.ts`) when a clamped position lands inside a UTF-16 surrogate pair (e.g., emoji or other supplementary Unicode characters outside the Basic Multilingual Plane). A position is inside a surrogate pair when it points at a low surrogate (code unit 0xDC00–0xDFFF); [Bias](#bias) then determines the snap direction, `Bias.Left` stepping back to the high surrogate (the position *before* the supplementary character) and `Bias.Right` stepping past the low surrogate (the position *after* it).
 
 This matches the surrogate-pair-aware cursor movement in `cursor.ts`, which uses `codePointAt`/`prevCpStart` helpers to traverse pairs atomically.
 
@@ -430,7 +400,7 @@ See: `src/buffer/buffer.ts`, [Bias](#bias), [Clipping](#clipping)
 
 ### TextSummary
 
-Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text.
+Cached aggregate metrics for a span of text: `lines`, `bytes`, `lastLineLength`, and `chars`. Stored per-excerpt to enable O(1) position lookups without scanning the text. `lastLineLength` and `chars` count [UTF-16 code units](#coordinate-systems); `bytes` is a UTF-8 count intended for display only, and is the one metric here that must never be used for position arithmetic.
 
 ### Trailing Newline (synthetic)
 
@@ -438,10 +408,7 @@ An artificial newline appended after an excerpt's last line to visually separate
 
 ### TreeEdit
 
-An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter. Matches the data fields of web-tree-sitter's `Edit` class:
-
-- `startIndex` / `oldEndIndex` / `newEndIndex` — byte offsets of the changed range in the old and new text.
-- `startPosition` / `oldEndPosition` / `newEndPosition` — row/column positions of the range endpoints.
+An interface (`src/renderer/highlighter.ts`) describing a single incremental text edit to supply to tree-sitter, matching the data fields of web-tree-sitter's `Edit` class: `startIndex` / `oldEndIndex` / `newEndIndex` give the changed range as offsets into the old and new text, and `startPosition` / `oldEndPosition` / `newEndPosition` give the same endpoints as row/column positions.
 
 Passed alongside the new buffer text to `Highlighter.parseBuffer()` to enable [Incremental Parsing](#incremental-parsing). The helper `applyTreeEdit(tree, edit)` applies the descriptor to an existing tree before re-parsing.
 
