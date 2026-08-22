@@ -1083,8 +1083,11 @@ export class WebGpuRenderer implements Renderer {
     const lines = this._snapshot.lines(startRow, endRow);
     const excerptBoundaries = this._snapshot.excerptBoundaries(startRow, endRow);
 
+    // The header sits on the previous excerpt's trailing-newline row, which
+    // only exists when that excerpt has one. Without it, `row - 1` is a
+    // content row and the header would replace the text on it.
     const excerptHeaders = excerptBoundaries
-      .filter((b) => b.prev !== undefined)
+      .filter((b) => b.prev?.hasTrailingNewline === true)
       .map((b) => ({
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         row: (b.row - 1) as MultiBufferRow,

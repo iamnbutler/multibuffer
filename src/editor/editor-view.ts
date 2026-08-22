@@ -239,8 +239,10 @@ class EditorViewImpl implements EditorView {
 
     // Build excerpt headers: each excerpt after the first uses the
     // trailing-newline row of the previous excerpt as its header row.
+    // Excerpts without a trailing newline have no such row, and drawing a
+    // header on `row - 1` there would hide that excerpt's last line.
     const excerptHeaders = boundaries
-      .filter((b) => b.prev !== undefined)
+      .filter((b) => b.prev?.hasTrailingNewline === true)
       .map((b) => ({
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for header row offset
         row: (b.row - 1) as MultiBufferRow,
