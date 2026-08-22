@@ -763,8 +763,11 @@ export class DomRenderer implements Renderer {
 
     // Skip header for the first excerpt (no trailing newline row before it).
     // Subsequent excerpts use the previous excerpt's trailing newline row.
+    // That row only exists when the previous excerpt has one: otherwise
+    // `row - 1` holds real text, and a header there replaces the line
+    // rather than sitting above it.
     const excerptHeaders = excerptBoundaries
-      .filter((b) => b.prev !== undefined)
+      .filter((b) => b.prev?.hasTrailingNewline === true)
       .map((b) => ({
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
         row: (b.row - 1) as MultiBufferRow,
