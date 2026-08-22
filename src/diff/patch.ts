@@ -365,10 +365,21 @@ function parseHunk(
     const line = lines[i];
     if (line === undefined) break;
 
-    // Stop at next hunk or file
+    // Stop at next hunk or file.
+    //
+    // "--- " is ambiguous: deleting a line whose content starts with "-- "
+    // (a SQL/Haskell/Lua comment, an email signature marker) produces a body
+    // line that is textually identical to a traditional diff's old-file
+    // header. The declared hunk counts are the only way to tell them apart,
+    // so only treat it as a header once this hunk has consumed every line it
+    // said it would. "diff --git" and "@@ " are unambiguous - a body line
+    // always carries a " ", "-", "+" or "\" prefix, so neither can appear at
+    // column 0 inside a hunk.
+    const hunkComplete =
+      oldLineNum - oldStart >= oldCount && newLineNum - newStart >= newCount;
     if (
       line.startsWith("diff --git") ||
-      line.startsWith("--- ") ||
+      (hunkComplete && line.startsWith("--- ")) ||
       HUNK_HEADER.test(line)
     ) {
       break;
