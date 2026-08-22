@@ -309,6 +309,129 @@ describe("parsePatch - traditional unified diff", () => {
   });
 });
 
+// Deleting a line whose content begins with "-- " (a SQL, Haskell, Lua or Ada
+// comment, or an email signature marker) produces the body line "--- ...",
+// which is textually identical to a traditional diff's old-file header.
+// The declared hunk counts are what distinguish them.
+
+const DELETED_DASH_COMMENT_GIT = `diff --git a/q.sql b/q.sql
+index 1111111..2222222 100644
+--- a/q.sql
++++ b/q.sql
+@@ -1,4 +1,3 @@
+ SELECT 1;
+--- old comment
+ SELECT 2;
+ SELECT 3;
+`;
+
+const DELETED_DASH_COMMENT_TRADITIONAL = `--- a/q.sql
++++ b/q.sql
+@@ -1,3 +1,3 @@
+ SELECT 1;
+--- old comment
++++ new comment
+ SELECT 2;
+`;
+
+const TWO_TRADITIONAL_FILES = `--- a/one.txt
++++ b/one.txt
+@@ -1,1 +1,1 @@
+-alpha
++beta
+--- a/two.txt
++++ b/two.txt
+@@ -1,1 +1,1 @@
+-gamma
++delta
+`;
+
+describe("parsePatch - content that looks like a file header", () => {
+  test("keeps a deleted '-- ' comment and the lines after it", () => {
+    const result = parsePatch(DELETED_DASH_COMMENT_GIT);
+    expect(result.files.length).toBe(1);
+
+    const file = result.files[0];
+    expect(file).toBeDefined();
+    if (!file) return;
+
+    expect(file.hunks.length).toBe(1);
+    const hunk = file.hunks[0];
+    expect(hunk).toBeDefined();
+    if (!hunk) return;
+
+    expect(hunk.lines.map((l) => l.kind)).toEqual([
+      "context",
+      "delete",
+      "context",
+      "context",
+    ]);
+    expect(hunk.lines.map((l) => l.content)).toEqual([
+      "SELECT 1;",
+      "-- old comment",
+      "SELECT 2;",
+      "SELECT 3;",
+    ]);
+  });
+
+  test("does not invent a second file from '--- '/'+++ ' body lines", () => {
+    const result = parsePatch(DELETED_DASH_COMMENT_TRADITIONAL);
+    expect(result.files.length).toBe(1);
+
+    const file = result.files[0];
+    expect(file).toBeDefined();
+    if (!file) return;
+
+    expect(file.oldPath).toBe("q.sql");
+    const hunk = file.hunks[0];
+    expect(hunk).toBeDefined();
+    if (!hunk) return;
+
+    expect(hunk.lines.map((l) => l.kind)).toEqual([
+      "context",
+      "delete",
+      "add",
+      "context",
+    ]);
+    expect(hunk.lines.map((l) => l.content)).toEqual([
+      "SELECT 1;",
+      "-- old comment",
+      "++ new comment",
+      "SELECT 2;",
+    ]);
+  });
+
+  test("single-file patch is not misreported as a multi-file patch", () => {
+    expect(() =>
+      createMultiBufferFromPatch(DELETED_DASH_COMMENT_TRADITIONAL),
+    ).not.toThrow();
+  });
+
+  test("an added '++ ' line is preserved", () => {
+    const result = parsePatch(`--- a/q.sql
++++ b/q.sql
+@@ -1,1 +1,2 @@
+ SELECT 1;
++++ new comment
+`);
+    const hunk = result.files[0]?.hunks[0];
+    expect(hunk).toBeDefined();
+    if (!hunk) return;
+
+    expect(hunk.lines.map((l) => l.kind)).toEqual(["context", "add"]);
+    expect(hunk.lines[1]?.content).toBe("++ new comment");
+  });
+
+  test("real file boundaries in a traditional diff still split", () => {
+    const result = parsePatch(TWO_TRADITIONAL_FILES);
+    expect(result.files.length).toBe(2);
+    expect(result.files[0]?.oldPath).toBe("one.txt");
+    expect(result.files[1]?.oldPath).toBe("two.txt");
+    expect(result.files[0]?.hunks[0]?.lines.length).toBe(2);
+    expect(result.files[1]?.hunks[0]?.lines.length).toBe(2);
+  });
+});
+
 describe("parsePatch - edge cases", () => {
   test("handles empty patch string", () => {
     const result = parsePatch("");
