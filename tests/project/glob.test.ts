@@ -228,4 +228,44 @@ describe("shouldTraverseDirectory", () => {
       shouldTraverseDirectory("node_modules", ["**/*.ts"], ["node_modules"]),
     ).toBe(false);
   });
+
+  describe("brace expansion", () => {
+    test("traverses a directory named by a leading brace group", () => {
+      const include = ["{src,tests}/**/*.ts"];
+      expect(shouldTraverseDirectory("src", include, [])).toBe(true);
+      expect(shouldTraverseDirectory("tests", include, [])).toBe(true);
+      expect(shouldTraverseDirectory("docs", include, [])).toBe(false);
+    });
+
+    test("traverses a directory named by an inner brace group", () => {
+      const include = ["src/{a,b}/**/*.ts"];
+      expect(shouldTraverseDirectory("src/a", include, [])).toBe(true);
+      expect(shouldTraverseDirectory("src/b", include, [])).toBe(true);
+      expect(shouldTraverseDirectory("src/c", include, [])).toBe(false);
+    });
+
+    test("agrees with shouldInclude for every brace alternative", () => {
+      // Pruning is an optimisation: a directory holding a file that
+      // shouldInclude() accepts must always be traversed.
+      const include = ["{src,tests}/*.ts"];
+      for (const dir of ["src", "tests"]) {
+        expect(shouldInclude(`${dir}/index.ts`, include, [])).toBe(true);
+        expect(shouldTraverseDirectory(dir, include, [])).toBe(true);
+      }
+    });
+
+    test("excludes a directory named by a brace group", () => {
+      const exclude = ["{node_modules,dist}"];
+      expect(shouldTraverseDirectory("node_modules", [], exclude)).toBe(false);
+      expect(shouldTraverseDirectory("dist", [], exclude)).toBe(false);
+      expect(shouldTraverseDirectory("src", [], exclude)).toBe(true);
+    });
+
+    test("excludes nested directories named by a brace group", () => {
+      // Matches the plain-pattern behaviour of exclude: ["node_modules"].
+      expect(
+        shouldTraverseDirectory("src/node_modules", [], ["{node_modules,dist}"]),
+      ).toBe(false);
+    });
+  });
 });
