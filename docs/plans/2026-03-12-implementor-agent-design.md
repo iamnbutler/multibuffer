@@ -1,107 +1,37 @@
 # Implementor Agent Design
 
+**Status:** Shipped. [`.github/workflows/implementor.md`](../../.github/workflows/implementor.md) is the authoritative definition and has evolved past this document — read it for the current triggers, phase steps, safe-output caps, and guardrails. This file records the design decisions and their rationale only.
+
 **Goal:** A gh-aw workflow that takes scoped GitHub issues and implements them following the project's TDD discipline (Types → Tests → Implementation), creating draft PRs with working code.
 
-**Architecture:** Scheduled + slash-command triggered gh-aw workflow. Single-issue focus per run with escape hatches for complexity (decompose into sub-issues, commit WIP). Reads CLAUDE.md dynamically for project constraints while following a baked-in TDD phase structure.
+**Architecture:** Scheduled (`0 7,14 * * *`) plus the `/implement` slash command and `workflow_dispatch`. One issue per run, with escape hatches for complexity. Project constraints are read from `CLAUDE.md` at runtime rather than baked in, so the agent tracks the repo as it changes; only the TDD phase structure is fixed.
 
 ---
 
-## Triggers
+## Design Decisions
 
-- **Scheduled:** Twice daily at 7am and 2pm UTC (`0 7,14 * * *`)
-- **Slash command:** `/implement` on any issue, with optional instructions
-- **Manual:** `workflow_dispatch` for ad-hoc runs
+**Types → Tests → Implementation, each its own commit.** The phases mirror the discipline in `CLAUDE.md`, and committing at every boundary (`feat(<module>): add types for <feature>`, `test(<module>): add tests for <feature>`, `feat(<module>): implement <feature>`) means a run that dies partway still leaves a reviewable, bisectable branch rather than one undifferentiated blob.
 
-## Issue Selection
+**One issue per run.** Scheduled runs take the oldest open issue labeled `agent:implement`; `/implement` runs take the issue they were invoked on. Narrow scope keeps PRs reviewable and contains a failure to a single issue.
 
-- **Scheduled runs:** Picks oldest issue labeled `agent:implement`
-- **Command runs:** Works on the issue where `/implement` was invoked
-- Agent removes `agent:implement` and adds `in-progress` when it starts
+**Labels as the state machine.** `agent:implement` marks work as available. The agent swaps it for `in-progress` as soon as it comments its plan, which claims the issue against concurrent and later runs. `in-progress` survives PR creation and clears only when the PR merges or closes. A decomposed parent gets a comment linking its children and loses `agent:implement`; the children carry the label forward.
 
-## TDD Phases
+**Escape hatches instead of best-effort guessing.** Vague issue → comment asking for clarification and exit. Too large (3+ modules, 500+ new lines, or multiple independent concerns) → decompose into sub-issues and exit. Approaching the 45-minute timeout → commit with a `WIP:` prefix, record the phase in memory, resume next run. Two WIP runs without progress → flag for a human and release the label. Broken existing tests → investigate and fix the implementation; escalate rather than editing tests to make them pass.
 
-### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
+**Repo memory for cross-run continuity.** Tracks in-progress issues with their WIP branch and current phase, failed approaches (so the same one is never retried), parent→child decomposition mappings, and open-PR CI status. Memory is a hint, not truth — issues close and branches vanish between runs, so it is verified against live repository state before being acted on.
 
-### Phase 1: Plan
-- Identify affected modules (buffer, multibuffer, editor, renderer, diff)
-- Identify types that need to change or be created
-- Comment implementation plan on the issue
-- If too large → decompose into sub-issues labeled `agent:implement`, exit
-
-### Phase 2: Types
-- Create or modify type definitions
-- Run `bun run typecheck`
-- Commit: `feat(<module>): add types for <feature>`
-
-### Phase 3: Tests
-- Write failing tests that define expected behavior
-- Run `bun test` to confirm they fail for the right reasons
-- Commit: `test(<module>): add tests for <feature>`
-
-### Phase 4: Implementation
-- Write implementation to make tests pass
-- Run full validation: `bun run typecheck && bun run lint && bun test`
-- If existing tests break → investigate and fix the implementation
-- Iterate until green
-- Commit: `feat(<module>): implement <feature>`
-
-### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+**Self-maintenance.** Every run checks its own open `[Implementor]` PRs and pushes fixes for CI failures its changes caused, leaving infrastructure-only failures and all human review comments alone; a maintainer's reply is not a signal for the agent to act.
 
 ## Safe Outputs
 
-- `create-pull-request` — draft, `[Implementor]` prefix, max 1/run
-- `push-to-pull-request-branch` — WIP updates and CI fixes
-- `create-issue` — sub-issues with `agent:implement` label, max 4/run
-- `add-comment` — plans, progress, delegation via `/pr-fix`
-- `add-labels` / `remove-labels` — manage `agent:implement` and `in-progress`
+| Output | Configuration |
+| --- | --- |
+| `create-pull-request` | draft, `[Implementor] ` prefix, `automation`/`implementation` labels, max 1 |
+| `push-to-pull-request-branch` | WIP updates and CI fixes, max 4 |
+| `create-issue` | decomposition sub-issues, `agent:implement` label, max 4 |
+| `add-comment` | plans and progress, max 8, older comments hidden |
+| `add-labels` / `remove-labels` | `agent:implement` and `in-progress` only, max 10 |
 
-## Memory
+## Known Drift
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
-
-## State Transitions
-
-1. `agent:implement` detected → plan comment → swap to `in-progress`
-2. Work proceeds across 1+ runs → WIP commits pushed
-3. Draft PR created → `in-progress` stays until merged/closed
-4. If decomposed → parent gets linking comment, label removed
-
-## PR Maintenance
-
-- Each run checks open `[Implementor]` PRs for CI failures
-- Auto-fixes failures caused by its own changes
-- Can invoke `/pr-fix` on its own PRs for complex CI issues
-- Leaves human review comments untouched
-
-## Guardrails
-
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
-
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
-
-**Escape hatches:**
-- Issue too vague → comment asking for clarification
-- Issue too large → decompose into sub-issues
-- Implementation breaks existing tests → investigate and fix; escalate if stuck after genuine attempt
-- Can't resolve within 2 runs → flag for human attention
+> This design called for delegating complex CI failures to a `/pr-fix` workflow. No such workflow exists in `.github/workflows/`, so the `/pr-fix` references still in `implementor.md` (lines 11 and 229) are inert and the agent has no fallback beyond its own fix attempts. Either build `pr-fix` or drop the references.
