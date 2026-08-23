@@ -277,7 +277,13 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
   // Don't intercept if both Ctrl and Meta are pressed (system shortcuts)
   if (e.ctrlKey && e.metaKey) return undefined;
 
-  switch (e.key) {
+  // `KeyboardEvent.key` reports the *shifted* character for printable keys, so
+  // Shift (or Caps Lock) delivers "K" rather than "k". Lower-case single-character
+  // keys so the letter cases below match either way — the mirror of the
+  // upper-casing normalizeKey() applies for the same reason.
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+  switch (key) {
     // ── Navigation ──────────────────────────────────────────────
     //
     // Granularity priority: mod (Cmd/Ctrl) > alt (Opt) > character
@@ -361,8 +367,11 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
 
     // ── Shortcuts ───────────────────────────────────────────────
 
+    // The `!shift` guards below keep these bindings exactly as narrow as they
+    // were before the case normalization above: a browser reports "A" for
+    // Shift+A, so Mod+Shift+A never reached `case "a"` and must not start to.
     case "a":
-      if (mod) return { type: "selectAll" };
+      if (mod && !shift) return { type: "selectAll" };
       return undefined;
 
     case "z":
@@ -371,15 +380,15 @@ export function keyEventToCommand(e: KeyboardEvent): EditorCommand | undefined {
       return undefined;
 
     case "y":
-      if (mod) return { type: "redo" };
+      if (mod && !shift) return { type: "redo" };
       return undefined;
 
     case "c":
-      if (mod) return { type: "copy" };
+      if (mod && !shift) return { type: "copy" };
       return undefined;
 
     case "x":
-      if (mod) return { type: "cut" };
+      if (mod && !shift) return { type: "cut" };
       return undefined;
 
     case "v":
