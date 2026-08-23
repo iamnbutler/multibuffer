@@ -33,6 +33,10 @@ export interface DiffClient {
 interface PendingRequest {
   resolve: (result: DiffResult) => void;
   reject: (error: Error) => void;
+  /** Inputs retained so the request can be answered on the main thread if the worker dies. */
+  readonly oldText: string;
+  readonly newText: string;
+  readonly options?: DiffOptions;
 }
 
 /**
@@ -65,12 +69,23 @@ export function createDiffClient(workerUrl?: URL | string): DiffClient {
       };
 
       _worker.onerror = (error) => {
-        // On worker error, reject all pending requests and fall back to main thread
-        for (const pending of _pending.values()) {
-          pending.reject(new Error(`Worker error: ${error.message}`));
-        }
-        _pending.clear();
+        // On worker error, fall back to main thread. Mark the worker unavailable
+        // first so anything queued from these continuations takes the fast path.
         _workerAvailable = false;
+
+        const stranded = [..._pending.values()];
+        _pending.clear();
+
+        for (const pending of stranded) {
+          // The in-flight requests are answerable here: diff() is the same pure
+          // function the worker would have run. Failing them would strand the
+          // very first request behind an error the fallback exists to absorb.
+          try {
+            pending.resolve(diff(pending.oldText, pending.newText, pending.options));
+          } catch {
+            pending.reject(new Error(`Worker error: ${error.message}`));
+          }
+        }
       };
     } catch {
       // Worker creation failed, will use fallback
@@ -99,7 +114,7 @@ export function createDiffClient(workerUrl?: URL | string): DiffClient {
     }
 
     return new Promise<DiffResult>((resolve, reject) => {
-      _pending.set(requestId, { resolve, reject });
+      _pending.set(requestId, { resolve, reject, oldText, newText, options });
 
       const message: DiffWorkerMessage = {
         type: "diff",
