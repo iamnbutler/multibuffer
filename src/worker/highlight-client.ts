@@ -246,7 +246,12 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     for (let row = startRow; row < endRow; row++) {
       const cachedTokens = cached?.get(row);
       if (cachedTokens !== undefined) {
-        result.set(row, cachedTokens);
+        // A cached empty array is a real answer ("this row has no tokens"),
+        // not a cache miss. Keep it out of the result so the returned map has
+        // the same shape as the worker's response, which omits such rows.
+        if (cachedTokens.length > 0) {
+          result.set(row, cachedTokens);
+        }
       } else {
         if (row < minMissing) minMissing = row;
         if (row > maxMissing) maxMissing = row;
@@ -308,6 +313,20 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
               bufferCache.set(row, rowTokens);
             }
             result.set(row, rowTokens);
+          }
+
+          // The worker omits rows that produced no tokens (highlight-worker.ts
+          // only sets a row when `lineTokens.length > 0`). Record those rows as
+          // explicitly empty; otherwise they read as cache misses forever and
+          // every later call re-requests them, so the cache never warms for any
+          // buffer containing a blank line. Safe because every parse ack
+          // invalidates the whole buffer cache.
+          if (bufferCache) {
+            for (let row = minMissing; row <= maxMissing; row++) {
+              if (!bufferCache.has(row)) {
+                bufferCache.set(row, []);
+              }
+            }
           }
 
           resolve(result);
