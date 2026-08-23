@@ -152,6 +152,51 @@ describe("createProjectTree", () => {
       expect(paths).toContain("App.tsx");
       expect(paths).not.toContain("styles.css");
     });
+
+    test("brace group naming a top-level directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file" },
+        "/root/tests": { type: "directory" },
+        "/root/tests/index.ts": { type: "file" },
+        "/root/docs": { type: "directory" },
+        "/root/docs/guide.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        include: ["{src,tests}/**/*.ts"],
+      });
+      const paths = await collectPaths(tree.entries());
+
+      expect(paths).toContain("src/index.ts");
+      expect(paths).toContain("tests/index.ts");
+      expect(paths).not.toContain("docs/guide.ts");
+    });
+
+    test("brace group naming a nested directory", async () => {
+      const adapter = createMemoryFsAdapter({
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/a": { type: "directory" },
+        "/root/src/a/one.ts": { type: "file" },
+        "/root/src/b": { type: "directory" },
+        "/root/src/b/two.ts": { type: "file" },
+        "/root/src/c": { type: "directory" },
+        "/root/src/c/three.ts": { type: "file" },
+      });
+
+      const tree = createProjectTree("/root", {
+        adapter,
+        include: ["src/{a,b}/*.ts"],
+      });
+      const paths = await collectPaths(tree.entries());
+
+      expect(paths).toContain("src/a/one.ts");
+      expect(paths).toContain("src/b/two.ts");
+      expect(paths).not.toContain("src/c/three.ts");
+    });
   });
 
   describe("exclude patterns", () => {

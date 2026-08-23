@@ -68,6 +68,27 @@ function expandBraces(pattern: string): string[] {
 }
 
 /**
+ * Expand brace groups across a list of patterns.
+ *
+ * Returns the input untouched when no pattern contains a brace, so the
+ * common case costs one scan per pattern and allocates nothing.
+ */
+function expandAll(patterns: readonly string[]): readonly string[] {
+  for (const pattern of patterns) {
+    if (pattern.includes("{")) {
+      return patterns.flatMap((p) => {
+        const expanded = expandBraces(p);
+        // compileGlob only substitutes the expansion when it produces more
+        // than one alternative, so a single-alternative "{a}" stays literal
+        // (as it does in a shell). Mirror that, or the two disagree again.
+        return expanded.length > 1 ? expanded : [p];
+      });
+    }
+  }
+  return patterns;
+}
+
+/**
  * Convert a single glob pattern (no braces) to regex string.
  */
 function compileGlobToRegexString(pattern: string): string {
@@ -260,8 +281,15 @@ export function shouldTraverseDirectory(
   exclude: readonly string[],
   matcher: GlobMatcher = defaultGlobMatcher,
 ): boolean {
+  // The checks below compare pattern segments literally, so a brace group
+  // would be read as a directory named "{a,b}" and match nothing. compileGlob
+  // expands braces before matching, so without this the two disagree: a file
+  // passes shouldInclude() while its directory is pruned and never traversed.
+  const expandedExclude = expandAll(exclude);
+  const expandedInclude = expandAll(include);
+
   // Check if directory itself is excluded (exact match or directory patterns)
-  for (const pattern of exclude) {
+  for (const pattern of expandedExclude) {
     // Exact match of directory name
     if (matcher(pattern, dirPath)) {
       return false;
@@ -277,12 +305,12 @@ export function shouldTraverseDirectory(
   }
 
   // If no include patterns, traverse all non-excluded directories
-  if (include.length === 0) {
+  if (expandedInclude.length === 0) {
     return true;
   }
 
   // Check if any include pattern could potentially match files in this directory
-  for (const pattern of include) {
+  for (const pattern of expandedInclude) {
     // Check if pattern starts with ** (matches any directory)
     if (pattern.startsWith("**/") || pattern === "**") {
       return true;
