@@ -425,3 +425,70 @@ describe("keyEventToCommand — Returns undefined for unbound keys", () => {
     expect(keyEventToCommand(keyEvent("Escape"))).toBeUndefined();
   });
 });
+
+
+// ─── Shifted / Caps Lock letter keys ────────────────────────────
+//
+// `KeyboardEvent.key` carries the *shifted* character for printable keys: a
+// browser reports "K" for Shift+K, never "k".  The `keyEvent()` helper above
+// lets a test pass `key: "k"` together with `shiftKey: true`, which is a
+// combination no browser produces — so the letter bindings that require Shift
+// have to be asserted with the character the browser really sends.
+
+describe("keyEventToCommand — printable keys arrive shifted", () => {
+  test("Mod+Shift+K → deleteLine when the browser reports key 'K'", () => {
+    expect(keyEventToCommand(keyEvent("K", mod({ shiftKey: true })))).toEqual({
+      type: "deleteLine",
+    });
+  });
+
+  test("Mod+Shift+Z → redo when the browser reports key 'Z'", () => {
+    expect(keyEventToCommand(keyEvent("Z", mod({ shiftKey: true })))).toEqual({
+      type: "redo",
+    });
+  });
+
+  // Caps Lock upper-cases the key without setting shiftKey.
+  test("Mod+Z → undo with Caps Lock on", () => {
+    expect(keyEventToCommand(keyEvent("Z", mod()))).toEqual({ type: "undo" });
+  });
+
+  test("Mod+A → selectAll with Caps Lock on", () => {
+    expect(keyEventToCommand(keyEvent("A", mod()))).toEqual({ type: "selectAll" });
+  });
+
+  test("Mod+C → copy with Caps Lock on", () => {
+    expect(keyEventToCommand(keyEvent("C", mod()))).toEqual({ type: "copy" });
+  });
+
+  test("Mod+X → cut with Caps Lock on", () => {
+    expect(keyEventToCommand(keyEvent("X", mod()))).toEqual({ type: "cut" });
+  });
+
+  test("Mod+Y → redo with Caps Lock on", () => {
+    expect(keyEventToCommand(keyEvent("Y", mod()))).toEqual({ type: "redo" });
+  });
+
+  // Guards: matching upper-case keys must not *widen* the bindings that never
+  // took Shift.  These stay undefined, exactly as they are without the fix.
+  test("Mod+Shift+A stays unbound", () => {
+    expect(keyEventToCommand(keyEvent("A", mod({ shiftKey: true })))).toBeUndefined();
+  });
+
+  test("Mod+Shift+C stays unbound", () => {
+    expect(keyEventToCommand(keyEvent("C", mod({ shiftKey: true })))).toBeUndefined();
+  });
+
+  test("Mod+Shift+X stays unbound", () => {
+    expect(keyEventToCommand(keyEvent("X", mod({ shiftKey: true })))).toBeUndefined();
+  });
+
+  test("Mod+Shift+Y stays unbound", () => {
+    expect(keyEventToCommand(keyEvent("Y", mod({ shiftKey: true })))).toBeUndefined();
+  });
+
+  // An unmodified upper-case letter is text input, not a command.
+  test("Shift+K alone → undefined (falls through to text input)", () => {
+    expect(keyEventToCommand(keyEvent("K", { shiftKey: true }))).toBeUndefined();
+  });
+});
