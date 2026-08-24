@@ -15,6 +15,7 @@ import {
   excerptRange,
   expectPoint,
   mbPoint,
+  num,
   resetCounters,
 } from "../helpers.ts";
 
@@ -341,6 +342,87 @@ describe("SearchController - Anchor Stability", () => {
     search.replaceActive("qux");
     // Should be updated after replacement
     expect(search.state.count).toBe(2);
+  });
+
+  test("active match survives an edit elsewhere in the document", () => {
+    const { editor, search } = setup("foo\nfoo\nfoo\nPAD");
+    search.find("foo");
+    search.goTo(2);
+
+    // Type on a line with no match: the match set cannot change.
+    editor.setCursor(mbPoint(3, 3));
+    editor.dispatch({ type: "insertText", text: "x" });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(2);
+  });
+
+  test("next() advances from the active match after an unrelated edit", () => {
+    const { editor, search } = setup("foo\nfoo\nfoo\nPAD");
+    search.find("foo");
+    search.goTo(1);
+
+    editor.setCursor(mbPoint(3, 3));
+    editor.dispatch({ type: "insertText", text: "x" });
+
+    // Should step to the third match, not back to the first.
+    search.next();
+    expect(search.state.activeIndex).toBe(2);
+    expect(num(editor.cursor.row)).toBe(2);
+  });
+
+  test("an edit above the matches keeps the same match active", () => {
+    const { search, editor } = setup("foo\nfoo\nfoo");
+    search.find("foo");
+    search.goTo(2);
+
+    // Insert a whole line above every match, shifting them all down.
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "insertText", text: "header\n" });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(2);
+  });
+
+  test("deleting the active match falls through to the following one", () => {
+    const { search, editor } = setup("foo\nfoo\nfoo");
+    search.find("foo");
+    search.goTo(1);
+
+    // Remove the active (middle) match.
+    editor.setCursor(mbPoint(1, 0));
+    editor.extendSelectionTo(mbPoint(1, 3));
+    editor.dispatch({ type: "insertText", text: "" });
+
+    expect(search.state.count).toBe(2);
+    // The surviving match below where it was, not a jump back to the top.
+    expect(search.state.activeIndex).toBe(1);
+  });
+
+  test("deleting a match above the active one keeps the same match active", () => {
+    const { search, editor } = setup("foo\nfoo\nfoo\nfoo\nfoo");
+    search.find("foo");
+    search.goTo(3);
+
+    // Remove the very first match; every later match shifts down one index.
+    editor.setCursor(mbPoint(0, 0));
+    editor.extendSelectionTo(mbPoint(0, 3));
+    editor.dispatch({ type: "insertText", text: "" });
+
+    expect(search.state.count).toBe(4);
+    // Still the same match, now at index 2 - not the same index number.
+    expect(search.state.activeIndex).toBe(2);
+  });
+
+  test("a fresh find still activates the first match", () => {
+    const { search } = setup("foo\nfoo\nfoo");
+    search.find("foo");
+    expect(search.state.activeIndex).toBe(0);
+
+    // A second find must reset navigation rather than inherit the old index.
+    search.goTo(2);
+    search.find("foo");
+    expect(search.state.activeIndex).toBe(0);
   });
 });
 
