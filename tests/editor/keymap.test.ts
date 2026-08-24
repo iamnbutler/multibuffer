@@ -175,6 +175,46 @@ describe("resolveKeyBinding", () => {
     expect(result.pendingChord).toBeNull();
   });
 
+  test("abandoned chord still honours a direct binding for the second key", () => {
+    // The chord cannot complete, so the second key must resolve as itself —
+    // the consumer's keymap does not stop applying because a prefix was pressed.
+    const keymap: Keymap = { "Mod+K Mod+C": cmd("commentLine"), "Mod+S": cmd("save") };
+    const chordPrefixes = new Set(["Mod+K"]);
+    const result = resolveKeyBinding(keymap, "Mod+S", "Mod+K", chordPrefixes);
+    expect(result.matched).toBe(true);
+    expect(result.binding).toEqual({ type: "custom", action: "save" });
+    expect(result.pendingChord).toBeNull();
+  });
+
+  test("abandoned chord still honours a null (disabled) binding", () => {
+    // Without this, the disabled key falls through to its built-in default and
+    // fires the very command the consumer disabled.
+    const keymap: Keymap = { "Mod+K Mod+C": cmd("commentLine"), "Mod+Z": null };
+    const chordPrefixes = new Set(["Mod+K"]);
+    const result = resolveKeyBinding(keymap, "Mod+Z", "Mod+K", chordPrefixes);
+    expect(result.matched).toBe(true);
+    expect(result.binding).toBeNull();
+    expect(result.pendingChord).toBeNull();
+  });
+
+  test("abandoned chord re-arms when the second key is itself a chord prefix", () => {
+    const keymap: Keymap = { "Mod+K Mod+C": cmd("commentLine"), "Mod+G Mod+X": cmd("goto") };
+    const chordPrefixes = new Set(["Mod+K", "Mod+G"]);
+    const result = resolveKeyBinding(keymap, "Mod+G", "Mod+K", chordPrefixes);
+    expect(result.matched).toBe(true);
+    expect(result.binding).toBeUndefined();
+    expect(result.pendingChord).toBe("Mod+G");
+  });
+
+  test("chord completion still wins over a direct binding for the same key", () => {
+    // Control for the three tests above: resolving the second key against the
+    // keymap must not pre-empt the chord it was meant to complete.
+    const keymap: Keymap = { "Mod+K Mod+C": cmd("commentLine"), "Mod+C": cmd("copyLine") };
+    const chordPrefixes = new Set(["Mod+K"]);
+    const result = resolveKeyBinding(keymap, "Mod+C", "Mod+K", chordPrefixes);
+    expect(result.binding).toEqual({ type: "custom", action: "commentLine" });
+  });
+
   test("multiple chords with same prefix", () => {
     const keymap: Keymap = {
       "Mod+K Mod+C": cmd("commentLine"),
