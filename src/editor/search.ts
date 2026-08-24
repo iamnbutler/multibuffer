@@ -401,7 +401,11 @@ export class SearchController {
     const matches = this._findMatches(fullText);
     const lineOffsets = this._computeLineOffsets(fullText);
 
-    const results: SearchResult[] = [];
+    // Where the active match sat before the rebuild, so an edit elsewhere in
+    // the document doesn't send the user back to the top of the results.
+    const previousStart = this._activeStartPoint(snap);
+
+    const built: Array<{ result: SearchResult; start: MultiBufferPoint }> = [];
     for (const match of matches) {
       const startPoint = this._offsetToPoint(match.start, lineOffsets, snap);
       const endPoint = this._offsetToPoint(match.end, lineOffsets, snap);
@@ -413,17 +417,82 @@ export class SearchController {
 
       if (!startAnchor || !endAnchor) continue;
 
-      results.push({
-        range: createAnchorRange(startAnchor, endAnchor),
-        matchedText: match.text,
+      built.push({
+        result: {
+          range: createAnchorRange(startAnchor, endAnchor),
+          matchedText: match.text,
+        },
+        start: startPoint,
       });
     }
 
     // Sort by position
-    results.sort((a, b) => compareAnchors(a.range.start, b.range.start));
+    built.sort((a, b) => compareAnchors(a.result.range.start, b.result.range.start));
+
+    const results = built.map((entry) => entry.result);
 
     this._results = results;
-    this._activeIndex = results.length > 0 ? 0 : -1;
+    this._activeIndex = this._indexForActive(built, previousStart);
+  }
+
+  /**
+   * Resolve the currently active match's start position, if there is one.
+   * Returns undefined when no match is active, which is the case for a fresh
+   * `find()` — it clears the index before searching.
+   */
+  private _activeStartPoint(snap: MultiBufferSnapshot): MultiBufferPoint | undefined {
+    const active = this.activeResult;
+    if (!active) return undefined;
+    return snap.resolveAnchor(active.range.start);
+  }
+
+  /**
+   * Pick the active index for a freshly rebuilt result set.
+   *
+   * Keeps the user on the match they were on. If the edit removed that match,
+   * falls back to the first match at or after where it used to be. With no
+   * previously active match, activates the first result as `find()` expects.
+   *
+   * Compares positions directly rather than trusting the array order, so it
+   * stays correct regardless of how the results were sorted.
+   */
+  private _indexForActive(
+    built: ReadonlyArray<{ result: SearchResult; start: MultiBufferPoint }>,
+    previousStart: MultiBufferPoint | undefined,
+  ): number {
+    if (built.length === 0) return -1;
+    if (!previousStart) return 0;
+
+    let after = -1;
+    let afterPoint: MultiBufferPoint | undefined;
+
+    for (let i = 0; i < built.length; i++) {
+      const entry = built[i];
+      if (!entry) continue;
+      const start = entry.start;
+
+      // The same match survived the edit.
+      if (start.row === previousStart.row && start.column === previousStart.column) {
+        return i;
+      }
+
+      const isAfter =
+        start.row > previousStart.row ||
+        (start.row === previousStart.row && start.column > previousStart.column);
+      if (!isAfter) continue;
+
+      if (
+        !afterPoint ||
+        start.row < afterPoint.row ||
+        (start.row === afterPoint.row && start.column < afterPoint.column)
+      ) {
+        after = i;
+        afterPoint = start;
+      }
+    }
+
+    // Every remaining match sits above the old position: wrap to the first.
+    return after === -1 ? 0 : after;
   }
 
   private _getFullText(snap: MultiBufferSnapshot): string {
