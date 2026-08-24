@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test";
 import {
   createMemoryFsAdapter,
   createProjectTree,
+  type FsAdapter,
+  type MemoryFsEntry,
   type ProjectEntry,
 } from "../../src/project/index.ts";
 
@@ -486,5 +488,140 @@ describe("createMemoryFsAdapter", () => {
     const adapter = createMemoryFsAdapter({});
 
     await expect(adapter.stat?.("/nonexistent")).rejects.toThrow("ENOENT");
+  });
+});
+
+describe("root containment", () => {
+  /**
+   * Resolve "." / ".." the way a real filesystem does before it reads.
+   *
+   * `createMemoryFsAdapter` matches paths as literal strings, so it silently
+   * fails to find an escaping path instead of following it out of the root.
+   * Wrapping it this way models what Bun, Node and the OS actually do, which
+   * is the behaviour the containment check has to hold up against.
+   */
+  function resolveLikeFs(path: string): string {
+    const out: string[] = [];
+    for (const segment of path.split("/")) {
+      if (segment === "" || segment === ".") continue;
+      if (segment === "..") {
+        out.pop();
+        continue;
+      }
+      out.push(segment);
+    }
+    return `/${out.join("/")}`;
+  }
+
+  function realisticAdapter(files: Record<string, MemoryFsEntry>): FsAdapter {
+    const inner = createMemoryFsAdapter(files);
+    return {
+      readdir: (path: string) => inner.readdir(resolveLikeFs(path)),
+      stat: (path: string) => {
+        const statFn = inner.stat;
+        if (!statFn) throw new Error("memory adapter always defines stat");
+        return statFn(resolveLikeFs(path));
+      },
+    };
+  }
+
+  /** A project at /root, with unrelated files beside and above it. */
+  function makeTree() {
+    return createProjectTree("/root", {
+      adapter: realisticAdapter({
+        "/": { type: "directory" },
+        "/outside.ts": { type: "file", size: 7 },
+        "/sibling": { type: "directory" },
+        "/sibling/other.ts": { type: "file" },
+        "/root": { type: "directory" },
+        "/root/src": { type: "directory" },
+        "/root/src/index.ts": { type: "file", size: 3 },
+      }),
+      include: ["**/*.ts"],
+    });
+  }
+
+  test("get() refuses a relative path that escapes the root", async () => {
+    const tree = makeTree();
+
+    await expect(tree.get("../outside.ts")).rejects.toThrow(
+      /outside project root/,
+    );
+  });
+
+  test("has() refuses a relative path that escapes the root", async () => {
+    const tree = makeTree();
+
+    await expect(tree.has("../sibling/other.ts")).rejects.toThrow(
+      /outside project root/,
+    );
+  });
+
+  test("children() does not enumerate the parent directory", async () => {
+    const tree = makeTree();
+
+    await expect(collectPaths(tree.children(".."))).rejects.toThrow(
+      /outside project root/,
+    );
+    await expect(collectPaths(tree.children("../sibling"))).rejects.toThrow(
+      /outside project root/,
+    );
+  });
+
+  test("an escape hidden mid-path is refused too", async () => {
+    const tree = makeTree();
+
+    await expect(tree.get("src/../../outside.ts")).rejects.toThrow(
+      /outside project root/,
+    );
+  });
+
+  test("relative and absolute spellings of an outside path agree", async () => {
+    const tree = makeTree();
+
+    const relative = await tree
+      .get("../outside.ts")
+      .then(() => "resolved", () => "threw");
+    const absolute = await tree
+      .get("/outside.ts")
+      .then(() => "resolved", () => "threw");
+
+    expect(relative).toBe(absolute);
+    expect(relative).toBe("threw");
+  });
+
+  test("an absolute path that escapes via .. is refused", async () => {
+    const tree = makeTree();
+
+    await expect(tree.get("/root/../outside.ts")).rejects.toThrow(
+      /outside project root/,
+    );
+  });
+
+  test("a .. that stays inside the root still resolves", async () => {
+    const tree = makeTree();
+
+    const direct = await tree.get("src/index.ts");
+    const viaParent = await tree.get("src/../src/index.ts");
+
+    expect(direct?.relativePath).toBe("src/index.ts");
+    expect(viaParent?.relativePath).toBe("src/index.ts");
+    expect(viaParent?.path).toBe(direct?.path);
+  });
+
+  test("ordinary enumeration is unchanged", async () => {
+    const tree = makeTree();
+
+    expect(await collectPaths(tree.entries())).toEqual(["src", "src/index.ts"]);
+    expect(await collectPaths(tree.children("."))).toEqual(["src"]);
+    expect(await collectPaths(tree.children(""))).toEqual(["src"]);
+    expect((await tree.get("src/index.ts"))?.type).toBe("file");
+  });
+
+  test("root is canonicalized", () => {
+    expect(createProjectTree("/root/./src").root).toBe("/root/src");
+    expect(createProjectTree("/root/nested/..").root).toBe("/root");
+    expect(createProjectTree("/root//src/").root).toBe("/root/src");
+    expect(createProjectTree("/").root).toBe("/");
   });
 });

@@ -61,8 +61,8 @@ export function createProjectTree(
   const includeMetadata = options.includeMetadata ?? false;
   const maxDepth = options.maxDepth;
 
-  // Normalize root path (remove trailing slash except for /)
-  const normalizedRoot = root === "/" ? root : root.replace(/\/+$/, "");
+  // Normalize root path (resolve "." / ".." and drop redundant separators)
+  const normalizedRoot = normalizePathSegments(root);
 
   return new ProjectTreeImpl(
     normalizedRoot,
@@ -353,15 +353,20 @@ class ProjectTreeImpl implements ProjectTree {
 
   /**
    * Convert a path to absolute.
+   *
+   * The result is canonical: `.` and `..` segments are resolved here, before
+   * `toRelativePath` performs its containment check. That check is a string
+   * prefix test, so it is only meaningful on a canonical path — `"/root/../etc"`
+   * begins with `"/root/"` textually while naming something outside the root.
    */
   private toAbsolutePath(path: string): string {
     if (path.startsWith("/")) {
-      return path;
+      return normalizePathSegments(path);
     }
     if (path === "" || path === ".") {
       return this.root;
     }
-    return this.joinPath(this.root, path);
+    return normalizePathSegments(this.joinPath(this.root, path));
   }
 
   /**
@@ -403,6 +408,40 @@ class ProjectTreeImpl implements ProjectTree {
     const parts = path.split("/");
     return parts[parts.length - 1] ?? "";
   }
+}
+
+/**
+ * Resolve `.` and `..` segments and collapse redundant separators.
+ *
+ * Filesystems resolve these before they read, so a path has to be canonical
+ * before it can be compared against the project root — otherwise the
+ * comparison and the read disagree about which file is meant.
+ *
+ * `..` above the filesystem root is dropped, matching POSIX, where `/..` is `/`.
+ * A leading `..` in a relative path is kept, since there is nothing to pop.
+ */
+function normalizePathSegments(path: string): string {
+  const isAbsolute = path.startsWith("/");
+  const resolved: string[] = [];
+
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      const last = resolved[resolved.length - 1];
+      if (last !== undefined && last !== "..") {
+        resolved.pop();
+      } else if (!isAbsolute) {
+        resolved.push("..");
+      }
+      continue;
+    }
+    resolved.push(segment);
+  }
+
+  const joined = resolved.join("/");
+  return isAbsolute ? `/${joined}` : joined;
 }
 
 /**
