@@ -78,8 +78,11 @@ export function resolveKeyBinding(
     if (Object.hasOwn(keymap, chordKey)) {
       return { matched: true, binding: keymap[chordKey], pendingChord: null };
     }
-    // Wrong second key — reset chord and fall through to default handling
-    return { matched: false, pendingChord: null };
+    // Wrong second key — the chord is abandoned, but the key itself still has
+    // to be resolved against the keymap exactly as if no chord had been
+    // pending. Falling straight through to the built-in defaults here would
+    // skip the consumer's own binding for this key, so a `null` (disabled)
+    // entry would fire its built-in command anyway.
   }
 
   // Direct keymap match

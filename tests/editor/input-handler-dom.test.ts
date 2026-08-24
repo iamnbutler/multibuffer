@@ -586,6 +586,62 @@ describe("InputHandler with custom keymap", () => {
 
     handler.unmount();
   });
+
+  // The keymap below is the example from the `Keymap` docstring in
+  // src/editor/types.ts, verbatim. It combines a disabled key, a plain binding
+  // and a chord — the exact combination in which an abandoned chord used to
+  // hand the second key to the built-in defaults.
+  const docstringKeymap = (): InputHandlerOptions => ({
+    keymap: {
+      "Mod+S": { type: "custom", action: "save" },
+      "Mod+Z": null,
+      "Mod+K Mod+C": { type: "custom", action: "commentLine" },
+    },
+  });
+
+  test("a disabled key stays disabled after an abandoned chord prefix", () => {
+    const handler = new InputHandler(collector.callback, docstringKeymap());
+    handler.mount(container);
+    const textarea = getTextarea(container);
+
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "k"));
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "z"));
+
+    // Mod+Z is bound to null, so it is disabled whether or not Mod+K preceded
+    // it. Previously this dispatched the built-in { type: "undo" }.
+    expect(collector.commands).toHaveLength(0);
+
+    handler.unmount();
+  });
+
+  test("a bound key still fires after an abandoned chord prefix", () => {
+    const handler = new InputHandler(collector.callback, docstringKeymap());
+    handler.mount(container);
+    const textarea = getTextarea(container);
+
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "k"));
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "s"));
+
+    expect(collector.commands).toHaveLength(1);
+    expect(collector.commands[0]).toEqual({ type: "custom", action: "save" });
+
+    handler.unmount();
+  });
+
+  test("an unbound key after an abandoned chord prefix still reaches the built-in default", () => {
+    // Neutrality control: keys the consumer never bound must keep falling
+    // through, both with and without a preceding prefix.
+    const handler = new InputHandler(collector.callback, docstringKeymap());
+    handler.mount(container);
+    const textarea = getTextarea(container);
+
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "k"));
+    textarea?.dispatchEvent(createModKeyboardEvent("keydown", "x"));
+
+    expect(collector.commands).toEqual([{ type: "cut" }]);
+
+    handler.unmount();
+  });
 });
 
 // ── Chord cancellation ──────────────────────────────────────────────────────
