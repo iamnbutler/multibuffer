@@ -492,6 +492,7 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
     collapseAll(): void {
       if (_disposed) return;
 
+      const changed: InternalFileState[] = [];
       for (const state of fileStates) {
         if (!state.collapsed) {
           state.collapsed = true;
@@ -499,19 +500,20 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
             state.contentElement.style.display = "none";
           }
           updateHeaderUI(state);
+          changed.push(state);
         }
       }
-      // Single batch notification instead of N individual callbacks
-      for (const state of fileStates) {
-        if (state.collapsed) {
-          options.onFileToggle?.(state.entry.filename, true);
-        }
+      // Notify once all mutations are applied, and only for files that
+      // actually changed - matching collapseFile()'s contract.
+      for (const state of changed) {
+        options.onFileToggle?.(state.entry.filename, true);
       }
     },
 
     expandAll(): void {
       if (_disposed) return;
 
+      const changed: InternalFileState[] = [];
       for (const state of fileStates) {
         if (state.collapsed) {
           state.collapsed = false;
@@ -523,13 +525,13 @@ export function createMultiFileDiff(options: MultiFileDiffOptions): MultiFileDif
           if (!state.initialized) {
             initializeFileDiff(state, { context });
           }
+          changed.push(state);
         }
       }
-      // Single batch notification instead of N individual callbacks
-      for (const state of fileStates) {
-        if (!state.collapsed) {
-          options.onFileToggle?.(state.entry.filename, false);
-        }
+      // Notify once all mutations are applied, and only for files that
+      // actually changed - matching expandFile()'s contract.
+      for (const state of changed) {
+        options.onFileToggle?.(state.entry.filename, false);
       }
     },
 

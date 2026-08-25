@@ -363,6 +363,97 @@ describe("MultiFileDiff collapse/expand", () => {
     multiDiff.dispose();
   });
 
+  test("collapseAll notifies only the files whose state changed", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const files: FileDiffEntry[] = [
+      { filename: "file1.ts", oldContent: "a\n", newContent: "b\n" },
+      { filename: "file2.ts", oldContent: "c\n", newContent: "d\n" },
+      { filename: "file3.ts", oldContent: "e\n", newContent: "f\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({
+      files,
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    // file1 is already collapsed, so collapseAll must not report it again.
+    multiDiff.collapseFile("file1.ts");
+    toggleEvents.length = 0;
+
+    multiDiff.collapseAll();
+
+    expect(toggleEvents).toEqual([
+      { filename: "file2.ts", collapsed: true },
+      { filename: "file3.ts", collapsed: true },
+    ]);
+
+    multiDiff.dispose();
+  });
+
+  test("expandAll notifies only the files whose state changed", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const files: FileDiffEntry[] = [
+      { filename: "file1.ts", oldContent: "a\n", newContent: "b\n" },
+      { filename: "file2.ts", oldContent: "c\n", newContent: "d\n" },
+      { filename: "file3.ts", oldContent: "e\n", newContent: "f\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({
+      files,
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    multiDiff.collapseFile("file2.ts");
+    toggleEvents.length = 0;
+
+    multiDiff.expandAll();
+
+    expect(toggleEvents).toEqual([{ filename: "file2.ts", collapsed: false }]);
+
+    multiDiff.dispose();
+  });
+
+  test("batch collapse/expand of an unchanged set emits no callbacks", () => {
+    const container = createMockContainer();
+    const toggleEvents: Array<{ filename: string; collapsed: boolean }> = [];
+
+    const files: FileDiffEntry[] = [
+      { filename: "file1.ts", oldContent: "a\n", newContent: "b\n" },
+      { filename: "file2.ts", oldContent: "c\n", newContent: "d\n" },
+    ];
+
+    const multiDiff = createMultiFileDiff({
+      files,
+      container,
+      onFileToggle: (filename, collapsed) => {
+        toggleEvents.push({ filename, collapsed });
+      },
+    });
+
+    // Files start expanded: expanding again changes nothing.
+    multiDiff.expandAll();
+    expect(toggleEvents).toEqual([]);
+
+    multiDiff.collapseAll();
+    toggleEvents.length = 0;
+
+    // Already fully collapsed: collapsing again changes nothing.
+    multiDiff.collapseAll();
+    expect(toggleEvents).toEqual([]);
+
+    multiDiff.dispose();
+  });
+
   test("collapse/expand unknown file is a no-op", () => {
     const container = createMockContainer();
     const files: FileDiffEntry[] = [
