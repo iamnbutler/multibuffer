@@ -213,7 +213,10 @@ export class GlyphAtlas {
       this._packY += this._lineHeight;
     }
 
-    if (this._packY + this._lineHeight > this._height) {
+    // Keep expanding until the cell actually fits. _expand() prefers growing
+    // width, which adds no new rows, so one call may report success without
+    // making room for this glyph.
+    while (this._packY + this._lineHeight > this._height) {
       // Need to expand the atlas
       if (!this._expand()) {
         // Can't expand, return invalid glyph
