@@ -1,9 +1,8 @@
-# TI memory (compact — full detail in #667)
+# TI memory (compact; detail in #667)
 
 ## CRITICAL: memory push size
-3 gates. (1) per-FILE 10240: REAL, hit 08-20 (11.3KB memory.md rejected) — my old "validator always false-fails" note was wrong about THIS one. (2) TOTAL-dir: counts .git (~34KB) so it always reports 45KB>12KB — advisory, ignore, pushes still land. (3) GIT PATCH 10240: REAL, ate the 08-09 memory (#698). File is AT the cap: every add needs an equal delete.
-RULE: NEVER full-rewrite this file — use surgical Edit calls; git patches only changed lines (08-13: 5.2KB file, 5.9KB patch. 08-14: 7.4KB file, 6.5KB patch = 63% of cap). A full rewrite costs old+new bytes, so >5KB file = >10KB patch = LOST RUN.
-✅ 08-15/16: compacted old findings as planned. Keep doing this: squeeze the oldest finding to 1 line whenever adding a new one, and CHECK `git diff|wc -c` <10240 BEFORE finishing.
+3 gates. (1) per-FILE 10240 REAL (hit 08-20, 08-26). (2) TOTAL-dir counts .git so always says 45KB>12KB — advisory, ignore. (3) GIT PATCH 10240 REAL, ate the 08-09 memory (#698). File is AT the cap: every add needs an equal delete.
+RULE: NEVER full-rewrite — surgical Edit only. 🚨08-26 TRAP: squeezing an old line costs old+new patch bytes, and a delete far from your edits opens a NEW HUNK (~1200B context each). To fit BOTH caps: ADD LESS (detail -> #667 comment) and only reshape text INSIDE a hunk you already touched. Verify both `wc -c` and `git diff|wc -c` <10240.
 Maintainer fix: raise max-patch-size in daily-test-improver.md:61 (ceiling 100KB).
 
 ## Commands (test/typecheck/lint revalidated 2026-08-24, fuzz 08-10)
@@ -11,11 +10,11 @@ bun test 2265p/3skip/6todo/0fail (2274 in 76 files, ~2.6s); typecheck clean; lin
 lint: biome + no-type-assertion.grit -> use row()/mbRow() from tests/helpers.ts, never `n as BufferRow`.
 FLAKE still on main: "Buffer Performance > line access is O(1)". ALWAYS repeat runs before blaming a mutation. #611 fixes.
 
-## State 08-25
-main ce545ec (unmoved 156d). Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690), ZERO human comments; #667 0/45 ticked, body 63.8K/65536 after condensing 08-22/23/24 into "Earlier runs" — ONLY the newest run stays detailed now, condense 08-25 next run. #611 open. #373=maintainer's, lint-blocked.
-POSTURE: NO NEW PRs; findings -> #667 BODY. 08-19 commented on #717.
+## State 08-26
+main ce545ec (unmoved 157d). Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690), ZERO human comments. #611 open (fixes the flake). #373=maintainer's, lint-blocked.
+POSTURE: NO NEW PRs; findings -> #667 COMMENTS (NEVER the body).
 🚨 08-18: 3 of my 4 "SRC BUGs" were ALREADY OPEN PRs (#687 #546 #720); I never checked the queue. RULE (item 33): before ANY write-up, search open PRs for file+symptom (narrow query, jq the saved file). ✅ PAID OFF 08-19 (glob=PR#717) AND 08-24 (header=PR#735) — both times report only the RESIDUE. KEEP DOING THIS.
-✅ #667 body 55->38.6KB on 08-18: REWROTE Suggested Actions to spec one-liners (was 31KB of inlined write-ups; detail now lives in the PRs). LIMIT 65536, lots of headroom now. Read+rewrite of #667 costs ~35K tokens/run.
+🚨🚨 08-26 #667 BODY WAS DESTROYED: the 08-25 update EXCEEDED 65536 so GH replaced the WHOLE body with "[Content too large, saved to file: <sha>.json]". 45 items + history GONE (0 ticked). Rebuilt ~9KB. NOT MCP truncation — PROOF: sibling #666 returned a full 44215-char body in the SAME call; the saved-to-file path does NOT exist on disk, don't chase it.
 Aug=#667 (Sept rollover 09-01). charset=#696. memory-fail=#698.
 
 ## Gotchas
@@ -27,8 +26,10 @@ MUTATION RECIPE: cp src to /tmp, python3 script patches it, run arms, restore, A
 API: snap.excerpts = ARRAY PROPERTY not fn; ExcerptInfo{startRow,endRow}.
 
 ## Findings (detail in #667)
-08-25 HEADER EXPR IS IN 5 FILES (dom:767 editor-view:243 webgpu:1087 diff/diff-editor-view:316 react/use-diff-view:149) — I said 2 on 08-24, ALWAYS GREP THE WHOLE EXPR. #735 fixes 3, NOT the 2 diff ones (they pass their OWN header array INTO render()). src/diff NEVER passes hasTrailingNewline + 1 excerpt PER GROUP => #735's defect hides the LAST LINE OF EVERY GROUP; on 8f694a9 output == main. #735's filter on diff-editor-view:316 => 0 missing, 2279p. 🔑 2nd FALSE-PREMISE test header (after 08-21 worker): diff-editor-view.test says "needs a browser", happy-dom is in 4 test files; createDiffEditorView NEVER constructed in tests. RECIPE: remeasure() THEN setDecorations to force _render; rAF shim = setTimeout.
-08-24 SRC BUG #7 EXCERPT-HEADER (#667 bug7/item40), unclaimed. 5 SITES (see 08-25). Boundaries queried by excerpt START, drawn at row-1 => excerpt starting AT endRow loses an ONSCREEN header. Sweep257 46->0. Item-30 3rd. DEAD API: RenderState.selections/.focused unread
+08-26 SRC BUG #8 PATCH PATHS (patch.ts:30-32), unclaimed, WRITE-UP IN #667 COMMENT. git C-quotes non-ASCII paths (quotePath dflt TRUE) => DIFF_GIT_HEADER needs a BARE a/ => no match; parsePatch:69-87 starts a file ONLY on `diff --git`/`--- `, and BINARY + PURE RENAME have NO --- line => FILE SILENTLY DROPPED (4-file diff -> 2). SPACE => trailing TAB eaten. FIX: cut at TAB -> C-unquote -> strip a/ -> relax DIFF_GIT_HEADER.
+🔑 08-26 CLEAN don't re-audit: patch.ts hunk batching + row/deco math (oracle, 162 gen + 21 real-git shapes, 0 fail). 🔑 METHOD: BUILD FIXTURES WITH THE REAL git BINARY, oracle vs `git show HEAD:path`. = hand-written fixtures never show what the real producer emits.
+08-25 HEADER EXPR IN 5 FILES (dom:767 editor-view:243 webgpu:1087 diff/diff-editor-view:316 react/use-diff-view:149) — GREP THE WHOLE EXPR. #735 fixes 3, NOT the 2 diff ones (they pass their OWN header array INTO render()). 🔑 2nd FALSE-PREMISE test header: diff-editor-view.test says "needs a browser" but happy-dom is in 4 test files. RECIPE: remeasure() THEN setDecorations; rAF shim = setTimeout.
+08-24 SRC BUG #7 EXCERPT-HEADER (#667 bug7/item40), unclaimed. 5 SITES (see 08-25). Boundaries queried by excerpt START, drawn at row-1 => excerpt starting AT endRow loses an ONSCREEN header. DEAD API: RenderState.selections/.focused unread
 08-23 SRC BUG #6 INTRALINE-DIFF (#667 bug6/item39), unclaimed (#546=rope chunks, diff loc). computeIntralineDiff compares CODE UNITS -> 2 emoji sharing a high surrogate share a 1-unit prefix -> range starts MID-PAIR -> renderer slices there into separate DOM nodes (highlighter.ts:246-265) = 2 lone surrogates, both U+FFFD. NAIVE SNAP-OUTWARD IS WRONG: 71030 splits->0 but over-highlights 0->7074/67081. RIGHT=Array.from() code points for prefix/suffix AND char Myers (0/0, green).
 🔑 08-23 KILLER DETAIL (generalise): rejoined spans == original (halves recombine) so textContent assertions PASS w/ bug present => assert isWellFormed() PER NODE. tests/diff/ = ZERO non-ascii. diff.ts REST CLEAN, don't re-audit (hunk contract 58564x4ctx + minimality vs INDEP LCS DP 14641, 0 violations). Surrogate-safety IS house convention (buffer.ts:96/114, cursor.ts:193, editor.ts:284, PR#546) -> GREP A CONVENTION 4 MODULES KEEP AND 1 IGNORES.
 08-22 SRC BUG #4+#5 INJECTION-HL (bugs4/5), unclaimed. Detail in #667. 16 tests all toBeGreaterThan(0)/toBeDefined = BLIND TO POSITION. 🔑 TREE-SITTER RUNS UNDER bun test (playground/wasm/).
@@ -50,5 +51,5 @@ next (if posture lifts): bug#1 (search order) + 08-20 glyph-atlas are the 2 uncl
 AUDIT LESSONS: (1) comparators over IDENTITY fields where POSITION meant. (2) TWO FEATURES w/ solid describe blocks that NEVER INTERSECT — grep both markers co-occurring in one test body. Found 08-14 + 08-15 bugs. (3) mirror-image branches (up/down) textually IDENTICAL = suspect. (4) SIZE THRESHOLDS (chunk/page/tier): does any test cross it with INTERESTING content? "x".repeat(2048) hits multi-chunk but nothing a boundary can cut; also CHECK GENERATOR MAX SIZE vs the threshold (all repo generators cap at 100 vs 1024 chunk = whole class unreachable). (5) docstring "equivalent to X but faster" => diff vs X on adversarial input. (6) ONE PRIVATE HELPER, SEVERAL CALLERS: read its postcondition once, check each caller's question against it — correct for its documented query, silently wrong for a neighbouring one. Found 08-16.
 METHOD (4 src bugs in 4 runs): take an UNAUDITED item, write a from-scratch ABSOLUTE oracle over adversarial shapes, sweep EVERY offset/row. A/B perf in ONE process (import baseline copy as 2nd module from repo root), swap arm order to rule out JIT artifacts.
 Audited+clean: offset.ts(6/6), keysCompare, replaceAll:301, wrap-map pure fns, rope byteLength, rope line/lines/slice/text multi-chunk (08-16), rope insert/delete/replace + WrapMap lazy/_segCharStart (08-17).
-UNAUDITED (by ratio, lowest first): injection-hl DONE 08-22 (2 bugs), diff/diff DONE 08-23 (bug#6), editor-view DONE 08-24 (bug#7), diff-editor-view DONE 08-25 (facade = thin wiring, only defect is the shared header expr), diff/patch .92 (NEXT), diff/multi-file .95. hl-client DONE 08-21 (diff-client worker path still untested, same fake-Worker harness). Also still: cursor moveWord/movePage (movePage ignores wrapping - may be intended). project/glob.ts DONE 08-19.
+UNAUDITED (by ratio, lowest first): DONE = injection-hl 08-22(2 bugs), diff/diff 08-23(#6), editor-view 08-24(#7), diff-editor-view 08-25(thin wiring), diff/patch 08-26(#8), hl-client 08-21, glob 08-19. NEXT = diff/multi-file .95. Also: diff-client worker path (fake-Worker harness); cursor moveWord/movePage (movePage ignores wrapping - may be intended).
 NOTE: probes must live in REPO ROOT (bun can't resolve ./src from /tmp); rm + git checkout after.
