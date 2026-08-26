@@ -13,6 +13,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { createBuffer } from "../../src/buffer/buffer.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import type { MultiBufferRow } from "../../src/multibuffer/types.ts";
 import {
   calculateContentHeight,
@@ -26,7 +28,8 @@ import {
   yToVisualRow,
 } from "../../src/renderer/measurement.ts";
 import type { Measurements } from "../../src/renderer/types.ts";
-import { num } from "../helpers.ts";
+import { WrapMap } from "../../src/renderer/wrap-map.ts";
+import { createBufferId, excerptRange, num } from "../helpers.ts";
 
 // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction in tests
 const row = (n: number) => n as MultiBufferRow;
@@ -97,6 +100,50 @@ describe("calculateVisibleRows", () => {
     const maxScroll = contentHeight - VH; // 800
     const { endRow } = calculateVisibleRows(maxScroll, VH, LH, totalLines);
     expect(num(endRow)).toBe(totalLines); // clamped
+  });
+
+  test("scrollTop past the end of a short document does not invert the range", () => {
+    // A 5-line document with the viewport scrolled well past the last line:
+    // endRow clips to totalLines, so an unclamped startRow would overtake it.
+    const { startRow, endRow } = calculateVisibleRows(400, 400, LH, 5);
+    expect(num(endRow)).toBe(5);
+    expect(num(startRow)).toBeLessThanOrEqual(num(endRow));
+  });
+
+  test("startRow never exceeds endRow for any scroll position", () => {
+    for (const totalLines of [0, 1, 5, 20, 200]) {
+      for (const viewportHeight of [0, 200, 400, 800]) {
+        for (let scrollTop = 0; scrollTop <= 3000; scrollTop += 50) {
+          const { startRow, endRow } = calculateVisibleRows(
+            scrollTop,
+            viewportHeight,
+            LH,
+            totalLines,
+          );
+          expect(num(startRow)).toBeLessThanOrEqual(num(endRow));
+        }
+      }
+    }
+  });
+
+  test("wrap-aware branch does not invert the visual row range past the end", () => {
+    const text = "aaaa\nbbbbbbbbbbbbbbbbbbbb\ncc";
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length));
+    const wrapMap = new WrapMap(mb.snapshot(), 10);
+
+    for (let scrollTop = 0; scrollTop <= 4000; scrollTop += 50) {
+      const { startRow, endRow, startVisualRow, endVisualRow } = calculateVisibleRows(
+        scrollTop,
+        400,
+        LH,
+        3,
+        wrapMap,
+      );
+      expect(startVisualRow).toBeLessThanOrEqual(endVisualRow);
+      expect(num(startRow)).toBeLessThanOrEqual(num(endRow));
+    }
   });
 });
 

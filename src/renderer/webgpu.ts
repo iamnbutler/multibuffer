@@ -18,6 +18,7 @@ import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
   calculateContentHeight,
   calculateScrollTop,
+  clampScrollTop,
   createViewport,
   yToVisualRow,
 } from "./measurement.ts";
@@ -591,19 +592,23 @@ export class WebGpuRenderer implements Renderer {
     this._executeRender(glyphData, glyphCount, rectData, rectCount);
   }
 
-  scrollTo(target: ScrollTarget): void {
-    const contentHeight = calculateContentHeight(
+  /** Total content height in pixels for the current snapshot. */
+  private _contentHeight(): number {
+    return calculateContentHeight(
       this._snapshot?.lineCount ?? 0,
       this._measurements.lineHeight,
       this._wrapMap ?? undefined,
     );
+  }
+
+  scrollTo(target: ScrollTarget): void {
     this._scrollTop = calculateScrollTop(
       target.row,
       target.strategy,
       this._scrollTop,
       this._measurements.lineHeight,
       this._viewport.height,
-      contentHeight,
+      this._contentHeight(),
       this._wrapMap ?? undefined,
     );
     this._scheduleRender();
@@ -1228,7 +1233,14 @@ export class WebGpuRenderer implements Renderer {
     // Wheel scroll
     const wheelHandler = (e: WheelEvent) => {
       e.preventDefault();
-      this._scrollTop = Math.max(0, this._scrollTop + e.deltaY);
+      // Clamp to [0, contentHeight - viewportHeight]; without the upper bound
+      // the viewport can be scrolled arbitrarily far past the last line, which
+      // makes calculateVisibleRows() report startRow > endRow.
+      this._scrollTop = clampScrollTop(
+        this._scrollTop + e.deltaY,
+        this._contentHeight(),
+        this._viewport.height,
+      );
       this._scheduleRender();
     };
     this._onScroll = wheelHandler;
