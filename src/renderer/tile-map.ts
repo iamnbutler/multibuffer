@@ -212,7 +212,7 @@ export class TileManager {
       if (this._dirtyTiles.has(tileStart)) {
         result.push({
           startRow: tileStart,
-          endRow: Math.min(tileStart + this._linesPerTile, this._totalLines),
+          endRow: this._tileEndRow(tileStart),
           dirty: true,
         });
       }
@@ -232,7 +232,7 @@ export class TileManager {
     for (let tileStart = viewportTileStart; tileStart <= viewportTileEnd; tileStart += this._linesPerTile) {
       result.push({
         startRow: tileStart,
-        endRow: Math.min(tileStart + this._linesPerTile, this._totalLines),
+        endRow: this._tileEndRow(tileStart),
         dirty: this._dirtyTiles.has(tileStart),
       });
     }
@@ -262,6 +262,19 @@ export class TileManager {
    */
   private _rowToTileStart(row: number): number {
     return Math.floor(row / this._linesPerTile) * this._linesPerTile;
+  }
+
+  /**
+   * Calculate the exclusive end row of the tile starting at `tileStart`,
+   * clipped to the end of the document.
+   *
+   * A viewport can extend past the last line (a short file in a tall editor),
+   * so a tile may begin beyond `totalLines`. Clipping alone would then place
+   * the exclusive end *before* the inclusive start, which is not a
+   * representable range; such a tile covers no rows, so its end is its start.
+   */
+  private _tileEndRow(tileStart: number): number {
+    return Math.max(tileStart, Math.min(tileStart + this._linesPerTile, this._totalLines));
   }
 
   /**
