@@ -494,6 +494,42 @@ describe("TileManager edge cases", () => {
     expect(tiles.length).toBe(2); // tiles 20 and 30
     expect(tiles[1]?.endRow).toBe(35); // clipped to totalLines
   });
+
+  test("viewport taller than the document does not invert tile ranges", () => {
+    // A 5-line file in a 40-row editor: tiles 10, 20 and 30 lie entirely past
+    // the end of the document. Clipping endRow to totalLines must not push it
+    // below startRow — endRow is exclusive, so endRow < startRow is not a
+    // representable range.
+    const tm = new TileManager({ linesPerTile: 10, totalLines: 5 });
+    tm.setViewport(0, 40);
+
+    for (const tile of tm.getVisibleTiles()) {
+      expect(tile.endRow).toBeGreaterThanOrEqual(tile.startRow);
+    }
+    for (const tile of tm.getDirtyTiles()) {
+      expect(tile.endRow).toBeGreaterThanOrEqual(tile.startRow);
+    }
+
+    // Tiles within the document keep their clipped extent.
+    expect(tm.getVisibleTiles()[0]).toEqual({ startRow: 0, endRow: 5, dirty: true });
+  });
+
+  test("no configuration emits a tile whose exclusive endRow precedes its startRow", () => {
+    for (const linesPerTile of [1, 10, 25]) {
+      for (const totalLines of [0, 1, 5, 35, 100]) {
+        for (const startRow of [0, 5, 30, 90]) {
+          for (const height of [0, 1, 33, 120]) {
+            const tm = new TileManager({ linesPerTile, totalLines });
+            tm.setViewport(startRow, startRow + height);
+
+            for (const tile of [...tm.getVisibleTiles(), ...tm.getDirtyTiles()]) {
+              expect(tile.endRow).toBeGreaterThanOrEqual(tile.startRow);
+            }
+          }
+        }
+      }
+    }
+  });
 });
 
 describe("TileManager performance characteristics", () => {
