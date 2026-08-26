@@ -26,10 +26,13 @@ export function calculateVisibleRows(
     // No wrapping: visual row = buffer row
     const visibleStart = Math.floor(scrollTop / lineHeight);
     const visibleLines = Math.ceil(viewportHeight / lineHeight) + 1;
+    const end = Math.min(visibleStart + visibleLines + OVERDRAW, totalLines);
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    const startRow = Math.max(0, visibleStart - OVERDRAW) as MultiBufferRow;
+    const endRow = end as MultiBufferRow;
+    // A scrollTop past the end of the document puts the overdrawn start beyond
+    // `end`, so clamp it: the range covers no rows rather than inverting.
     // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    const endRow = Math.min(visibleStart + visibleLines + OVERDRAW, totalLines) as MultiBufferRow;
+    const startRow = Math.min(Math.max(0, visibleStart - OVERDRAW), end) as MultiBufferRow;
     return { startRow, endRow, startVisualRow: startRow, endVisualRow: endRow };
   }
 
@@ -38,8 +41,9 @@ export function calculateVisibleRows(
   const visibleStartVisual = Math.floor(scrollTop / lineHeight);
   const visibleLinesVisual = Math.ceil(viewportHeight / lineHeight) + 1;
 
-  const startVisualRow = Math.max(0, visibleStartVisual - OVERDRAW);
   const endVisualRow = Math.min(visibleStartVisual + visibleLinesVisual + OVERDRAW, totalVisualRows);
+  // Same clamp as the unwrapped branch, in visual-row space.
+  const startVisualRow = Math.min(Math.max(0, visibleStartVisual - OVERDRAW), endVisualRow);
 
   const { mbRow: startRow } = wrapMap.visualRowToBufferRow(startVisualRow);
   const endInfo = wrapMap.visualRowToBufferRow(Math.max(0, endVisualRow - 1));
