@@ -130,6 +130,117 @@ describe("InjectionHighlighter", () => {
     });
   });
 
+  // An injection must cover exactly the rows its own text occupies. Tree-sitter
+  // end positions are exclusive, so the row holding the *closing* delimiter used
+  // to be routed into the injected language — which has no tokens there, leaving
+  // the delimiter unhighlighted while its opening twin was styled.
+  describe("closing delimiters stay with the primary language", () => {
+    let h: InjectionHighlighter;
+
+    /** The single delimiter color both fence and frontmatter markers use. */
+    const delimiterColor = (tokens: { color: string }[]) => tokens.map((t) => t.color);
+
+    beforeAll(async () => {
+      h = new InjectionHighlighter(markdownQuery);
+      await h.init(
+        path.join(WASM_DIR, "tree-sitter.wasm"),
+        path.join(WASM_DIR, "tree-sitter-markdown.wasm"),
+        "markdown",
+      );
+      await h.loadLanguage("yaml", path.join(WASM_DIR, "tree-sitter-yaml.wasm"));
+      await h.loadLanguage(
+        "typescript",
+        path.join(WASM_DIR, "tree-sitter-typescript.wasm"),
+      );
+    });
+
+    it("highlights a closing code fence exactly like its opening fence", () => {
+      h.parseBuffer("fence", "```typescript\nconst x = 1;\n```\n");
+
+      const opening = h.getLineTokens("fence", 0);
+      const closing = h.getLineTokens("fence", 2);
+
+      expect(opening.length).toBeGreaterThan(0);
+      expect(closing).toEqual(opening);
+    });
+
+    it("still highlights the fenced content with the injected language", () => {
+      h.parseBuffer("fence-content", "```typescript\nconst x = 1;\n```\n");
+
+      const content = h.getLineTokens("fence-content", 1);
+      expect(content.length).toBeGreaterThan(0);
+      expect(content.some((t) => t.color.includes("keyword"))).toBe(true);
+    });
+
+    it("highlights the closing fence of a multi-line block", () => {
+      h.parseBuffer("fence-multi", "```typescript\nconst a = 1;\nconst b = 2;\n```\n");
+
+      expect(h.getLineTokens("fence-multi", 1).length).toBeGreaterThan(0);
+      expect(h.getLineTokens("fence-multi", 2).length).toBeGreaterThan(0);
+      expect(delimiterColor(h.getLineTokens("fence-multi", 3))).toEqual(
+        delimiterColor(h.getLineTokens("fence-multi", 0)),
+      );
+    });
+
+    it("highlights a closing fence indented inside a list item", () => {
+      // The content node ends at the fence's indentation column rather than at
+      // column 0, so the closing row is only identifiable from the delimiter.
+      h.parseBuffer("fence-indented", "- item\n\n  ```typescript\n  const a = 1;\n  ```\n");
+
+      // The opening row also carries the list's continuation token, so compare
+      // on the delimiter color rather than on the whole token list.
+      const opening = delimiterColor(h.getLineTokens("fence-indented", 2));
+      const closing = delimiterColor(h.getLineTokens("fence-indented", 4));
+
+      expect(opening).toContain("var(--syntax-comment, #928374)");
+      expect(closing).toContain("var(--syntax-comment, #928374)");
+    });
+
+    it("highlights a closing frontmatter delimiter like its opening one", () => {
+      h.parseBuffer("fm", "---\ntitle: Test\n---\n\n# Heading\n");
+
+      const opening = h.getLineTokens("fm", 0);
+      const closing = h.getLineTokens("fm", 2);
+
+      expect(opening.length).toBeGreaterThan(0);
+      expect(closing).toEqual(opening);
+    });
+
+    it("does not feed the closing frontmatter delimiter to the YAML parser", () => {
+      // Row 1 is the only YAML content row; row 2 is the closing "---".
+      h.parseBuffer("fm-scope", "---\ntitle: Test\n---\n\n# Heading\n");
+
+      expect(h.getLineTokens("fm-scope", 1).some((t) => t.color.includes("string"))).toBe(
+        true,
+      );
+      expect(delimiterColor(h.getLineTokens("fm-scope", 2))).not.toContain(
+        "var(--syntax-default, #ebdbb2)",
+      );
+    });
+
+    it("keeps a blank final content row inside the frontmatter injection", () => {
+      // The blank row 2 is real YAML content, not the trailing newline.
+      h.parseBuffer("fm-blank", "---\ntitle: Test\n\n---\n\n# Heading\n");
+
+      const closing = h.getLineTokens("fm-blank", 3);
+      expect(delimiterColor(closing)).toEqual(delimiterColor(h.getLineTokens("fm-blank", 0)));
+    });
+
+    it("highlights a closing TOML frontmatter delimiter", () => {
+      // No TOML grammar ships with the repo, so row 1 stays untokenised; the
+      // delimiter rows are handled by the primary language either way.
+      h.parseBuffer("toml", '+++\ntitle = "x"\n+++\n\n# Heading\n');
+
+      expect(h.getLineTokens("toml", 2)).toEqual(h.getLineTokens("toml", 0));
+    });
+
+    it("leaves an unterminated fence covering its content row", () => {
+      h.parseBuffer("fence-open", "```typescript\nconst x = 1;\n");
+
+      expect(h.getLineTokens("fence-open", 1).length).toBeGreaterThan(0);
+    });
+  });
+
   describe("row index O(1) lookup", () => {
     // This document has two separate injection ranges (YAML frontmatter + code block).
     // The row index must correctly distinguish which rows belong to each injection

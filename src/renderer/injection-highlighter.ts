@@ -20,6 +20,30 @@ import { colorForNodeType } from "./theme.ts";
 
 export type { Token };
 
+/**
+ * The last row a tree-sitter node actually covers.
+ *
+ * `endPosition` is exclusive: a node that stops at column 0 of a row puts no
+ * text on that row, so its last covered row is the one before it.
+ */
+function nodeLastRow(node: Node): number {
+  return node.endPosition.column === 0 ? node.endPosition.row - 1 : node.endPosition.row;
+}
+
+/**
+ * The content lines of a frontmatter node, with the opening and closing
+ * delimiter lines removed.
+ *
+ * `node.text` normally ends with a newline, so `split("\n")` leaves a trailing
+ * empty element. Dropping that first is what makes the final `slice` remove the
+ * *closing delimiter* rather than the empty tail.
+ */
+function frontmatterContentLines(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines.slice(1, -1);
+}
+
 /** Represents a range that should be highlighted with a different language. */
 interface InjectionRange {
   language: string;
@@ -229,41 +253,38 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     const walk = (node: Node) => {
       // YAML frontmatter (minus_metadata)
       if (node.type === "minus_metadata") {
-        const text = node.text;
-        const lines = text.split("\n");
-        // Skip first line (---) and last line (---)
-        const yamlLines = lines.slice(1, -1);
+        const yamlLines = frontmatterContentLines(node.text);
         const yamlText = yamlLines.join("\n");
 
         if (yamlText.trim()) {
+          const startRow = node.startPosition.row + 1;
           ranges.push({
             language: "yaml",
-            startRow: node.startPosition.row + 1,
+            startRow,
             startColumn: 0,
-            endRow: node.endPosition.row - 1,
+            endRow: startRow + yamlLines.length - 1,
             endColumn: yamlLines[yamlLines.length - 1]?.length ?? 0,
             text: yamlText,
-            rowOffset: node.startPosition.row + 1,
+            rowOffset: startRow,
           });
         }
       }
 
       // TOML frontmatter (plus_metadata)
       if (node.type === "plus_metadata") {
-        const text = node.text;
-        const lines = text.split("\n");
-        const tomlLines = lines.slice(1, -1);
+        const tomlLines = frontmatterContentLines(node.text);
         const tomlText = tomlLines.join("\n");
 
         if (tomlText.trim()) {
+          const startRow = node.startPosition.row + 1;
           ranges.push({
             language: "toml",
-            startRow: node.startPosition.row + 1,
+            startRow,
             startColumn: 0,
-            endRow: node.endPosition.row - 1,
+            endRow: startRow + tomlLines.length - 1,
             endColumn: tomlLines[tomlLines.length - 1]?.length ?? 0,
             text: tomlText,
-            rowOffset: node.startPosition.row + 1,
+            rowOffset: startRow,
           });
         }
       }
@@ -272,6 +293,7 @@ export class InjectionHighlighter implements SyntaxHighlighter {
       if (node.type === "fenced_code_block") {
         let language: string | null = null;
         let contentNode: Node | null = null;
+        let closingDelimiter: Node | null = null;
 
         for (let i = 0; i < node.childCount; i++) {
           const child = node.child(i);
@@ -288,17 +310,34 @@ export class InjectionHighlighter implements SyntaxHighlighter {
           if (child.type === "code_fence_content") {
             contentNode = child;
           }
+          // Children are in document order, so a delimiter seen after the
+          // content is the closing one. An unterminated fence has none.
+          if (child.type === "fenced_code_block_delimiter" && contentNode) {
+            closingDelimiter = child;
+          }
         }
 
         if (language && contentNode && contentNode.text.trim()) {
+          // `code_fence_content` runs right up to the closing delimiter, so its
+          // end position lands on the closing-fence row — at column 0, or at the
+          // fence's indentation column inside a list item. Recording that row as
+          // the inclusive end routes the delimiter into the injected language,
+          // which has nothing to say about it, so it loses its highlighting.
+          const startRow = contentNode.startPosition.row;
+          const lastContentRow = closingDelimiter
+            ? closingDelimiter.startPosition.row - 1
+            : nodeLastRow(contentNode);
+
+          const contentLines = contentNode.text.split("\n");
+
           ranges.push({
             language,
-            startRow: contentNode.startPosition.row,
+            startRow,
             startColumn: contentNode.startPosition.column,
-            endRow: contentNode.endPosition.row,
-            endColumn: contentNode.endPosition.column,
+            endRow: lastContentRow,
+            endColumn: contentLines[lastContentRow - startRow]?.length ?? 0,
             text: contentNode.text,
-            rowOffset: contentNode.startPosition.row,
+            rowOffset: startRow,
           });
         }
       }
@@ -388,11 +427,10 @@ export class InjectionHighlighter implements SyntaxHighlighter {
 
     // Skip if this node is a container for an injection (like minus_metadata)
     if (nodeType === "minus_metadata" || nodeType === "plus_metadata") {
-      // Only highlight the delimiter lines, not the content
-      if (
-        targetRow === node.startPosition.row ||
-        targetRow === node.endPosition.row
-      ) {
+      // Only highlight the delimiter lines, not the content.
+      // The closing delimiter sits on the node's last covered row, which is not
+      // `endPosition.row` when the node ends at column 0 of the following row.
+      if (targetRow === node.startPosition.row || targetRow === nodeLastRow(node)) {
         // Highlight the --- delimiter
         const startCol =
           node.startPosition.row === targetRow ? node.startPosition.column : 0;
