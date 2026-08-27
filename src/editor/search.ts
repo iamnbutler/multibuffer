@@ -387,7 +387,21 @@ export class SearchController {
     }
   }
 
-  private _performSearch(): void {
+  /**
+   * Rebuild the result list from the current text.
+   *
+   * @param preferred - Where the match that should stay active has moved to.
+   *   Whichever of its two edges the edit left alone identifies it: the start
+   *   anchor has {@link Bias.Left} so it does not follow text inserted at the
+   *   match start, and the end anchor has {@link Bias.Right} so it does not
+   *   stay put for text inserted at the match end. Without this the active
+   *   match resets to the first result, which is right for a fresh `find()`
+   *   but wrong for the automatic refresh after an edit.
+   */
+  private _performSearch(preferred?: {
+    start: MultiBufferPoint;
+    end: MultiBufferPoint;
+  }): void {
     const snap = this._editor.multiBuffer.snapshot();
     const mb = this._editor.multiBuffer;
     const fullText = this._getFullText(snap);
@@ -402,6 +416,8 @@ export class SearchController {
     const lineOffsets = this._computeLineOffsets(fullText);
 
     const results: SearchResult[] = [];
+    let matchedByStart: SearchResult | undefined;
+    let matchedByEnd: SearchResult | undefined;
     for (const match of matches) {
       const startPoint = this._offsetToPoint(match.start, lineOffsets, snap);
       const endPoint = this._offsetToPoint(match.end, lineOffsets, snap);
@@ -413,10 +429,25 @@ export class SearchController {
 
       if (!startAnchor || !endAnchor) continue;
 
-      results.push({
+      const result: SearchResult = {
         range: createAnchorRange(startAnchor, endAnchor),
         matchedText: match.text,
-      });
+      };
+      results.push(result);
+
+      if (preferred) {
+        if (
+          startPoint.row === preferred.start.row &&
+          startPoint.column === preferred.start.column
+        ) {
+          matchedByStart = result;
+        } else if (
+          endPoint.row === preferred.end.row &&
+          endPoint.column === preferred.end.column
+        ) {
+          matchedByEnd = result;
+        }
+      }
     }
 
     // Sort by position
@@ -424,6 +455,13 @@ export class SearchController {
 
     this._results = results;
     this._activeIndex = results.length > 0 ? 0 : -1;
+
+    // Keep the previously active match active when it survived the edit.
+    const survivor = matchedByStart ?? matchedByEnd;
+    if (survivor) {
+      const index = results.indexOf(survivor);
+      if (index >= 0) this._activeIndex = index;
+    }
   }
 
   private _getFullText(snap: MultiBufferSnapshot): string {
@@ -532,9 +570,13 @@ export class SearchController {
   private _subscribeToTextChanges(): void {
     if (this._textChangeHandler) return;
 
-    this._textChangeHandler = () => {
-      // Re-run search to rebuild anchor-based results
-      this._performSearch();
+    this._textChangeHandler = (snap) => {
+      // Re-run search to rebuild anchor-based results. The active match is
+      // resolved against the post-edit snapshot first so it stays active when
+      // the edit did not destroy it.
+      const active = this.activeResult;
+      const preferred = active ? resolveAnchorRange(snap, active.range) : undefined;
+      this._performSearch(preferred);
     };
 
     this._editor.on("textChange", this._textChangeHandler);

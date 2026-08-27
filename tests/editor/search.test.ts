@@ -333,6 +333,96 @@ describe("SearchController - Anchor Stability", () => {
     expect(editor.getSelectedText()).toBe("foo");
   });
 
+  test("the active match stays active across an edit elsewhere", () => {
+    const { editor, search } = setup("foo\nbar\nfoo\nfoo\nbaz");
+    search.find("foo");
+    search.next();
+    search.next();
+    expect(search.state.activeIndex).toBe(2);
+
+    // Edit on a line that holds no match at all
+    editor.setCursor(mbPoint(4, 0));
+    editor.dispatch({ type: "insertText", text: "X" });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(2);
+  });
+
+  test("the active match stays active when an edit before it shifts its position", () => {
+    const { editor, search } = setup("foo bar foo baz foo");
+    search.find("foo");
+    search.next();
+    expect(search.state.activeIndex).toBe(1);
+
+    editor.setCursor(mbPoint(0, 0));
+    editor.dispatch({ type: "insertText", text: "XXX " });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(1);
+    expect(search.activeResult).toBeDefined();
+
+    // And the active result still points at the middle "foo", now shifted right
+    const active = search.resolveResults()[search.state.activeIndex];
+    expect(active).toBeDefined();
+    if (active) expectPoint(active.start, 0, 12);
+  });
+
+  test("next() continues from the active match after an edit", () => {
+    const { editor, search } = setup("foo\nbar\nfoo\nfoo\nbaz");
+    search.find("foo");
+    search.next();
+    expect(search.state.activeIndex).toBe(1);
+
+    editor.setCursor(mbPoint(4, 0));
+    editor.dispatch({ type: "insertText", text: "X" });
+
+    search.next();
+    expect(search.state.activeIndex).toBe(2);
+  });
+
+  test("the active match stays active when text is inserted immediately before it", () => {
+    const { editor, search } = setup("foo\nbar\nfoo\nfoo\nbaz");
+    search.find("foo");
+    search.next();
+    expect(search.state.activeIndex).toBe(1);
+
+    // The start anchor has left bias, so it does not follow this insertion —
+    // the end anchor is what identifies the match here.
+    editor.setCursor(mbPoint(2, 0));
+    editor.dispatch({ type: "insertText", text: "Z" });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(1);
+  });
+
+  test("the active match stays active when text is inserted immediately after it", () => {
+    const { editor, search } = setup("foo\nbar\nfoo\nfoo\nbaz");
+    search.find("foo");
+    search.next();
+    expect(search.state.activeIndex).toBe(1);
+
+    editor.setCursor(mbPoint(2, 3));
+    editor.dispatch({ type: "insertText", text: "Z" });
+
+    expect(search.state.count).toBe(3);
+    expect(search.state.activeIndex).toBe(1);
+  });
+
+  test("the active match resets to the first result when the edit destroys it", () => {
+    const { editor, search } = setup("foo\nbar\nfoo\nfoo\nbaz");
+    search.find("foo");
+    search.next();
+    search.next();
+    expect(search.state.activeIndex).toBe(2);
+
+    // Delete the active match itself
+    editor.setCursor(mbPoint(3, 0));
+    editor.dispatch({ type: "deleteForward", granularity: "character" });
+
+    expect(search.state.count).toBe(2);
+    expect(search.state.activeIndex).toBe(0);
+  });
+
   test("replace updates result count", () => {
     const { search } = setup("foo bar foo baz foo");
     search.find("foo");
