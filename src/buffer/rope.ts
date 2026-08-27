@@ -15,6 +15,8 @@ const TARGET_CHUNK_SIZE = 1024;
 interface Chunk {
   readonly text: string;
   readonly newlines: number;
+  /** UTF-8 byte length of `text`, counted once when the chunk is created. */
+  readonly bytes: number;
 }
 
 function countNewlines(text: string): number {
@@ -25,8 +27,33 @@ function countNewlines(text: string): number {
   return count;
 }
 
+/**
+ * UTF-8 byte length of a single chunk's text.
+ *
+ * Counted per chunk rather than across the whole rope: an edit rebuilds only
+ * the chunks it touches, so every untouched chunk keeps the count it was born
+ * with and the rope total stays O(chunks touched) instead of O(document).
+ */
+function countUtf8Bytes(text: string): number {
+  let total = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code <= 0x7f) {
+      total += 1;
+    } else if (code <= 0x7ff) {
+      total += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      total += 4;
+      i++;
+    } else {
+      total += 3;
+    }
+  }
+  return total;
+}
+
 function makeChunk(text: string): Chunk {
-  return { text, newlines: countNewlines(text) };
+  return { text, newlines: countNewlines(text), bytes: countUtf8Bytes(text) };
 }
 
 /**
@@ -57,6 +84,7 @@ export class Rope {
   private readonly _chunks: readonly Chunk[];
   private readonly _length: number;
   private readonly _newlineCount: number;
+  private readonly _byteLength: number;
   /** _chunkOffsets[i] = UTF-16 code unit offset where chunk i starts. */
   private readonly _chunkOffsets: readonly number[];
   /** _chunkNewlines[i] = cumulative newlines in chunks 0..i-1. */
@@ -66,6 +94,7 @@ export class Rope {
     this._chunks = chunks;
     let length = 0;
     let newlines = 0;
+    let bytes = 0;
     const offsets = new Array<number>(chunks.length);
     const nlPrefixes = new Array<number>(chunks.length + 1);
     nlPrefixes[0] = 0;
@@ -75,12 +104,14 @@ export class Rope {
       offsets[i] = length;
       length += c.text.length;
       newlines += c.newlines;
+      bytes += c.bytes;
       nlPrefixes[i + 1] = newlines;
     }
     this._chunkOffsets = offsets;
     this._chunkNewlinePrefixes = nlPrefixes;
     this._length = length;
     this._newlineCount = newlines;
+    this._byteLength = bytes;
   }
 
   static from(text: string): Rope {
@@ -121,31 +152,15 @@ export class Rope {
   }
 
   /**
-   * Compute UTF-8 byte length by scanning chunks directly.
+   * UTF-8 byte length of the whole rope. O(1).
    *
-   * Avoids the O(n) string allocation of `utf8ByteLength(rope.text())` — instead
-   * scans each chunk in place. For a 10K-line buffer (~400 chunks, ~400 KB text),
-   * this eliminates a ~400 KB string allocation on every buffer edit.
+   * Each chunk counts its own bytes when it is created and the total is summed
+   * in the constructor, so an edit pays only for the chunks it rebuilds — the
+   * shared ones carry their counts across. `Buffer.textSummary` asks for this
+   * on every edit, which is why it must not scan the document.
    */
   byteLength(): number {
-    let total = 0;
-    for (const c of this._chunks) {
-      const s = c.text;
-      for (let i = 0; i < s.length; i++) {
-        const code = s.charCodeAt(i);
-        if (code <= 0x7f) {
-          total += 1;
-        } else if (code <= 0x7ff) {
-          total += 2;
-        } else if (code >= 0xd800 && code <= 0xdbff) {
-          total += 4;
-          i++;
-        } else {
-          total += 3;
-        }
-      }
-    }
-    return total;
+    return this._byteLength;
   }
 
   /** Get a single line by 0-based index. */

@@ -372,3 +372,49 @@ describe("Rope - lineIterator", () => {
     expect(gen.next().value).toBe("C");
   });
 });
+
+describe("Rope - byteLength", () => {
+  const encoder = new TextEncoder();
+
+  test("matches TextEncoder for each UTF-8 width", () => {
+    for (const text of ["", "abc", "café", "€uro", "😀😀", "a€😀\nb"]) {
+      expect(Rope.from(text).byteLength()).toBe(encoder.encode(text).length);
+    }
+  });
+
+  test("matches TextEncoder across chunk boundaries", () => {
+    // Well past TARGET_CHUNK_SIZE so the rope holds many chunks
+    const text = `${"héllo wörld 😀\n".repeat(500)}tail`;
+    const rope = Rope.from(text);
+    expect(rope.byteLength()).toBe(encoder.encode(text).length);
+  });
+
+  test("stays correct after insert", () => {
+    let rope = Rope.from("abc");
+    rope = rope.insert(1, "€😀");
+    expect(rope.text()).toBe("a€😀bc");
+    expect(rope.byteLength()).toBe(encoder.encode(rope.text()).length);
+  });
+
+  test("stays correct after delete", () => {
+    let rope = Rope.from("a€😀bc");
+    rope = rope.delete(1, 4); // removes "€😀"
+    expect(rope.text()).toBe("abc");
+    expect(rope.byteLength()).toBe(3);
+  });
+
+  test("stays correct after replace", () => {
+    let rope = Rope.from("one €uro\ntwo");
+    rope = rope.replace(4, 8, "😀😀");
+    expect(rope.byteLength()).toBe(encoder.encode(rope.text()).length);
+  });
+
+  test("stays correct over a run of edits on a multi-chunk rope", () => {
+    let rope = Rope.from(`${"line of text here\n".repeat(300)}end`);
+    for (let i = 0; i < 40; i++) {
+      rope = rope.insert(Math.min(i * 37, rope.length), i % 2 === 0 ? "€" : "z");
+      rope = rope.delete(0, 1);
+    }
+    expect(rope.byteLength()).toBe(encoder.encode(rope.text()).length);
+  });
+});
