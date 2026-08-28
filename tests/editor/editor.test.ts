@@ -1740,6 +1740,101 @@ describe("Editor - Line Operations", () => {
     expectPoint(editor.cursor, 1, 0);
   });
 
+  // ── Multi-row selections ────────────────────────────────────────
+  //
+  // These operations act on every row the selection touches. The row range must
+  // not depend on which way the selection was dragged: selecting rows 1–4 top-to-
+  // bottom and bottom-to-top describes the same block of text.
+
+  /** Select rows 1–4 of LINES by dragging downwards (head at the bottom). */
+  function dragDown(): { mb: MultiBuffer; editor: Editor } {
+    const s = setup("L0\nL1\nL2\nL3\nL4\nL5");
+    s.editor.setCursor(mbPoint(1, 0));
+    s.editor.extendSelectionTo(mbPoint(4, 2));
+    return s;
+  }
+
+  /** Select the same rows 1–4 by dragging upwards (head at the top). */
+  function dragUp(): { mb: MultiBuffer; editor: Editor } {
+    const s = setup("L0\nL1\nL2\nL3\nL4\nL5");
+    s.editor.setCursor(mbPoint(4, 2));
+    s.editor.extendSelectionTo(mbPoint(1, 0));
+    return s;
+  }
+
+  test("duplicate line down copies every selected line", () => {
+    const { mb, editor } = dragDown();
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("L0\nL1\nL2\nL3\nL4\nL1\nL2\nL3\nL4\nL5");
+  });
+
+  test("duplicate line up copies every selected line", () => {
+    const { mb, editor } = dragUp();
+    editor.dispatch({ type: "duplicateLine", direction: "up" });
+    expect(getText(mb)).toBe("L0\nL1\nL2\nL3\nL4\nL1\nL2\nL3\nL4\nL5");
+  });
+
+  test("duplicate line does not depend on drag direction", () => {
+    const down = dragDown();
+    down.editor.dispatch({ type: "duplicateLine", direction: "down" });
+    const up = dragUp();
+    up.editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(down.mb)).toBe(getText(up.mb));
+  });
+
+  test("insert line below opens after the last selected line", () => {
+    const { mb, editor } = dragDown();
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("L0\nL1\nL2\nL3\nL4\n\nL5");
+    expectPoint(editor.cursor, 5, 0);
+  });
+
+  test("insert line below does not depend on drag direction", () => {
+    const down = dragDown();
+    down.editor.dispatch({ type: "insertLineBelow" });
+    const up = dragUp();
+    up.editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(down.mb)).toBe(getText(up.mb));
+  });
+
+  test("insert line above opens before the first selected line", () => {
+    const { mb, editor } = dragDown();
+    editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(mb)).toBe("L0\n\nL1\nL2\nL3\nL4\nL5");
+    expectPoint(editor.cursor, 1, 0);
+  });
+
+  test("insert line above does not depend on drag direction", () => {
+    const down = dragDown();
+    down.editor.dispatch({ type: "insertLineAbove" });
+    const up = dragUp();
+    up.editor.dispatch({ type: "insertLineAbove" });
+    expect(getText(down.mb)).toBe(getText(up.mb));
+  });
+
+  test("one undo reverses a multi-row duplicate", () => {
+    const { mb, editor } = dragDown();
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    editor.dispatch({ type: "undo" });
+    expect(getText(mb)).toBe("L0\nL1\nL2\nL3\nL4\nL5");
+  });
+
+  test("duplicate line down keeps indentation of every selected line", () => {
+    const { mb, editor } = setup("a\n  b\n    c\nd");
+    editor.setCursor(mbPoint(1, 0));
+    editor.extendSelectionTo(mbPoint(2, 1));
+    editor.dispatch({ type: "duplicateLine", direction: "down" });
+    expect(getText(mb)).toBe("a\n  b\n    c\n  b\n    c\nd");
+  });
+
+  test("insert line below inherits indentation of the last selected line", () => {
+    const { mb, editor } = setup("a\n  b\n    c\nd");
+    editor.setCursor(mbPoint(1, 0));
+    editor.extendSelectionTo(mbPoint(2, 1));
+    editor.dispatch({ type: "insertLineBelow" });
+    expect(getText(mb)).toBe("a\n  b\n    c\n    \nd");
+  });
+
   // ── Undo/Redo ───────────────────────────────────────────────────
 
   test("undo reverses moveLine", () => {

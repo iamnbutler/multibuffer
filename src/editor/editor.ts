@@ -1271,73 +1271,90 @@ private _moveLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     }
   }
 
+  /**
+   * Duplicate every line the selection touches (or just the cursor line when the
+   * selection is collapsed). The copy is placed after the last touched line for
+   * "down" and before the first for "up". Uses a single _edit() for atomic undo.
+   */
   private _duplicateLine(snap: MultiBufferSnapshot, direction: "up" | "down"): void {
     this._goalColumn = undefined;
     const cursor = this.cursor;
-    const row = cursor.row;
+    const { startRow, endRow } = this._affectedRows(snap);
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const nextRowEnd = (row + 1) as MultiBufferRow;
-    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for row range
+    const lines = snap.lines(startRow, (endRow + 1) as MultiBufferRow);
+    const blockText = lines.join("\n");
+    const rowSpan = endRow - startRow + 1;
 
     if (direction === "down") {
-      const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
-      if (!this._edit(snap, insertPoint, insertPoint, `\n${currentLineText}`)) return;
+      const lastLineLen = lines[lines.length - 1]?.length ?? 0;
+      const insertPoint: MultiBufferPoint = { row: endRow, column: lastLineLen };
+      if (!this._edit(snap, insertPoint, insertPoint, `\n${blockText}`)) return;
 
+      // The copy sits below the original, so the cursor moves down by the block height
+      // to land on the same relative line of the copy.
       // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-      const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: cursor.column };
+      const newCursor: MultiBufferPoint = { row: (cursor.row + rowSpan) as MultiBufferRow, column: cursor.column };
       this._cursor = newCursor;
       const newSel = selectionAtPoint(this.multiBuffer, newCursor);
       this._selections = newSel ? [newSel] : [];
     } else {
-      const insertPoint: MultiBufferPoint = { row, column: 0 };
-      if (!this._edit(snap, insertPoint, insertPoint, `${currentLineText}\n`)) return;
+      const insertPoint: MultiBufferPoint = { row: startRow, column: 0 };
+      if (!this._edit(snap, insertPoint, insertPoint, `${blockText}\n`)) return;
 
-      this._cursor = { row, column: cursor.column };
+      // The copy is inserted above, pushing the original down; the cursor keeps its
+      // row and so lands on the same relative line of the copy.
+      this._cursor = { row: cursor.row, column: cursor.column };
       const newSel = selectionAtPoint(this.multiBuffer, this._cursor);
       this._selections = newSel ? [newSel] : [];
     }
   }
 
+  /**
+   * Open a blank line after the last line the selection touches (or after the
+   * cursor line when the selection is collapsed).
+   */
   private _insertLineBelow(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
+    const { endRow } = this._affectedRows(snap);
 
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const nextRowEnd = (row + 1) as MultiBufferRow;
-    const currentLineText = snap.lines(row, nextRowEnd)[0] ?? "";
+    const nextRowEnd = (endRow + 1) as MultiBufferRow;
+    const currentLineText = snap.lines(endRow, nextRowEnd)[0] ?? "";
 
     // Inherit the current line's leading whitespace (matches Enter auto-indent)
     const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
 
-    const insertPoint: MultiBufferPoint = { row, column: currentLineText.length };
+    const insertPoint: MultiBufferPoint = { row: endRow, column: currentLineText.length };
     if (!this._edit(snap, insertPoint, insertPoint, `\n${indent}`)) return;
 
     // Move cursor to the new line after any indentation
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const newCursor: MultiBufferPoint = { row: (row + 1) as MultiBufferRow, column: indent.length };
+    const newCursor: MultiBufferPoint = { row: (endRow + 1) as MultiBufferRow, column: indent.length };
     this._cursor = newCursor;
     const newSel = selectionAtPoint(this.multiBuffer, newCursor);
     this._selections = newSel ? [newSel] : [];
   }
 
+  /**
+   * Open a blank line before the first line the selection touches (or before the
+   * cursor line when the selection is collapsed).
+   */
   private _insertLineAbove(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
-    const cursor = this.cursor;
-    const row = cursor.row;
+    const { startRow } = this._affectedRows(snap);
 
     // Inherit the current line's leading whitespace (consistent with Enter and insertLineBelow)
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
-    const currentLineText = snap.lines(row, (row + 1) as MultiBufferRow)[0] ?? "";
+    const currentLineText = snap.lines(startRow, (startRow + 1) as MultiBufferRow)[0] ?? "";
     const indent = currentLineText.match(/^( +)/)?.[1] ?? "";
 
-    // Insert the indented blank line before the current line
-    const insertPoint: MultiBufferPoint = { row, column: 0 };
+    // Insert the indented blank line before the first touched line
+    const insertPoint: MultiBufferPoint = { row: startRow, column: 0 };
     if (!this._edit(snap, insertPoint, insertPoint, `${indent}\n`)) return;
 
     // Cursor moves to the new blank line after any indentation
-    const newCursor: MultiBufferPoint = { row, column: indent.length };
+    const newCursor: MultiBufferPoint = { row: startRow, column: indent.length };
     this._cursor = newCursor;
     const newSel = selectionAtPoint(this.multiBuffer, newCursor);
     this._selections = newSel ? [newSel] : [];
