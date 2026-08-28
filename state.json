@@ -5,33 +5,43 @@
   "update_issue body is INLINE: retype whole body, UNESCAPE entities.",
   "Verify the PREVIOUS run's safe output landed."
  ],
- "memory_mechanism_FIXED_2026-08-27": [
-  "MY EARLIER NOTE HERE WAS WRONG. Corrected on #677 with the real job log.",
-  "The push job does NOT count .git. It scans memory FILES only (found 1: state.json).",
-  "What fails is MAX_PATCH_SIZE=10240 (effective 12288 with 20% overhead), NOT file size.",
-  "Patch = removed lines + added lines. Old single-line JSON => patch = old + new + ~161.",
-  "Run 33059488348 lost a whole run of state this way: 6356+8437+161 = 14954 > 12288.",
-  "FIX APPLIED: this file is now MULTI-LINE json => git diffs line-by-line => tiny patches.",
-  "KEEP IT MULTI-LINE. Never json.dumps without indent. Keep total under ~5500 bytes.",
-  "Prefer arrays of SHORT strings: only changed lines enter the patch.",
-  "The in-agent push_repo_memory MCP tool is a DIFFERENT, advisory check (the 39 KB one).",
-  "Ceiling raise is #698. Directory-check issue #677 recommended for retitle-or-close."
+ "memory_mechanism": [
+  "in-agent push_repo_memory is ADVISORY, counts .git (33 KB) => ALWAYS fails. That is",
+  "issue #677, unsatisfiable. IGNORE it. REAL gate = push job: files only, MAX_PATCH_SIZE",
+  "10240 (effective 12288). Measure yourself: cd /tmp/gh-aw/repo-memory/default;",
+  "git diff | wc -c. Patch = removed + added lines, so EDIT FEW LINES, don't rewrite.",
+  "KEEP MULTI-LINE json; target file <6500 B, patch <9000. Ceiling raise = #698."
+ ],
+ "issue666_size_procedure": [
+  "08-28: body hit 56,884 B of GitHub's 65,536. Rebuilt to 50,708 (headroom 14,827).",
+  "METHOD: python3 html.unescape body; drop items whose #N is no longer in (open issues",
+  "| open PRs); fold oldest ### entries into 'Earlier runs (compressed)', keep ~5.",
+  "Suggested Actions (~39 KB, 172 items) is the MAINTAINER'S QUEUE - do not condense",
+  "unilaterally; reclaim space from Run History instead."
  ],
  "screening_MUST_DO_BOTH": [
-  "search_issues is scoped is:issue and NEVER returns PRs. This caused a duplicate PR.",
-  "Every screen must run BOTH search_issues AND search_pull_requests.",
-  "For a src/ file, also enumerate the open PRs touching it.",
+  "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
+  "Run BOTH search_issues AND search_pull_requests, then diff every open PR.",
+  "PROVEN 08-28: list_pull_requests perPage=100 pages 1-2 -> payloadPath json -> numbers",
+  "(git ls-remote is USELESS: 559 refs incl. closed). One batched fetch:",
+  "  refs=$(awk '{printf \"refs/pull/%s/head:refs/prs/%s \", $1,$1}' openprs.txt)",
+  "  git fetch -q --no-tags origin $refs   # 176 heads, <60s",
+  "then loop `git diff ce545ec refs/prs/$n -- <file>` and grep the SYMBOL.",
+  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs => they match every",
+  "symbol. Filter to +/- lines and read the PR's real function body before believing.",
   "If the finding is 'X is called too often', search the CALLEE's name, not the fix.",
-  "My own back catalogue is the likeliest dup: ~153 open RA PRs, none merged.",
-  "Other bots: [Perf Improver], [Test Improver]. ENUMERATE PRs; never ls-remote branch",
-  "names (bot branches carry a -<hash> suffix => false 'vanished')."
+  "My back catalogue is the likeliest dup: ~154 open RA PRs, 0 merged.",
+  "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names",
+  "(bot branches carry a -<hash> suffix => false 'vanished')."
  ],
  "rules": [
   "main FROZEN at ce545ec. PR only if live-on-main + red-on-main + gates green + screened.",
   "TEST-ONLY is excepted. public-API-only => PR ok but STATE 'zero in-repo callers'.",
   "pure-optimisation / dead-code / untestable / SETTINGS => ISSUE, not PR.",
-  "Ambiguous semantics or exported-signature change => ISSUE unless a docstring pins it,",
-  "OR SPLIT: fix the unambiguous half by PR, hand the rest over. Size findings honestly.",
+  "Ambiguous semantics => ISSUE unless a docstring pins it, OR SPLIT: PR the unambiguous",
+  "half and NAME the ambiguous half in the PR body as the maintainer's call.",
+  "08-28 worked example: deleteLine's drag-direction dependence is indefensible (PR it);",
+  "how many lines a selection deletes is a preference (hand over, same PR).",
   "Speculative => gated patch in a COMMENT. Never a dup PR; never push to a batch branch.",
   "ONE comment per thread per run. PROTECTED: CLAUDE.md, package.json, .github/, .claude/.",
   "Caps: update_issue 1/run, comments 10, PRs 4."
@@ -42,48 +52,62 @@
   "list_issues/issue_read/search overflow => parse saved file: raw[raw.find('{'):];",
   "list_issues returns {'issues':[..]}. actions_list caps 30/page. get_job_logs WORKS.",
   "ABSOLUTE paths in scratch scripts; cwd resets. Bash 60s => run_in_background.",
-  "RUNNER CHECKOUT IS depth-1: run `git fetch --unshallow -q origin` BEFORE any",
-  "merge-base / rev-list / two-dot-diff / 'orphan' claim (this produced false finding #705).",
+  "RUNNER CHECKOUT IS depth-1: `git fetch --unshallow -q origin` BEFORE any merge-base /",
+  "rev-list / two-dot-diff / 'orphan' claim (produced false finding #705).",
+  "Merge-testing 2 PRs: WORKTREE + `git merge --no-ff -m t` (NOT --no-commit; the 2nd",
+  "merge then dies on 'MERGE_HEAD exists').",
   "react-dom NOT installed. Edit replace_all matches INDENTATION; re-probe after edits."
  ],
  "gates": [
   "ALWAYS run test + typecheck + lint (bun test does NOT typecheck).",
   "CI also runs `bun run build:playground` FIRST. CLAUDE.md's build:demo does not exist (#671).",
-  "BASELINE ce545ec: 2274 run / 2265 pass / 0 fail; tsc 0; lint 1 info.",
-  "FLAKE buffer.test.ts 'line access is O(1)' ~27% (#673), covered by #611/#667; do not refile.",
+  "BASELINE ce545ec: 2274 run / 2265 pass / 0 fail; tsc 0; lint 1 info (#760).",
+  "FLAKE buffer.test.ts 'line access is O(1)' ~27% (#673), covered by #611/#667; don't refile.",
   "noUncheckedIndexedAccess: arr[i] is T|undefined. Branded rows: num() from tests/helpers.ts."
  ],
  "ci_is_parked_not_absent": [
   "#757: ci.yml runs ARE created on bot PRs but sit at action_required. A parked run",
   "dispatches 0 jobs and publishes NO check runs => looks identical to 'CI not configured'.",
-  "Cause not determined. T6 has NO CI-failure work until the gate clears."
+  "Re-verified 08-28: still parked, newest #769 at 08-27T23:11. Cause not determined.",
+  "T6 has NO CI-failure work until the gate clears."
  ],
  "dead_tasks": [
-  "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored. T6: structural no-op.",
-  "T4 EXHAUSTED, re-verified 08-27: same 4 audit vulns (#675), same outdated set",
+  "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
+  "T6 has no CI/conflict work BUT IS NOT EMPTY: use it to flag my own dup/superseded PRs",
+  "on their own threads (did this 08-28 on #765). Check newest RA PRs for self-dups.",
+  "T4 EXHAUSTED (re-verified 08-27): same 4 audit vulns (#675), same outdated set",
   "(8-pkg refresh + #760), 0 dependabot PRs, rest protected. T2: new issues DO appear."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf;",
-  "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758)."
+  "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
+  "_deleteLine multi-row selection (fixed 08-28)."
  ],
- "this_run_2026-08-27": [
-  "Drew T4 (dead) + T2. Commented #756, #677; details in #666. #756 reproduced:",
-  "2.59-2.88x, 4/4 rounds; left costs same as down => map built regardless of",
-  "direction. Guard safe: _wrapMap read only via _getWrapMap. No PR (pure-opt)."
+ "this_run_2026-08-28": [
+  "Drew T6 + T5. T6: verified #747 merges clean onto ce545ec then #765 CONFLICTS in",
+  "search.ts => alternatives, not complements. Commented on #765 (had 0 comments)",
+  "advising keep #747. Real difference: #765 matches EITHER edge anchor; #747 falls to",
+  "the nearest match at-or-after when the match is destroyed.",
+  "T5: PR on branch repo-assist/fix-deleteline-multirow-selection. _deleteLine took only",
+  "each selection's HEAD row; rows 1-4 selected => down-drag deleted L4, up-drag L1.",
+  "Fix mirrors _affectedRows expansion. 2277/2268/0; 2 of 3 new tests red on main first."
  ],
  "next_veins": [
   "AUTHORITATIVE list is in #666 'Future Work'. Read there.",
-  "V0: a finding from an incomplete local view is a finding about my view (#705).",
-  "V0b: absence of a signal != absence of the emitter - check the producer (#757).",
-  "V0c NEW: two checks sharing a name may differ - read the failing job LOG (#677).",
+  "V0: doubt the probe first - an incomplete local view (#705), a missing signal whose",
+  "emitter still runs (#757), two checks sharing one name (#677).",
   "V1: a clamp is only safe if its bound cannot cross the value it clamps.",
-  "V2: a well-covered file is not a checked file - look at what the fixtures hold CONSTANT.",
-  "V3: docstring-vs-behaviour vein, now 9+ hits.",
-  "V4 NEW: one call site skipping a policy its siblings implement (editor.ts:126 vs the 3",
-  "renderers). Sweep for other single-outlier call sites of a shared constructor.",
-  "Targets: replace/clear APIs; multi-cursor EDIT paths; react/use-diff-view.ts;",
+  "V2: a well-covered file is not a checked file. 8 hits. REFINED 08-28: ask what every",
+  "fixture holds CONSTANT - for deleteLine it was the SHAPE of the selection (all four",
+  "tests used a collapsed cursor), not a value. Also grep tests/ for the symbol itself.",
+  "V3: docstring-vs-behaviour vein, 9+ hits.",
+  "V4: a call site skipping a policy its siblings implement. 2 hits (editor.ts:126 vs the",
+  "3 renderers; _deleteLine vs _indentLines). REFINED: don't stop at 2 - the line-op",
+  "family has THREE policies. NEXT: _moveLine/_duplicateLine/_insertLineBelow/",
+  "_insertLineAbove ignore selections ENTIRELY and use only this.cursor. #461/#463/#464,",
+  "#472/#473, #701 cover only the MULTI-CURSOR half, NOT multi-row selections.",
+  "Targets: replace/clear APIs; the 4 line-ops above; react/use-diff-view.ts;",
   "other O(document)-per-edit callers; project/adapter.ts + editor-view.ts docstrings."
  ]
 }
