@@ -84,14 +84,19 @@
   "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
   "_deleteLine multi-row selection (fixed 08-28)."
  ],
- "this_run_2026-08-28": [
-  "Drew T6 + T5. T6: verified #747 merges clean onto ce545ec then #765 CONFLICTS in",
-  "search.ts => alternatives, not complements. Commented on #765 (had 0 comments)",
-  "advising keep #747. Real difference: #765 matches EITHER edge anchor; #747 falls to",
-  "the nearest match at-or-after when the match is destroyed.",
-  "T5: PR on branch repo-assist/fix-deleteline-multirow-selection. _deleteLine took only",
-  "each selection's HEAD row; rows 1-4 selected => down-drag deleted L4, up-drag L1.",
-  "Fix mirrors _affectedRows expansion. 2277/2268/0; 2 of 3 new tests red on main first."
+ "this_run_2026-08-28b": [
+  "Drew T6 + T3. Prev run's PR landed = #771. T6: merge-tested 16 newest (#742-#771) vs",
+  "ce545ec => ALL CLEAN, no CI work (still parked). #464 vs #463 head-to-head: #464 is a",
+  "STRICT SUBSET (#463 adds 2 excerpt-boundary guards + 28 test lines). ALREADY flagged",
+  "on #464 in April => did NOT recomment. T3: branch repo-assist/fix-lineops-multirow-",
+  "selection. _duplicateLine/_insertLineBelow/_insertLineAbove used this.cursor (= the",
+  "selection HEAD) => drag direction changed the result; insertLineAbove down-drag put a",
+  "blank line INSIDE the block. Routed all 3 through _affectedRows. 2284/2275/0 (+10),",
+  "7 of 10 new tests red on main. EXCLUDED _moveLine: needs block swap + the ambiguous",
+  "'should the selection survive the move' call => handed to maintainer in #666.",
+  "OVERLAP NOT DUP: #463/#464 (move/dup) + #473 (insertLine*) fix the MULTI-CURSOR half",
+  "of the same fns and CONFLICT textually; they use head rows too so they don't fix this.",
+  "#771 merges clean with it. Said all of this in the PR body."
  ],
  "next_veins": [
   "AUTHORITATIVE list is in #666 'Future Work'. Read there.",
@@ -102,12 +107,15 @@
   "fixture holds CONSTANT - for deleteLine it was the SHAPE of the selection (all four",
   "tests used a collapsed cursor), not a value. Also grep tests/ for the symbol itself.",
   "V3: docstring-vs-behaviour vein, 9+ hits.",
-  "V4: a call site skipping a policy its siblings implement. 2 hits (editor.ts:126 vs the",
-  "3 renderers; _deleteLine vs _indentLines). REFINED: don't stop at 2 - the line-op",
-  "family has THREE policies. NEXT: _moveLine/_duplicateLine/_insertLineBelow/",
-  "_insertLineAbove ignore selections ENTIRELY and use only this.cursor. #461/#463/#464,",
-  "#472/#473, #701 cover only the MULTI-CURSOR half, NOT multi-row selections.",
-  "Targets: replace/clear APIs; the 4 line-ops above; react/use-diff-view.ts;",
+  "V4: a call site skipping a policy its siblings implement. RICHEST VEIN, 5 hits.",
+  "The line-op family is now DOWN TO ONE HOLDOUT: _moveLine (blocked on the selection-",
+  "preservation decision). dup/insertBelow/insertAbove FIXED 08-28b, _deleteLine in #771.",
+  "V5 (new, cheap, reusable): drag a selection BOTH WAYS and diff. A command whose output",
+  "depends on drag direction is wrong under EVERY semantics => no design call needed to",
+  "file it. That is what separated the 3 shippable fixes from _moveLine.",
+  "V6: a non-dup can still CONFLICT. Screen for OVERLAP, not just duplication, and name",
+  "the collision in the PR body (#463/#464/#473 vs my line-op PR).",
+  "Targets: _moveLine (after the decision); replace/clear APIs; react/use-diff-view.ts;",
   "other O(document)-per-edit callers; project/adapter.ts + editor-view.ts docstrings."
  ]
 }
