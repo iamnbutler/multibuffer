@@ -555,6 +555,36 @@ describe("Editor - Delete Line", () => {
     expect(getText(mb)).toBe("");
     expectPoint(editor.cursor, 0, 0);
   });
+
+  test("deletes every line a selection spans, not just the head line", () => {
+    const { editor, mb } = setup("L0\nL1\nL2\nL3\nL4\nL5");
+    editor.setCursor(mbPoint(1, 0));
+    editor.extendSelectionTo(mbPoint(4, 2));
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("L0\nL5");
+  });
+
+  test("result does not depend on the direction the selection was made", () => {
+    const down = setup("L0\nL1\nL2\nL3\nL4\nL5");
+    down.editor.setCursor(mbPoint(1, 0));
+    down.editor.extendSelectionTo(mbPoint(4, 2));
+    down.editor.dispatch({ type: "deleteLine" });
+
+    const up = setup("L0\nL1\nL2\nL3\nL4\nL5");
+    up.editor.setCursor(mbPoint(4, 2));
+    up.editor.extendSelectionTo(mbPoint(1, 0));
+    up.editor.dispatch({ type: "deleteLine" });
+
+    expect(getText(up.mb)).toBe(getText(down.mb));
+  });
+
+  test("a selection within one line still deletes exactly that line", () => {
+    const { editor, mb } = setup("AAA\nBBB\nCCC");
+    editor.setCursor(mbPoint(1, 0));
+    editor.extendSelectionTo(mbPoint(1, 2));
+    editor.dispatch({ type: "deleteLine" });
+    expect(getText(mb)).toBe("AAA\nCCC");
+  });
 });
 
 // ─── Selection Extension ────────────────────────────────────────

@@ -1114,9 +1114,19 @@ export class Editor {
   private _deleteLine(snap: MultiBufferSnapshot): void {
     this._goalColumn = undefined;
 
-    // Collect unique rows from all selections
+    // Collect unique rows from all selections. A non-collapsed selection
+    // contributes every row it spans, matching _indentLines/_dedentLines
+    // (which expand the same way via _affectedRows). Taking only the head row
+    // made the result depend on which end of the selection was dragged.
     const rowSet = new Set<number>();
     for (const sel of this._selections) {
+      if (!isCollapsed(snap, sel)) {
+        const range = resolveAnchorRange(snap, sel.range);
+        if (range) {
+          for (let r = range.start.row; r <= range.end.row; r++) rowSet.add(r);
+          continue;
+        }
+      }
       const headAnchor = sel.head === "end" ? sel.range.end : sel.range.start;
       const point = snap.resolveAnchor(headAnchor);
       if (point) rowSet.add(point.row);
