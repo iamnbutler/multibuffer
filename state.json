@@ -74,10 +74,11 @@
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T6 HAS REAL WORK: (a) src-file-set dup sweep, (b) NEW: pairwise merge-tree sweep +",
-  "run the suite on the merged pair. Both paid off. No CI work until the gate clears.",
+  "T6 HAS REAL WORK: (a) src-file-set dup sweep, (b) pairwise merge-tree sweep + BUILD",
+  "THE TREE + run the suite. Both paid off. No CI work until the gate clears.",
   "T4 EXHAUSTED (re-verified 08-27): same 4 audit vulns (#675), same outdated set",
-  "(8-pkg refresh + #760), 0 dependabot PRs, rest protected. T2: new issues DO appear."
+  "(8-pkg refresh + #760), 0 dependabot PRs, rest protected. T2 IS NOT SATURATED:",
+  "the [aw] failure issues (#749 #754 #764 #768) read as boilerplate and are not."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -88,7 +89,9 @@
  "next_veins": [
   "AUTHORITATIVE list is in #666 'Future Work'. Read there.",
   "V0: doubt the probe. 3rd hit 08-29: hunk-overlap predicted 175 conflicting PR pairs,",
-  "real merges = 80. IF THE REAL CHECK IS AFFORDABLE, DO NOT MODEL IT.",
+  "real merges = 80. IF THE REAL CHECK IS AFFORDABLE, DO NOT MODEL IT. 4th hit 08-29c:",
+  "an EXACT test behind a WRONG COMPARISON SET is still wrong - ask what the filter",
+  "excludes before trusting what the test includes.",
   "V1: a clamp is only safe if its bound cannot cross the value it clamps.",
   "V2: a well-covered file is not a checked file (9 hits). Ask what every fixture holds",
   "CONSTANT. 08-29 variant: what does NO test in the repo do at all? (real fs = 0 tests).",
@@ -105,23 +108,29 @@
   "other O(document)-per-edit callers; editor-view.ts docstrings.",
   "DONE: project/adapter.ts now covered by the new real-fs tests."
  ],
- "this_run_2026-08-29b": [
-  "Drew T9 + T6. T6 IS NOT DEAD - best tool found yet: `git merge-tree --write-tree",
-  "--merge-base=ce545ec refs/prs/A refs/prs/B` (exit!=0 => conflict). Exact, ~30ms, no",
-  "worktree. 914 file-sharing RA pairs -> 80 conflict, 17 clusters (biggest 24 = editor.ts",
-  "line-op family). 73 RA PRs conflict with NOTHING and merge sequentially 73/73 clean.",
-  "BUT that tree is RED: 8 fails, both chased to pairwise SEMANTIC interactions.",
-  "#743+#745: #743's highlight-client-cache.test.ts sets globalThis.Worker=StubWorker with",
-  "NO restore; bun = 1 process for all files => #745's 7 real-Worker tests time out 5000ms.",
-  "3-line afterAll restore => 0 fail (2279). NEW, commented on #743 + #745.",
-  "#518+#728: ALREADY in #666 (I nearly reported it as new - READ #666 BEFORE CLAIMING",
-  "NOVELTY). Added value = the line: #518's new _cut loop re-adds the start-only editable",
-  "check that #728 replaces with _rangeIsEditable at 4 sites. Commented #728 (had ZERO",
-  "comments) + #518. T9: filed test-only PR tests/project/adapter.test.ts, +20 tests.",
-  "NO test in repo ever touched a real fs => createFsAdapter/getDefaultFsAdapter/",
-  "createProjectTree default path had 0 executed lines. Probed first: memory vs real",
-  "adapter AGREE everywhere, so it is a guard not a bug. 5/5 mutations red.",
-  "#666 rebuilt 59,220 -> 59,160 B, 195 items, folded 3 run entries (08-29 07:10, both",
-  "08-28) into compressed. Only ~1 entry of headroom left for next run."
+ "merge_sweep_TOOL_AND_TRAP": [
+  "TOOL: `git merge-tree --write-tree --merge-base=ce545ec refs/prs/A refs/prs/B`",
+  "(exit!=0 => conflict). Exact, ~30ms, no worktree. THE TRAP I FELL INTO 08-29b:",
+  "I built each PR's file set from src/+tests/ ONLY, so pairs colliding purely in",
+  "benchmarks/ were NEVER COMPARED and scored 'conflict-free'. 13 RA PRs touch neither",
+  "src/ nor tests/. USE **ALL** CHANGED PATHS in the file set. CORRECTED 08-29c on 156",
+  "RA PRs: 955 file-sharing pairs -> 97 conflict -> 70 conflict-free, and those 70 merge",
+  "sequentially 70/70 clean. Missed pairs were 365<->508, 367<->501, 501<->533;",
+  "benchmarks/index.ts is a registry 5 PRs append to. ALWAYS BUILD THE TREE - the",
+  "sequential merge is what exposed the bad filter within seconds."
+ ],
+ "this_run_2026-08-29c": [
+  "Drew T6 + T2. T6: corrected the sweep above; commented the correction on my own #776.",
+  "Merged tree suite = 2600 pass / 8 fail, and ALL 8 are the 2 KNOWN pairs (7 = #743+#745",
+  "globalThis.Worker leak, 1 = #518+#728 editability guard). The '6 unexplained fails' my",
+  "memory carried NEVER EXISTED - that vein is CLOSED, do not go chasing it.",
+  "T2: [aw] workflow-failure issues were NOT boilerplate and NOT triaged. #764: Docs/Update",
+  "failed 23 of 26 runs, 17 consecutive since 2026-04-29, and ALL 12 failure issues ever",
+  "filed (#223 #370 #444 #547 #570 #591 #608 #627 #643 #660 #710 #764) name the SAME cause:",
+  "patch touches protected CLAUDE.md. docs-update.md's description + its '### CLAUDE.md'",
+  "section order it to edit that file; its create-pull-request block sets no",
+  "protected-files: => default refusal. Re-verified all 5 #671 drifts still live.",
+  "Commented #764. STILL UNTRIAGED: #749, #768. No PR - both remedies are protected paths.",
+  "#666 retyped in full, ~60 KB, folded the 08-29 16:58 entry into compressed."
  ]
 }
