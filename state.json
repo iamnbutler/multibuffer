@@ -68,13 +68,14 @@
  "ci_is_parked_not_absent": [
   "#757: ci.yml runs ARE created on bot PRs but sit at action_required. A parked run",
   "dispatches 0 jobs and publishes NO check runs => looks identical to 'CI not configured'.",
-  "Re-verified 08-28: still parked, newest #769 at 08-27T23:11. Cause not determined.",
+  "Re-verified 08-29: still parked. A run may show conclusion=failure yet dispatch 0 JOBS",
+  "- same parked shape, different string. CHECK JOB COUNT, not conclusion. Cause unknown.",
   "T6 has NO CI-failure work until the gate clears."
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T6 has no CI/conflict work BUT IS NOT EMPTY: use it to flag my own dup/superseded PRs",
-  "on their own threads (did this 08-28 on #765). Check newest RA PRs for self-dups.",
+  "T6 has no CI/conflict work BUT IS NOT EMPTY: the src-file-set dup sweep (see 08-29)",
+  "is its best use - it found 5 pairs on 08-29. Re-run it when new PRs land.",
   "T4 EXHAUSTED (re-verified 08-27): same 4 audit vulns (#675), same outdated set",
   "(8-pkg refresh + #760), 0 dependabot PRs, rest protected. T2: new issues DO appear."
  ],
@@ -84,19 +85,21 @@
   "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
   "_deleteLine multi-row selection (fixed 08-28)."
  ],
- "this_run_2026-08-28b": [
-  "Drew T6 + T3. Prev run's PR landed = #771. T6: merge-tested 16 newest (#742-#771) vs",
-  "ce545ec => ALL CLEAN, no CI work (still parked). #464 vs #463 head-to-head: #464 is a",
-  "STRICT SUBSET (#463 adds 2 excerpt-boundary guards + 28 test lines). ALREADY flagged",
-  "on #464 in April => did NOT recomment. T3: branch repo-assist/fix-lineops-multirow-",
-  "selection. _duplicateLine/_insertLineBelow/_insertLineAbove used this.cursor (= the",
-  "selection HEAD) => drag direction changed the result; insertLineAbove down-drag put a",
-  "blank line INSIDE the block. Routed all 3 through _affectedRows. 2284/2275/0 (+10),",
-  "7 of 10 new tests red on main. EXCLUDED _moveLine: needs block swap + the ambiguous",
-  "'should the selection survive the move' call => handed to maintainer in #666.",
-  "OVERLAP NOT DUP: #463/#464 (move/dup) + #473 (insertLine*) fix the MULTI-CURSOR half",
-  "of the same fns and CONFLICT textually; they use head rows too so they don't fix this.",
-  "#771 merges clean with it. Said all of this in the PR body."
+ "this_run_2026-08-29": [
+  "Drew T6 + T2. Prev run's PR landed = #772. T6 PAID OFF for once: found 5 NEW exact",
+  "self-dup PR pairs the old hash sweep missed - #419=418 #429=428 #431=430 #458=457",
+  "#455=453, byte-identical src AND tests. METHOD (reusable): group all open PRs by the",
+  "SET of src/ files touched, then compare only +/- lines within a group. The old sweep",
+  "hashed WHOLE diffs, so pairs differing outside src/ hashed differently. 7 more pairs",
+  "were already listed in #666; total 12 of 155 closable. Titles are a hint NOT a verdict:",
+  "#367/#492/#693, #741/#748, #387/#707 have near-twin titles and are genuinely DIFFERENT.",
+  "T2: commented on #774 and #770 (both Perf Improver, 0 prior comments). #774: built the",
+  "chunked bracket-scan prototype, 76,716+72 equivalence cases 0 mismatches, 10-12x near /",
+  "worst case +4% at chunk64, +0.6% at 256; no single-row accessor exists on the snapshot.",
+  "#770: proved the discarded DiffResult IS cacheable - DiffOptions has ONE field(context),",
+  "both sites pass it; 3,014 round-trip + 3,000 head-to-head cases, 0 mismatches; content",
+  "is readonly with no update API. Filed NO PR (pure-optimisation rule; issues exist).",
+  "#666 rebuilt: 55,568 -> 58,262 B, 188 items, folded 08-27+08-26 entries into compressed."
  ],
  "next_veins": [
   "AUTHORITATIVE list is in #666 'Future Work'. Read there.",
@@ -115,6 +118,8 @@
   "file it. That is what separated the 3 shippable fixes from _moveLine.",
   "V6: a non-dup can still CONFLICT. Screen for OVERLAP, not just duplication, and name",
   "the collision in the PR body (#463/#464/#473 vs my line-op PR).",
+  "V7: a detector is only as good as its UNIT. Hashing whole diffs missed 5 exact dups",
+  "that differ outside src/. Ask what the comparison key includes that it should not.",
   "Targets: _moveLine (after the decision); replace/clear APIs; react/use-diff-view.ts;",
   "other O(document)-per-edit callers; project/adapter.ts + editor-view.ts docstrings."
  ]
