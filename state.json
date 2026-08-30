@@ -95,6 +95,9 @@
   "V9 (08-30) a prose rule in a prompt is ADVISORY - an LLM violated a ban 4 days after",
   "  it shipped (#343). An enforceable guard belongs in CONFIG, not instructions.",
   "V10 (08-30) fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
+  "V12 (08-30) a docstring can pin the WRONG rule. My 'docstring pins it => PR ok'",
+  "  holds only when it pins the RIGHT side: #704 docstring correct (PR it), #695",
+  "  docstring endorses the bug (hand over). ASK WHICH SIDE THE DOCSTRING IS ON.",
   "Targets: the 21 UNTESTED conflict clusters; _moveLine (after the decision);",
   "replace/clear APIs; react/use-diff-view.ts; editor-view.ts docstrings.",
   "DONE: project/adapter.ts covered; the '6 unexplained fails' vein is CLOSED."
@@ -118,22 +121,17 @@
   "11 picks were dups => 8 distinct changes. Subtract dups before quoting a set size."
  ],
  "this_run_2026-08-30": [
-  "RUN b (33309939941), drew T6+T2. HEADLINE: run 33294436219 had OVERWRITTEN #666's body",
-  "with the truncation placeholder (proof: its agent-output artifact is 4,467 B - a 64 KB",
-  "body never passed through; the note 'retyped 64,233 B' was FALSE). Rebuilt #666 from live",
-  "state; filed a bug issue with 4 config-level fixes. Old checkbox state is UNRECOVERABLE.",
-  "T6 c3/c4 PAID OFF BIG: 4 open PRs implement the SAME excerpt-shift fix; merged with main",
-  "#369 is GREEN (2268/0, tsc+lint clean) and #342/#448/#449 are ALL RED on containment.test",
-  "'toMultiBufferPoint...inserting lines' (expects 26 gets 25). Commented all 4 + #754.",
-  "Dups 16/17: #360==#375 (I duplicated the OWNER's own PR) and #505==#507.",
-  "Failure was SINGLE-PR not cross-PR: c1-c4 still show 0 cross-PR breakage.",
-  "V11: when N PRs claim the SAME fix, MERGE-TEST EACH - cheapest high-value T6 move.",
-  "NEXT: c5=413,414,668,747,765; c6=324,378,379,723; c7=333,339,510,565; c8=381,391,402,406.",
-  "Sweep reproduced EXACTLY (124/1058, 23 clusters, 105 PRs) - stable, don't recompute.",
-  "ANCIENT-BASE PRs: testing the HEAD measures old code (#342 head=2039 pass). Test the MERGE.",
-  "A FRESH worktree has NO node_modules => 12 phantom fails; reuse ONE installed worktree",
-  "and `git checkout -q --detach <ref>` between refs.",
-  "T2: all 54 open issues are bot-filed. #754 = agent emitted nothing, never called noop",
-  "(no agent-output artifact at all); same class as #749/#764/#768."
+  "RUN c (33322981847), drew T3+T2. Both delivered.",
+  "T3: PR for #704 - DomRenderer discarded explicit charWidth. V4 paid off AGAIN and so",
+  "did V10: the TWIN was setMeasurements(), guarded in canvas.ts:368-370, absent in dom.",
+  "CHECK EVERY WRITER TO A FIELD, not just the reader the issue names.",
+  "4 tests red-on-main/green-with-fix; gates 2279/2270/0, tsc 0, lint 1.",
+  "T2 #695: COSTING a handed-over decision = highest-value comment shape I have found.",
+  "Reproduced sweep (16200/360), applied the 1-line candidate, MEASURED blast radius:",
+  "360->0 inversions, exactly 1 failing assertion (offset.test.ts:148) of 15,671. REUSE.",
+  "Screen that worked: 179 heads, `git diff ce545ec refs/prs/N -- <file>`, grep ADDED",
+  "lines for the symbol => 22 dom.ts PRs, only #723, unrelated. Cheap and decisive.",
+  "Housekeeping: #579 #657 #677 #698 CLOSED, trimmed from #666; #778 now a real number.",
+  "STILL TRUE: 0 human comments repo-wide in 11 days; all 63 open issues bot-filed."
  ]
 }
