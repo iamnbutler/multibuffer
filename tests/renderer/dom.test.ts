@@ -354,11 +354,46 @@ describe("DomRenderer", () => {
 
     test("getCharWidth returns a number after mount", () => {
       renderer.mount(container);
-      // After mount, charWidth is measured from font; happy-dom returns 0
-      // from getBoundingClientRect, so we only verify the type
       const charWidth = renderer.getCharWidth();
       expect(typeof charWidth).toBe("number");
       expect(charWidth).toBeGreaterThanOrEqual(0);
+    });
+
+    test("mount preserves an explicitly supplied charWidth", () => {
+      // Measurements.charWidth is documented as auto-measured "if omitted",
+      // so an explicit value must survive mount rather than be re-measured.
+      const explicit = new DomRenderer({ lineHeight: 20, charWidth: 20, gutterWidth: 40 });
+      explicit.mount(container);
+      expect(explicit.getCharWidth()).toBe(20);
+      explicit.unmount();
+    });
+
+    test("remeasure preserves an explicitly supplied charWidth", () => {
+      const explicit = new DomRenderer({ lineHeight: 20, charWidth: 20, gutterWidth: 40 });
+      explicit.mount(container);
+      explicit.remeasure();
+      expect(explicit.getCharWidth()).toBe(20);
+      explicit.unmount();
+    });
+
+    test("charWidth is measured from the font when omitted", () => {
+      // The explicit-value short-circuit must not disable auto-measurement.
+      // happy-dom reports a zero-width bounding box, so the probe yields 0.
+      const measured = new DomRenderer({ lineHeight: 20, gutterWidth: 40 });
+      measured.mount(container);
+      expect(measured.getCharWidth()).toBe(0);
+      measured.unmount();
+    });
+
+    test("setMeasurements applies a new charWidth", () => {
+      renderer.mount(container);
+      renderer.setMeasurements({ lineHeight: 20, charWidth: 10, gutterWidth: 40 });
+      expect(renderer.getCharWidth()).toBe(10);
+    });
+
+    test("setMeasurements applies a new charWidth before mount", () => {
+      renderer.setMeasurements({ lineHeight: 20, charWidth: 10, gutterWidth: 40 });
+      expect(renderer.getCharWidth()).toBe(10);
     });
   });
 

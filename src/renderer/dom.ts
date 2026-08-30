@@ -371,6 +371,10 @@ export class DomRenderer implements Renderer {
 
   setMeasurements(measurements: Measurements): void {
     this._measurements = measurements;
+    // Use provided charWidth if given, as the constructor does
+    if (measurements.charWidth !== undefined) {
+      this._charWidth = measurements.charWidth;
+    }
     // Rebuild wrap map if snapshot exists and wrapping is enabled
     if (this._snapshot) {
       this._wrapMap = this._buildWrapMap(this._snapshot);
@@ -856,6 +860,10 @@ export class DomRenderer implements Renderer {
    * Uses a test string to get accurate width for monospace fonts.
    */
   private _measureCharWidth(container: HTMLElement): number {
+    if (this._measurements.charWidth) {
+      return this._measurements.charWidth;
+    }
+
     const span = document.createElement("span");
     span.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:inherit;";
     span.textContent = "MMMMMMMMMM"; // 10 wide chars for accuracy
