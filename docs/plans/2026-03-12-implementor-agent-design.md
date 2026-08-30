@@ -4,71 +4,38 @@
 
 **Architecture:** Scheduled + slash-command triggered gh-aw workflow. Single-issue focus per run with escape hatches for complexity (decompose into sub-issues, commit WIP). Reads CLAUDE.md dynamically for project constraints while following a baked-in TDD phase structure.
 
+> **Status:** Shipped. [`.github/workflows/implementor.md`](../../.github/workflows/implementor.md) is authoritative for triggers, caps, and steps; this records the original design intent and has drifted where noted below.
+
 ---
 
-## Triggers
+## Triggers and Issue Selection
 
-- **Scheduled:** Twice daily at 7am and 2pm UTC (`0 7,14 * * *`)
-- **Slash command:** `/implement` on any issue, with optional instructions
-- **Manual:** `workflow_dispatch` for ad-hoc runs
-
-## Issue Selection
-
-- **Scheduled runs:** Picks oldest issue labeled `agent:implement`
-- **Command runs:** Works on the issue where `/implement` was invoked
-- Agent removes `agent:implement` and adds `in-progress` when it starts
+Runs twice daily at 7am and 2pm UTC (`0 7,14 * * *`), on `/implement <instructions>` against any issue, or via `workflow_dispatch`. Scheduled runs pick the oldest issue labeled `agent:implement`; command runs work on the invoking issue. On starting, the agent swaps `agent:implement` for `in-progress`.
 
 ## TDD Phases
 
-### Phase 0: Understand
-- Read CLAUDE.md for current project constraints
-- Read the issue thoroughly
-- Check repo-memory for prior work on this issue
-- Check for existing WIP branches/PRs to resume
-
-### Phase 1: Plan
-- Identify affected modules (buffer, multibuffer, editor, renderer, diff)
-- Identify types that need to change or be created
-- Comment implementation plan on the issue
-- If too large → decompose into sub-issues labeled `agent:implement`, exit
-
-### Phase 2: Types
-- Create or modify type definitions
-- Run `bun run typecheck`
-- Commit: `feat(<module>): add types for <feature>`
-
-### Phase 3: Tests
-- Write failing tests that define expected behavior
-- Run `bun test` to confirm they fail for the right reasons
-- Commit: `test(<module>): add tests for <feature>`
-
-### Phase 4: Implementation
-- Write implementation to make tests pass
-- Run full validation: `bun run typecheck && bun run lint && bun test`
-- If existing tests break → investigate and fix the implementation
-- Iterate until green
-- Commit: `feat(<module>): implement <feature>`
-
-### Phase 5: Validate & Ship
-- Run complete suite one final time
-- Create draft PR linking the issue
-- If timeout approaching → commit WIP, note progress in repo-memory
+| Phase | Work | Commit |
+| --- | --- | --- |
+| 0. Understand | Read CLAUDE.md and the issue; check repo-memory for prior work and any WIP branch/PR to resume | — |
+| 1. Plan | Identify affected modules and the types that must change; comment the plan on the issue. Too large → decompose into sub-issues labeled `agent:implement` and exit | — |
+| 2. Types | Define or modify types; `bun run typecheck` | `feat(<module>): add types for <feature>` |
+| 3. Tests | Write failing tests that define the behavior; `bun test` to confirm they fail for the right reasons | `test(<module>): add tests for <feature>` |
+| 4. Implementation | Make the tests pass; iterate on `bun run typecheck && bun run lint && bun test` until green, fixing the implementation when existing tests break | `feat(<module>): implement <feature>` |
+| 5. Validate & ship | Full suite once more, then a draft PR linking the issue. Timeout approaching → commit WIP and record progress in repo-memory | — |
 
 ## Safe Outputs
 
-- `create-pull-request` — draft, `[Implementor]` prefix, max 1/run
-- `push-to-pull-request-branch` — WIP updates and CI fixes
-- `create-issue` — sub-issues with `agent:implement` label, max 4/run
-- `add-comment` — plans, progress, delegation via `/pr-fix`
-- `add-labels` / `remove-labels` — manage `agent:implement` and `in-progress`
+| Output | Limits |
+| --- | --- |
+| `create-pull-request` | draft, `[Implementor]` prefix, max 1/run |
+| `push-to-pull-request-branch` | WIP updates and CI fixes, max 4/run |
+| `create-issue` | sub-issues labeled `agent:implement`, max 4/run |
+| `add-comment` | plans, progress, delegation via `/pr-fix`; max 8/run |
+| `add-labels` / `remove-labels` | `agent:implement` and `in-progress` only |
 
 ## Memory
 
-Repo-memory tracks:
-- Issues in-progress (to resume across runs)
-- WIP branch names and current phase
-- Failed attempts with reasons (no retry of same approach)
-- Parent→child issue mapping for decompositions
+Repo-memory tracks in-progress issues (to resume across runs), WIP branch names and the current phase, failed attempts and their reasons so the same approach is not retried, and parent→child mapping for decompositions.
 
 ## State Transitions
 
@@ -79,29 +46,17 @@ Repo-memory tracks:
 
 ## PR Maintenance
 
-- Each run checks open `[Implementor]` PRs for CI failures
-- Auto-fixes failures caused by its own changes
-- Can invoke `/pr-fix` on its own PRs for complex CI issues
-- Leaves human review comments untouched
+Each run checks open `[Implementor]` PRs for CI failures and auto-fixes those caused by its own changes, delegating complex ones via `/pr-fix`. Human review comments are left untouched.
 
 ## Guardrails
 
-**Must do:**
-- Read CLAUDE.md before every run
-- Follow `biome-ignore` with `expect:` convention
-- Run full validation suite before creating PRs
-- Identify as `[Implementor]` in all outputs
-- Respect architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic)
+**Must do:** follow the `biome-ignore` + `expect:` convention, identify as `[Implementor]` in all outputs, and respect the architecture constraints (fixed-height lines, vanilla TS, rendering-agnostic). The phase table above already covers reading CLAUDE.md, types-first ordering, and full validation before a PR.
 
-**Must not:**
-- Add dependencies without filing a discussion issue
-- Modify code outside target issue scope
-- Create non-draft PRs
-- Re-attempt a previously failed approach
-- Skip the types-first phase
+**Must not:** add dependencies without filing a discussion issue, touch code outside the target issue's scope, create non-draft PRs, or re-attempt a previously failed approach.
 
-**Escape hatches:**
-- Issue too vague → comment asking for clarification
-- Issue too large → decompose into sub-issues
-- Implementation breaks existing tests → investigate and fix; escalate if stuck after genuine attempt
-- Can't resolve within 2 runs → flag for human attention
+**Escape hatches:** vague issue → ask for clarification; oversized issue → decompose; stuck after a genuine attempt, or unresolved within 2 runs → escalate for human attention.
+
+## Known Drift
+
+- **Module scope.** Phase 1 was written against `buffer, multibuffer, editor, renderer, diff`; `src/` now also holds `project/`, `react/`, and `worker/`.
+- **`/pr-fix` is inert.** This design and the live workflow both reference delegating to `/pr-fix`, but no workflow in `.github/workflows/` handles that command, so delegation is a no-op.
