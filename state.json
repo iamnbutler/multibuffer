@@ -18,15 +18,14 @@
  "screening_MUST_DO_BOTH": [
   "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
   "Run BOTH search_issues AND search_pull_requests, then diff every open PR.",
-  "PROVEN 08-28: list_pull_requests perPage=100 pages 1-2 -> payloadPath json -> numbers",
-  "(git ls-remote is USELESS: 559 refs incl. closed). One batched fetch:",
+  "PROVEN: curl 2x100 /pulls -> numbers -> ONE batched fetch of every head:",
   "  refs=$(awk '{printf \"refs/pull/%s/head:refs/prs/%s \", $1,$1}' openprs.txt)",
-  "  git fetch -q --no-tags origin $refs   # 176 heads, <60s",
-  "then loop `git diff ce545ec refs/prs/$n -- <file>` and grep the SYMBOL.",
-  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs => they match every",
-  "symbol. Filter to +/- lines and read the PR's real function body before believing.",
+  "  git fetch -q --no-tags origin $refs   # 181 heads, <60s",
+  "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL.",
+  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs match every symbol.",
+  "Filter to +/- lines and read the PR's real function body before believing.",
   "If the finding is 'X is called too often', search the CALLEE's name, not the fix.",
-  "My back catalogue is the likeliest dup: ~154 open RA PRs, 0 merged.",
+  "My back catalogue is the likeliest dup: 157 open RA PRs, 0 merged.",
   "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names",
   "(bot branches carry a -<hash> suffix => false 'vanished')."
  ],
@@ -69,9 +68,9 @@
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T6 HAS REAL WORK: ALL-PATHS dup sweep; merge-tree sweep + BUILD THE TREE + run the",
-  "suite; cluster cores under combination. All paid off. No CI work until gate clears.",
-  "T4 EXHAUSTED (08-27): 4 audit vulns (#675), 8-pkg refresh, rest protected."
+  "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
+  "T6 HAS REAL WORK: cluster combination tests (c9-c23 left); ALL-PATHS dup sweep.",
+  "No T6 CI-failure work until the action_required gate clears."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -121,17 +120,20 @@
   "11 picks were dups => 8 distinct changes. Subtract dups before quoting a set size."
  ],
  "this_run_2026-08-30": [
-  "RUN c (33322981847), drew T3+T2. Both delivered.",
-  "T3: PR for #704 - DomRenderer discarded explicit charWidth. V4 paid off AGAIN and so",
-  "did V10: the TWIN was setMeasurements(), guarded in canvas.ts:368-370, absent in dom.",
-  "CHECK EVERY WRITER TO A FIELD, not just the reader the issue names.",
-  "4 tests red-on-main/green-with-fix; gates 2279/2270/0, tsc 0, lint 1.",
-  "T2 #695: COSTING a handed-over decision = highest-value comment shape I have found.",
-  "Reproduced sweep (16200/360), applied the 1-line candidate, MEASURED blast radius:",
-  "360->0 inversions, exactly 1 failing assertion (offset.test.ts:148) of 15,671. REUSE.",
-  "Screen that worked: 179 heads, `git diff ce545ec refs/prs/N -- <file>`, grep ADDED",
-  "lines for the symbol => 22 dom.ts PRs, only #723, unrelated. Cheap and decisive.",
-  "Housekeeping: #579 #657 #677 #698 CLOSED, trimmed from #666; #778 now a real number.",
-  "STILL TRUE: 0 human comments repo-wide in 11 days; all 63 open issues bot-filed."
+  "RUN d (33335208446), drew T6+T4. T4 CONFIRMED EXHAUSTED - substitute, don't force it.",
+  "T6: rebuilt conflict map on ALL 181 PRs (1062 pairs -> 124 conflict -> 23 clusters/105).",
+  "Combination-tested c5+c6+c7+c8 = 17 PRs each merged with main: ALL 17 GREEN.",
+  "c1-c8 DONE. NEXT c9 #311 #331 #483; c10 #335 #336 #718; c11 #368 #426 #720; c12+.",
+  "BIG LESSON: an all-green cluster = COMPETING DESIGNS, not breakage. The deliverable",
+  "flips from 'which is red' to 'which one', and the ORACLE is WHAT MAIN ALREADY SHIPS:",
+  "DomRenderer.setCursorBlink (dom.ts:426) exists => settles #324 (setBlinkInterval)",
+  "vs #378/#379 (setCursorBlink). V4 again. SECOND ORACLE: the maintainer's OWN stale",
+  "review - #324 rejected by iamnbutler 2026-03-26, still open; I re-checked its 3",
+  "objections against every sibling PR (1 fixed, 2 unaddressed). HIGHEST-VALUE SHAPE YET.",
+  "Prefer the ZERO-COMMENT PR in a cluster as the place to post (#379 had none).",
+  "New dup: #413==#414 (byte-identical search.ts; #413's test fails noNonNullAssertion).",
+  "#675 re-verified: bun audit 4->0, lockfile-only, 2265/0, tsc clean. Wide refresh",
+  "STILL lint-red today, Biome sole breaker - settled on #675 thread 08-18, DO NOT REDO.",
+  "#705 DISPROVEN: 0/181 NOBASE after unshallow. Commented #379 #324; updated #666."
  ]
 }
