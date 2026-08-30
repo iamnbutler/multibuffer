@@ -6,11 +6,11 @@
   "Verify the PREVIOUS run's safe output landed."
  ],
  "memory_mechanism": [
-  "in-agent push_repo_memory is ADVISORY, counts .git (33 KB) => ALWAYS fails. That is",
-  "issue #677, unsatisfiable. IGNORE it. REAL gate = push job: files only, MAX_PATCH_SIZE",
-  "10240 (effective 12288). Measure yourself: cd /tmp/gh-aw/repo-memory/default;",
-  "git diff | wc -c. Patch = removed + added lines, so EDIT FEW LINES, don't rewrite.",
-  "KEEP MULTI-LINE json; target file <6500 B, patch <9000. Ceiling raise = #698."
+  "in-agent push_repo_memory is ADVISORY, counts .git => ALWAYS fails (#677). IGNORE it.",
+  "REAL gate = push job: MAX_FILE_SIZE 10240 AND MAX_PATCH_SIZE 10240 (eff. 12288).",
+  "BOTH bind. Patch = removed + added lines => EDIT FEW LINES. Keep file <9500 B.",
+  "Measure BOTH: wc -c state.json; git diff | wc -c. Ceiling raise = #698.",
+  "Use `with open(...)`: unflushed json.dump + append CORRUPTS the file (hit 08-30)."
  ],
  "issue666_size_procedure": [
   "08-28: body hit 56,884 B of GitHub's 65,536. Rebuilt to 50,708 (headroom 14,827).",
@@ -74,11 +74,10 @@
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T6 HAS REAL WORK: (a) src-file-set dup sweep, (b) pairwise merge-tree sweep + BUILD",
-  "THE TREE + run the suite. Both paid off. No CI work until the gate clears.",
-  "T4 EXHAUSTED (re-verified 08-27): same 4 audit vulns (#675), same outdated set",
-  "(8-pkg refresh + #760), 0 dependabot PRs, rest protected. T2 IS NOT SATURATED:",
-  "the [aw] failure issues (#749 #754 #764 #768) read as boilerplate and are not."
+  "T6 HAS REAL WORK: ALL-PATHS dup sweep; merge-tree sweep + BUILD THE TREE + run the",
+  "suite; cluster cores under combination. All paid off. No CI work until gate clears.",
+  "T4 EXHAUSTED (08-27): 4 audit vulns (#675), 8-pkg refresh, rest protected.",
+  "T2 BACKLOG EMPTY 08-30: #749 #768 triaged; #754 #764 done earlier."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -87,26 +86,24 @@
   "_deleteLine multi-row selection (fixed 08-28)."
  ],
  "next_veins": [
-  "AUTHORITATIVE list is in #666 'Future Work'. Read there.",
-  "V0: doubt the probe. 3rd hit 08-29: hunk-overlap predicted 175 conflicting PR pairs,",
-  "real merges = 80. IF THE REAL CHECK IS AFFORDABLE, DO NOT MODEL IT. 4th hit 08-29c:",
-  "an EXACT test behind a WRONG COMPARISON SET is still wrong - ask what the filter",
-  "excludes before trusting what the test includes.",
-  "V1: a clamp is only safe if its bound cannot cross the value it clamps.",
-  "V2: a well-covered file is not a checked file (9 hits). Ask what every fixture holds",
-  "CONSTANT. 08-29 variant: what does NO test in the repo do at all? (real fs = 0 tests).",
-  "V3: docstring-vs-behaviour, 9+ hits. V4: a call site skipping a policy its siblings",
-  "implement - RICHEST, 5 hits. V5: drag a selection BOTH ways and diff.",
-  "V6: a non-dup can still CONFLICT - screen for overlap, name it in the PR.",
-  "V7: a detector is only as good as its UNIT (whole-diff hashing missed 5 exact dups).",
-  "V8 (NEW 08-29b, strong): two PRs textually independent + semantically incompatible.",
-  "Ask what a PR takes ownership of that ISN'T a line of its own file - a GLOBAL it",
-  "monkey-patches, an invariant every sibling call site upholds, a shared fixture.",
-  "Invisible to git merge, to CI-per-PR, and to reviewing either diff.",
-  "Targets: the other 6 unexplained fails in the 73-PR tree (2 of 8 chased so far, both",
-  "paid); _moveLine (after the decision); replace/clear APIs; react/use-diff-view.ts;",
-  "other O(document)-per-edit callers; editor-view.ts docstrings.",
-  "DONE: project/adapter.ts now covered by the new real-fs tests."
+  "AUTHORITATIVE list is #666 'Future Work' - read it there, this is just the index.",
+  "V0 doubt the probe; if the real check is affordable DO NOT MODEL IT. And an exact",
+  "  test behind a WRONG COMPARISON SET is still wrong - ask what the filter excludes.",
+  "V1 a clamp is safe only if its bound cannot cross the value it clamps.",
+  "V2 a well-covered file is not a checked file (9 hits); ask what every fixture holds",
+  "  CONSTANT, and what NO test in the repo does at all.",
+  "V3 docstring-vs-behaviour (9+). V4 a call site skipping a policy its siblings",
+  "  implement - RICHEST, 5 hits; the sibling that is already right is the ORACLE.",
+  "V5 drag a selection BOTH ways and diff. V6 a non-dup can still CONFLICT.",
+  "V7 a detector is only as good as its UNIT of comparison.",
+  "V8 two PRs textually independent + semantically incompatible: ask what a PR takes",
+  "  ownership of that ISN'T a line of its own file (a global, an invariant, a fixture).",
+  "V9 (08-30) a prose rule in a prompt is ADVISORY - an LLM violated a ban 4 days after",
+  "  it shipped (#343). An enforceable guard belongs in CONFIG, not instructions.",
+  "V10 (08-30) fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
+  "Targets: the 21 UNTESTED conflict clusters; _moveLine (after the decision);",
+  "replace/clear APIs; react/use-diff-view.ts; editor-view.ts docstrings.",
+  "DONE: project/adapter.ts covered; the '6 unexplained fails' vein is CLOSED."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=ce545ec refs/prs/A refs/prs/B`",
@@ -117,20 +114,27 @@
   "RA PRs: 955 file-sharing pairs -> 97 conflict -> 70 conflict-free, and those 70 merge",
   "sequentially 70/70 clean. Missed pairs were 365<->508, 367<->501, 501<->533;",
   "benchmarks/index.ts is a registry 5 PRs append to. ALWAYS BUILD THE TREE - the",
-  "sequential merge is what exposed the bad filter within seconds."
+  "sequential merge is what exposed the bad filter within seconds.",
+  "08-30 THIRD HIT, two NEW places: (a) the DUPLICATE sweep still grouped by src/+tests/",
+  "=> #559==#760 hid in biome.json; (b) every conflict-free figure was RA-vs-RA ONLY -",
+  "8 RA PRs (#333 #340 #345 #401 #510 #511 #684 #723) conflict only with a NON-RA PR.",
+  "COMPARE ALL 179 OPEN PRs. Use per-pair `git merge-base A B`, not a fixed base.",
+  "Fresh: 124/1058 all, 94/955 RA-only, 23 clusters/105 PRs, largest 25, 65 conflict-free.",
+  "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): 3 of c1's",
+  "11 picks were dups => 8 distinct changes. Subtract dups before quoting a set size."
  ],
- "this_run_2026-08-29c": [
-  "Drew T6 + T2. T6: corrected the sweep above; commented the correction on my own #776.",
-  "Merged tree suite = 2600 pass / 8 fail, and ALL 8 are the 2 KNOWN pairs (7 = #743+#745",
-  "globalThis.Worker leak, 1 = #518+#728 editability guard). The '6 unexplained fails' my",
-  "memory carried NEVER EXISTED - that vein is CLOSED, do not go chasing it.",
-  "T2: [aw] workflow-failure issues were NOT boilerplate and NOT triaged. #764: Docs/Update",
-  "failed 23 of 26 runs, 17 consecutive since 2026-04-29, and ALL 12 failure issues ever",
-  "filed (#223 #370 #444 #547 #570 #591 #608 #627 #643 #660 #710 #764) name the SAME cause:",
-  "patch touches protected CLAUDE.md. docs-update.md's description + its '### CLAUDE.md'",
-  "section order it to edit that file; its create-pull-request block sets no",
-  "protected-files: => default refusal. Re-verified all 5 #671 drifts still live.",
-  "Commented #764. STILL UNTRIAGED: #749, #768. No PR - both remedies are protected paths.",
-  "#666 retyped in full, ~60 KB, folded the 08-29 16:58 entry into compressed."
+ "this_run_2026-08-30": [
+  "Drew T2 + T6. T2 BACKLOG NOW EMPTY. #749 = 7th of 8 Doc Unbloat failures, all",
+  "protected-file refusals (#215 #343 workflows/*.md; #493 #562 #654 #702 #749",
+  "CLAUDE.md; #405 unrelated). PR #258 (03-18) fixed the workflows/ half, never added",
+  "CLAUDE.md. Prompt comes via {{#runtime-import}} => LOCK FILES ARE NEVER STALE, that",
+  "theory is DEAD. #343's run (7e50d57) DESCENDS from the fix and still picked",
+  "reviewer.md => prose bans are advisory. disable-agentic-editing is INERT (1 file).",
+  "#768 = MAX_PATCH_SIZE not file size: 8437 B file, 14954 B patch vs 12288. 3 workflows",
+  "(#579 #657 #677 #698 #768). T6: FIRST combination test of CLUSTERED PRs - the 70-tree",
+  "held only globally-conflict-free PRs, so all 105 clustered were untested. c1 11 PRs",
+  "2290/0 fail, c2 8 PRs 2302/0, tsc+lint clean. NEGATIVE: no cross-PR breakage.",
+  "15th dup #559==#760 (biome.json, in NEITHER src/ nor tests/). Commented #760.",
+  "#666 retyped 64,233 B, headroom 1303; asked permission to prune the 208-item queue."
  ]
 }
