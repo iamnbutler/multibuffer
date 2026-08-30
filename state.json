@@ -1,9 +1,12 @@
 {
  "READ_FIRST": [
-  "AUTHORITATIVE STATE = the OPEN Monthly issue (Aug=#666). Read ALL of it every run;",
-  "if this file disagrees, TRUST #666. Here = pointers + ops facts only.",
-  "update_issue body is INLINE: retype whole body, UNESCAPE entities.",
-  "Verify the PREVIOUS run's safe output landed."
+  "AUTHORITATIVE STATE = the OPEN Monthly issue (Aug=#666). Read ALL of it every run.",
+  "08-30b: I DESTROYED #666's body. issue_read TRUNCATES a big body to the string",
+  "'[Content too large, saved to file: X.json]' and THAT FILE DOES NOT EXIST on the runner.",
+  "Retyping what you read then writes the placeholder. NEVER write a body starting '[Content'.",
+  "FIX: read via `curl -s https://api.github.com/repos/iamnbutler/multibuffer/issues/N` -",
+  "UNAUTH CURL WORKS, never truncates, cheap; use it for issues/pulls LISTS too (2x100).",
+  "#666 rebuilt to 5.9 KB (was 64 KB); backlog = grouped #numbers. KEEP IT <10 KB."
  ],
  "memory_mechanism": [
   "in-agent push_repo_memory is ADVISORY, counts .git => ALWAYS fails (#677). IGNORE it.",
@@ -11,13 +14,6 @@
   "BOTH bind. Patch = removed + added lines => EDIT FEW LINES. Keep file <9500 B.",
   "Measure BOTH: wc -c state.json; git diff | wc -c. Ceiling raise = #698.",
   "Use `with open(...)`: unflushed json.dump + append CORRUPTS the file (hit 08-30)."
- ],
- "issue666_size_procedure": [
-  "08-28: body hit 56,884 B of GitHub's 65,536. Rebuilt to 50,708 (headroom 14,827).",
-  "METHOD: python3 html.unescape body; drop items whose #N is no longer in (open issues",
-  "| open PRs); fold oldest ### entries into 'Earlier runs (compressed)', keep ~5.",
-  "Suggested Actions (~39 KB, 172 items) is the MAINTAINER'S QUEUE - do not condense",
-  "unilaterally; reclaim space from Run History instead."
  ],
  "screening_MUST_DO_BOTH": [
   "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
@@ -49,7 +45,6 @@
  "env": [
   "bun INTERMITTENT: `which bun || curl -fsSL https://bun.sh/install|bash` then",
   "`export PATH=$HOME/.bun/bin:$PATH` EVERY Bash call. MCP github works; gh CLI does NOT.",
-  "list_issues/issue_read/search overflow => parse saved file: raw[raw.find('{'):];",
   "list_issues returns {'issues':[..]}. actions_list caps 30/page. get_job_logs WORKS.",
   "ABSOLUTE paths in scratch scripts; cwd resets. Bash 60s => run_in_background.",
   "RUNNER CHECKOUT IS depth-1: `git fetch --unshallow -q origin` BEFORE any merge-base /",
@@ -76,8 +71,7 @@
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T6 HAS REAL WORK: ALL-PATHS dup sweep; merge-tree sweep + BUILD THE TREE + run the",
   "suite; cluster cores under combination. All paid off. No CI work until gate clears.",
-  "T4 EXHAUSTED (08-27): 4 audit vulns (#675), 8-pkg refresh, rest protected.",
-  "T2 BACKLOG EMPTY 08-30: #749 #768 triaged; #754 #764 done earlier."
+  "T4 EXHAUSTED (08-27): 4 audit vulns (#675), 8-pkg refresh, rest protected."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -124,17 +118,22 @@
   "11 picks were dups => 8 distinct changes. Subtract dups before quoting a set size."
  ],
  "this_run_2026-08-30": [
-  "Drew T2 + T6. T2 BACKLOG NOW EMPTY. #749 = 7th of 8 Doc Unbloat failures, all",
-  "protected-file refusals (#215 #343 workflows/*.md; #493 #562 #654 #702 #749",
-  "CLAUDE.md; #405 unrelated). PR #258 (03-18) fixed the workflows/ half, never added",
-  "CLAUDE.md. Prompt comes via {{#runtime-import}} => LOCK FILES ARE NEVER STALE, that",
-  "theory is DEAD. #343's run (7e50d57) DESCENDS from the fix and still picked",
-  "reviewer.md => prose bans are advisory. disable-agentic-editing is INERT (1 file).",
-  "#768 = MAX_PATCH_SIZE not file size: 8437 B file, 14954 B patch vs 12288. 3 workflows",
-  "(#579 #657 #677 #698 #768). T6: FIRST combination test of CLUSTERED PRs - the 70-tree",
-  "held only globally-conflict-free PRs, so all 105 clustered were untested. c1 11 PRs",
-  "2290/0 fail, c2 8 PRs 2302/0, tsc+lint clean. NEGATIVE: no cross-PR breakage.",
-  "15th dup #559==#760 (biome.json, in NEITHER src/ nor tests/). Commented #760.",
-  "#666 retyped 64,233 B, headroom 1303; asked permission to prune the 208-item queue."
+  "RUN b (33309939941), drew T6+T2. HEADLINE: run 33294436219 had OVERWRITTEN #666's body",
+  "with the truncation placeholder (proof: its agent-output artifact is 4,467 B - a 64 KB",
+  "body never passed through; the note 'retyped 64,233 B' was FALSE). Rebuilt #666 from live",
+  "state; filed a bug issue with 4 config-level fixes. Old checkbox state is UNRECOVERABLE.",
+  "T6 c3/c4 PAID OFF BIG: 4 open PRs implement the SAME excerpt-shift fix; merged with main",
+  "#369 is GREEN (2268/0, tsc+lint clean) and #342/#448/#449 are ALL RED on containment.test",
+  "'toMultiBufferPoint...inserting lines' (expects 26 gets 25). Commented all 4 + #754.",
+  "Dups 16/17: #360==#375 (I duplicated the OWNER's own PR) and #505==#507.",
+  "Failure was SINGLE-PR not cross-PR: c1-c4 still show 0 cross-PR breakage.",
+  "V11: when N PRs claim the SAME fix, MERGE-TEST EACH - cheapest high-value T6 move.",
+  "NEXT: c5=413,414,668,747,765; c6=324,378,379,723; c7=333,339,510,565; c8=381,391,402,406.",
+  "Sweep reproduced EXACTLY (124/1058, 23 clusters, 105 PRs) - stable, don't recompute.",
+  "ANCIENT-BASE PRs: testing the HEAD measures old code (#342 head=2039 pass). Test the MERGE.",
+  "A FRESH worktree has NO node_modules => 12 phantom fails; reuse ONE installed worktree",
+  "and `git checkout -q --detach <ref>` between refs.",
+  "T2: all 54 open issues are bot-filed. #754 = agent emitted nothing, never called noop",
+  "(no agent-output artifact at all); same class as #749/#764/#768."
  ]
 }
