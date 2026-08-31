@@ -17,15 +17,14 @@
  ],
  "screening_MUST_DO_BOTH": [
   "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
-  "Run BOTH search_issues AND search_pull_requests, then diff every open PR.",
-  "PROVEN: curl 2x100 /pulls -> numbers -> ONE batched fetch of every head:",
+  "PROVEN recipe: curl 2x100 /pulls -> numbers -> ONE batched fetch of every head:",
   "  refs=$(awk '{printf \"refs/pull/%s/head:refs/prs/%s \", $1,$1}' openprs.txt)",
-  "  git fetch -q --no-tags origin $refs   # 181 heads, <60s",
+  "  git fetch -q --no-tags origin $refs   # 180 heads, <60s",
   "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL.",
-  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs match every symbol.",
-  "Filter to +/- lines and read the PR's real function body before believing.",
+  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs match every symbol; filter to",
+  "+/- lines and read the PR's real function body before believing.",
   "If the finding is 'X is called too often', search the CALLEE's name, not the fix.",
-  "My back catalogue is the likeliest dup: 157 open RA PRs, 0 merged.",
+  "My back catalogue is the likeliest dup: 158 open RA PRs, 0 merged. 08-31 it blocked TWO.",
   "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names",
   "(bot branches carry a -<hash> suffix => false 'vanished')."
  ],
@@ -48,8 +47,7 @@
   "ABSOLUTE paths in scratch scripts; cwd resets. Bash 60s => run_in_background.",
   "RUNNER CHECKOUT IS depth-1: `git fetch --unshallow -q origin` BEFORE any merge-base /",
   "rev-list / two-dot-diff / 'orphan' claim (produced false finding #705).",
-  "Merge-testing 2 PRs: WORKTREE + `git merge --no-ff -m t` (NOT --no-commit; the 2nd",
-  "merge then dies on 'MERGE_HEAD exists').",
+  "Merge-test 2 PRs: WORKTREE + `git merge --no-ff -m t` (NOT --no-commit; 2nd merge dies).",
   "react-dom NOT installed. Edit replace_all matches INDENTATION; re-probe after edits."
  ],
  "gates": [
@@ -60,23 +58,28 @@
   "noUncheckedIndexedAccess: arr[i] is T|undefined. Branded rows: num() from tests/helpers.ts."
  ],
  "ci_is_parked_not_absent": [
-  "#757: ci.yml runs ARE created on bot PRs but sit at action_required. A parked run",
-  "dispatches 0 jobs and publishes NO check runs => looks identical to 'CI not configured'.",
-  "Re-verified 08-29: still parked. A run may show conclusion=failure yet dispatch 0 JOBS",
-  "- same parked shape, different string. CHECK JOB COUNT, not conclusion. Cause unknown.",
-  "T6 has NO CI-failure work until the gate clears."
+  "#757: ci.yml runs ARE created on bot PRs but sit at action_required, dispatch 0 jobs and",
+  "publish NO check runs => looks identical to 'CI not configured'. Re-verified 08-29.",
+  "A run may show conclusion=failure yet dispatch 0 JOBS - same parked shape. CHECK JOB",
+  "COUNT, not conclusion. Cause unknown. T6 has NO CI-failure work until the gate clears."
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
   "T6 HAS REAL WORK: cluster combination tests (c9-c23 left); ALL-PATHS dup sweep.",
-  "No T6 CI-failure work until the action_required gate clears."
+  "No T6 CI-failure work until the action_required gate clears.",
+  "T9: line-level decoration render tests DONE by #737. react hooks UNTESTABLE",
+  "  (react-dom absent) - use-diff-view/use-editor-view stay zero-coverage."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf;",
   "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
-  "_deleteLine multi-row selection (fixed 08-28)."
+  "_deleteLine multi-row selection (fixed 08-28).",
+  "08-31: glob.ts shouldTraverseDirectory over-lenient => perf only (#540), not correctness;",
+  "injection getLineTokens is if/else => no mixed rows, no overlap (docstring :187 HOLDS);",
+  "_collectTokens pushes only LEAF nodes => no parent/child overlap;",
+  "dom.ts isColumnDecoration && precedence is odd but classifies CORRECTLY."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #666 'Future Work' - read it there, this is just the index.",
@@ -99,41 +102,40 @@
   "  docstring endorses the bug (hand over). ASK WHICH SIDE THE DOCSTRING IS ON.",
   "Targets: the 21 UNTESTED conflict clusters; _moveLine (after the decision);",
   "replace/clear APIs; react/use-diff-view.ts; editor-view.ts docstrings.",
-  "DONE: project/adapter.ts covered; the '6 unexplained fails' vein is CLOSED."
+  "DONE: project/adapter.ts covered; the '6 unexplained fails' vein is CLOSED.",
+  "V13 (08-31) MODELLED TESTS: a test that re-implements src logic passes whatever",
+  "  src does. Confirmed: decoration.test.ts buildDecorationMap (STALE - predates the",
+  "  line/column split, so #737's new file does NOT retire it); canvas.test.ts",
+  "V14 (08-31) TWIN EXPORTS: buildHighlightedSpans exists in highlighter.ts (tested,",
+  "  used by dom.ts) AND injection-highlighter.ts (exported as ...WithInjection,",
+  "  0 callers, 0 tests, LACKS columnDecorations). Parity test = green + drift-proof.",
+  "  simulateTokenRendering. Grep tests/ for 'Simulate|Replicat|logic used'."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
-  "TOOL: `git merge-tree --write-tree --merge-base=ce545ec refs/prs/A refs/prs/B`",
-  "(exit!=0 => conflict). Exact, ~30ms, no worktree. THE TRAP I FELL INTO 08-29b:",
-  "I built each PR's file set from src/+tests/ ONLY, so pairs colliding purely in",
-  "benchmarks/ were NEVER COMPARED and scored 'conflict-free'. 13 RA PRs touch neither",
-  "src/ nor tests/. USE **ALL** CHANGED PATHS in the file set. CORRECTED 08-29c on 156",
-  "RA PRs: 955 file-sharing pairs -> 97 conflict -> 70 conflict-free, and those 70 merge",
-  "sequentially 70/70 clean. Missed pairs were 365<->508, 367<->501, 501<->533;",
-  "benchmarks/index.ts is a registry 5 PRs append to. ALWAYS BUILD THE TREE - the",
-  "sequential merge is what exposed the bad filter within seconds.",
-  "08-30 THIRD HIT, two NEW places: (a) the DUPLICATE sweep still grouped by src/+tests/",
-  "=> #559==#760 hid in biome.json; (b) every conflict-free figure was RA-vs-RA ONLY -",
-  "8 RA PRs (#333 #340 #345 #401 #510 #511 #684 #723) conflict only with a NON-RA PR.",
-  "COMPARE ALL 179 OPEN PRs. Use per-pair `git merge-base A B`, not a fixed base.",
+  "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
+  "conflict). Exact, ~30ms, no worktree. Use per-pair `git merge-base A B`, not a fixed base.",
+  "TRAP, hit 3x: build each PR's file set from **ALL CHANGED PATHS**, not src/+tests/.",
+  "13 RA PRs touch neither; benchmarks/index.ts is a registry 5 PRs append to; #559==#760 hid",
+  "in biome.json. And compare ALL 180 OPEN PRs, not RA-only: 8 RA PRs conflict only with a",
+  "non-RA PR. ALWAYS BUILD THE TREE - the sequential merge exposes a bad filter in seconds.",
   "Fresh: 124/1058 all, 94/955 RA-only, 23 clusters/105 PRs, largest 25, 65 conflict-free.",
-  "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): 3 of c1's",
-  "11 picks were dups => 8 distinct changes. Subtract dups before quoting a set size."
+  "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
  "this_run_2026-08-30": [
-  "RUN d (33335208446), drew T6+T4. T4 CONFIRMED EXHAUSTED - substitute, don't force it.",
-  "T6: rebuilt conflict map on ALL 181 PRs (1062 pairs -> 124 conflict -> 23 clusters/105).",
-  "Combination-tested c5+c6+c7+c8 = 17 PRs each merged with main: ALL 17 GREEN.",
-  "c1-c8 DONE. NEXT c9 #311 #331 #483; c10 #335 #336 #718; c11 #368 #426 #720; c12+.",
-  "BIG LESSON: an all-green cluster = COMPETING DESIGNS, not breakage. The deliverable",
-  "flips from 'which is red' to 'which one', and the ORACLE is WHAT MAIN ALREADY SHIPS:",
-  "DomRenderer.setCursorBlink (dom.ts:426) exists => settles #324 (setBlinkInterval)",
-  "vs #378/#379 (setCursorBlink). V4 again. SECOND ORACLE: the maintainer's OWN stale",
-  "review - #324 rejected by iamnbutler 2026-03-26, still open; I re-checked its 3",
-  "objections against every sibling PR (1 fixed, 2 unaddressed). HIGHEST-VALUE SHAPE YET.",
-  "Prefer the ZERO-COMMENT PR in a cluster as the place to post (#379 had none).",
-  "New dup: #413==#414 (byte-identical search.ts; #413's test fails noNonNullAssertion).",
-  "#675 re-verified: bun audit 4->0, lockfile-only, 2265/0, tsc clean. Wide refresh",
-  "STILL lint-red today, Biome sole breaker - settled on #675 thread 08-18, DO NOT REDO.",
-  "#705 DISPROVEN: 0/181 NOBASE after unshallow. Commented #379 #324; updated #666."
+  "DIGEST (detail in #666 Run History): 181-PR conflict map = 23 clusters/105 PRs; c1-c8",
+  "combination-tested ALL GREEN. LESSON: an all-green cluster = COMPETING DESIGNS, not",
+  "breakage - deliverable flips from 'which is red' to 'which one'; the ORACLE is WHAT MAIN",
+  "ALREADY SHIPS, 2nd oracle the maintainer's OWN stale review. Post on the 0-comment PR."
+ ],
+ "this_run_2026-08-31": [
+  "RUN a (33360602138), drew T9+T3. Both delivered; screening blocked 2 DUP PRs.",
+  "T3: replaceAll bypasses 3 guards on main (undo #536, readOnly editor.ts:476, non-editable",
+  "_edit). ORACLE = replaceActive (via dispatch) respects all 3. TWO PRs already fix it and",
+  "they CONFLICT, both green, each missing what the other has: #537 has the readOnly guard but",
+  "emits NO events; #364 emits textChange/change but has NO readOnly guard (main emits nothing",
+  "either, so #537 is not a regression). Neither references #536. Commented #364. NO 3rd PR.",
+  "T9: line-level decoration tests were ALREADY PR #737. Shipped instead TEST-ONLY branch",
+  "repo-assist/test-highlighted-spans-parity. 2280 pass/0 fail, tsc 0, lint 1 info, build ok.",
+  "4 mutations verified RED before filing - do that for every test-only PR."
  ]
 }
