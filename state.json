@@ -61,11 +61,11 @@
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
-  "T6 HAS REAL WORK: cluster combination tests (c9-c23 left); ALL-PATHS dup sweep.",
+  "T6 CLUSTER PROGRAMME COMPLETE 08-31c: all 23 clusters / 105 PRs tested, none broken.",
   "No T6 CI-failure work until the action_required gate clears.",
   "T9 V13 population is EXACTLY 2 (structural sweep: fn in tests/ w/ loop >=12 lines):",
   "simulateTokenRendering RETIRED 08-31b; buildDecorationMap is the last. react hooks",
-  "untestable (react-dom absent). T6 dup sweep done 08-31b; c9-c23 clusters remain."
+  "untestable (react-dom absent). Both dup sweeps + all clusters DONE - T6 needs a NEW vein."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -96,41 +96,43 @@
   "V15 (08-31b) my fixtures hid 2 of 5 mutations: EVERY gap was whitespace, which paints",
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
-  "V17 canvas.ts:487 + webgpu.ts:438 build decorationMap with NO line/column split; dom.ts:507",
-  "  has one => a column-bounded dec paints a WHOLE ROW there. In-repo producers match dom.ts",
-  "  => ISSUE not PR. 6th 'DomRenderer learned it, siblings didn't'.",
-  "NEXT: decoration.test.ts buildDecorationMap is the LAST modelled test; #737 covers the DOM",
-  "  side - EXTEND it, do not open a 3rd file."
+  "V17 canvas.ts:487 + webgpu.ts:438 decorationMap has NO line/column split, dom.ts:507 does",
+  "  => column-bounded dec paints a WHOLE ROW. ISSUE not PR. 6th sibling-parity case.",
+  "NEXT: decoration.test.ts buildDecorationMap = LAST modelled test; EXTEND #737, no 3rd file."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
   "conflict). Exact, ~30ms, no worktree. Use per-pair `git merge-base A B`, not a fixed base.",
-  "TRAP, hit 3x: build each PR's file set from **ALL CHANGED PATHS**, not src/+tests/.",
-  "13 RA PRs touch neither; benchmarks/index.ts is a registry 5 PRs append to; #559==#760 hid",
-  "in biome.json. And compare ALL 180 OPEN PRs, not RA-only: 8 RA PRs conflict only with a",
-  "non-RA PR. ALWAYS BUILD THE TREE - the sequential merge exposes a bad filter in seconds.",
-  "Fresh: 124/1058 all, 94/955 RA-only, 23 clusters/105 PRs, largest 25, 65 conflict-free.",
+  "TRAP, hit 3x: build each PR's file set from **ALL CHANGED PATHS**, not src/+tests/, and",
+  "compare ALL 181 open PRs, not RA-only. Map reproduces exactly: 2426 sharing pairs, 124",
+  "conflicting, 23 clusters/105 PRs, largest 25. Suite is only 2.6s - test freely.",
   "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
  "this_run_2026-08-30": [
-  "DIGEST (detail in #666 Run History): 181-PR conflict map = 23 clusters/105 PRs; c1-c8",
-  "combination-tested ALL GREEN. LESSON: an all-green cluster = COMPETING DESIGNS, not",
-  "breakage - deliverable flips from 'which is red' to 'which one'; the ORACLE is WHAT MAIN",
-  "ALREADY SHIPS, 2nd oracle the maintainer's OWN stale review. Post on the 0-comment PR."
+  "DIGEST: an all-green cluster = COMPETING DESIGNS, not breakage - deliverable flips from",
+  "'which is red' to 'which one'; ORACLE = WHAT MAIN ALREADY SHIPS, 2nd = maintainer's own",
+  "stale review. Post on the 0-comment PR. Full detail in #666 Run History."
  ],
  "this_run_2026-08-31": [
   "RUN a (33360602138) T9+T3 -> #782 parity PR; #364 vs #537 head-to-head. Detail in #666.",
-  "RUN b (33398246060) T6+T9. T9: RETIRED canvas.test.ts simulateTokenRendering (a COPY of",
-  "_renderTokenizedLine; 6 tests that never touched src/). New canvas-token-rendering.test.ts",
-  "drives the REAL renderer; branch repo-assist/test-canvas-token-rendering; 2269 pass/0 fail",
-  "(2278 run), tsc 0, lint 1 info, build ok. 5 mutations red.",
+  "RUN c (33447792188) T6+T2. T6: c9-c23 (34 PRs) each merged onto main = ALL GREEN, 0 tsc.",
+  "23/23 clusters now done. NEW DUP TIER: hash the diff with COMMENT and blank lines",
+  "STRIPPED -> #387==#707, #371==#459 (differ ONLY in comment wording). Also close #340",
+  "(superseded by owner's #374) and #314 (by #439). Closable-unread now 21.",
+  "V18 A DIFF HASH MUST INCLUDE THE FILE PATH: path-blind hashing called #691==#692 a dup,",
+  "but it is the SAME one-line fix in dom.ts vs webgpu.ts - opposite of a dup, it is the",
+  "sibling-parity pattern. Re-ran path-aware. OLDBASE 4-group #326/#335/#339/#341 shares 297",
+  "lines because they share a REVERT of intervening work, not a change (memory caution held).",
+  "T2: #781 tree leak has a TWIN - InjectionHighlighter.parseBuffer drops primary tree + ALL",
+  "injection subtrees (1+N per parse) and that class has NO deleteBuffer at all; deleteBuffer",
+  "is also absent from the SyntaxHighlighter interface. 2nd reparse site = highlight-worker.ts:94.",
+  "RUN b (33398246060) T6+T9: retired canvas.test.ts simulateTokenRendering -> new",
+  "canvas-token-rendering.test.ts on branch repo-assist/test-canvas-token-rendering.",
   "CanvasRenderer IS mountable under happy-dom: patch win.HTMLCanvasElement.prototype.",
   "getContext -> recording stub + define OffscreenCanvas (canvas.ts has its OWN GlyphAtlas,",
   "NOT src/renderer/glyph-atlas.ts), getComputedStyle, requestAnimationFrame. Viewport needs",
   "`width`. Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
   "SPACES/TABS PAINT NO GLYPH (pen advances). #689 has an equal harness - REUSE, don't refile.",
-  "T6: ALL-PATHS dup sweep DONE (sha256 the whole merge-base diff, minus ^index lines):",
-  "15 EXACT pairs + 2 near (413~414, 425~502) = 17 closable, ALL LISTED IN #666. Don't redo.",
-  "Commented ONCE on #689 correcting MY OWN earlier claim that mount() can't run there."
+  "T6: ALL-PATHS dup sweep DONE: 15 EXACT + 2 near (413~414, 425~502), all in #666."
  ]
 }
