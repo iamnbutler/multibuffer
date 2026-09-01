@@ -9,9 +9,21 @@
  *
  * The scan is bounded to MAX_SCAN_LINES in each direction to keep the worst-case
  * cost proportional to the visible window, not the whole document.
+ *
+ * The scan is also bounded to rows backed by the *same buffer* as the cursor: a
+ * bracket in one file can never be closed by a bracket in another, so scanning
+ * past an excerpt whose buffer differs would pair unrelated documents. Adjacent
+ * excerpts drawn from the same buffer are still scanned as one region, even when
+ * their ranges are not contiguous in that buffer.
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
+
+/** Half-open row range `[firstRow, endRow)` that a bracket scan may cover. */
+interface ScanBounds {
+  readonly firstRow: number;
+  readonly endRow: number;
+}
 
 /** The matched open and close positions for a bracket pair. */
 export interface BracketMatch {
@@ -52,18 +64,48 @@ export function findMatchingBracket(
   const ch = line[cursor.column] ?? "";
 
   if (OPEN_BRACKETS.has(ch)) {
-    const close = scanForward(snapshot, cursor, ch);
+    const close = scanForward(snapshot, cursor, ch, sameBufferBounds(snapshot, cursor.row));
     if (!close) return null;
     return { open: cursor, close };
   }
 
   if (CLOSE_BRACKETS.has(ch)) {
-    const open = scanBackward(snapshot, cursor, ch);
+    const open = scanBackward(snapshot, cursor, ch, sameBufferBounds(snapshot, cursor.row));
     if (!open) return null;
     return { open, close: cursor };
   }
 
   return null;
+}
+
+/**
+ * The widest run of rows around `row` whose excerpts are all backed by the same
+ * buffer. Used to stop a scan before it crosses into a different file.
+ *
+ * Falls back to the whole document when the snapshot exposes no excerpt for
+ * `row`, which keeps single-excerpt and degenerate snapshots behaving as before.
+ */
+function sameBufferBounds(snapshot: MultiBufferSnapshot, row: MultiBufferRow): ScanBounds {
+  const here = snapshot.excerptAt(row);
+  if (!here) return { firstRow: 0, endRow: snapshot.lineCount };
+
+  let firstRow: number = here.startRow;
+  while (firstRow > 0) {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
+    const prev = snapshot.excerptAt((firstRow - 1) as MultiBufferRow);
+    if (!prev || prev.bufferId !== here.bufferId) break;
+    firstRow = prev.startRow;
+  }
+
+  let endRow: number = here.endRow;
+  while (endRow < snapshot.lineCount) {
+    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
+    const next = snapshot.excerptAt(endRow as MultiBufferRow);
+    if (!next || next.bufferId !== here.bufferId) break;
+    endRow = next.endRow;
+  }
+
+  return { firstRow, endRow };
 }
 
 /**
@@ -74,11 +116,12 @@ function scanForward(
   snapshot: MultiBufferSnapshot,
   start: MultiBufferPoint,
   openChar: string,
+  bounds: ScanBounds,
 ): MultiBufferPoint | null {
   const closeChar = BRACKET_PARTNER[openChar];
   if (!closeChar) return null;
 
-  const endRow = Math.min(start.row + MAX_SCAN_LINES + 1, snapshot.lineCount);
+  const endRow = Math.min(start.row + MAX_SCAN_LINES + 1, bounds.endRow);
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
   const lines = snapshot.lines(start.row, endRow as MultiBufferRow);
 
@@ -110,11 +153,12 @@ function scanBackward(
   snapshot: MultiBufferSnapshot,
   start: MultiBufferPoint,
   closeChar: string,
+  bounds: ScanBounds,
 ): MultiBufferPoint | null {
   const openChar = BRACKET_PARTNER[closeChar];
   if (!openChar) return null;
 
-  const firstRow = Math.max(0, start.row - MAX_SCAN_LINES);
+  const firstRow = Math.max(bounds.firstRow, start.row - MAX_SCAN_LINES);
   // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction for row bounds
   const lines = snapshot.lines(firstRow as MultiBufferRow, (start.row + 1) as MultiBufferRow);
 
