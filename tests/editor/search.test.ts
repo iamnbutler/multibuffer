@@ -546,14 +546,15 @@ describe("SearchController - Multi-excerpt", () => {
     expect(count).toBe(2);
 
     const resolved = search.resolveResults();
-    expect(resolved[0]).toBeDefined();
-    expect(resolved[1]).toBeDefined();
+    const first = resolved[0];
+    const second = resolved[1];
+    if (!first || !second) throw new Error("expected two resolved results");
 
     // Display order: buf2 (row 0) before buf1 (row 1+).
     // Without the fix, compareAnchors would sort by slot index: buf1 (0) before buf2 (1),
     // giving results[0].start.row > results[1].start.row — the wrong order.
-    const row0 = resolved[0]!.start.row;
-    const row1 = resolved[1]!.start.row;
+    const row0 = first.start.row;
+    const row1 = second.start.row;
     expect(row0).toBeLessThan(row1);
   });
 });
