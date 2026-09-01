@@ -14,6 +14,14 @@ export {
   resolveAnchorRange,
   reverseSelection,
 } from "./anchor.ts";
+// FileNavigator: file-path → excerpt mapping
+export {
+  createFileNavigator,
+  type FileNavigator,
+  type FileNavigatorOptions,
+  type OpenedFileInfo,
+  type ReadFileFn,
+} from "./file-navigator.ts";
 export { createMultiBuffer } from "./multibuffer.ts";
 export { keysCompare, keysEqual, type SlotKey, SlotMap } from "./slot_map.ts";
 export * from "./types.ts";
