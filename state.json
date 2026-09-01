@@ -25,7 +25,8 @@
   "+/- lines and read the PR's real function body before believing.",
   "My back catalogue is the likeliest dup: 158 open RA PRs, 0 merged. 08-31 it blocked TWO.",
   "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names",
-  "(bot branches carry a -<hash> suffix => false 'vanished')."
+  "(bot branches carry a -<hash> suffix => false 'vanished').",
+  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, different file)."
  ],
  "rules": [
   "main FROZEN at ce545ec. PR only if live-on-main + red-on-main + gates green + screened.",
@@ -70,14 +71,14 @@
   "T9 V13 population is EXACTLY 2: simulateTokenRendering RETIRED 08-31b, buildDecorationMap",
   "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent).",
   "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED gated 09-01b. No CI work until #757.",
-  "T6 merge-vs-MAIN: all 183 open PRs merge CLEAN onto ce545ec (09-01c). Dead avenue."
+  "T6 merge-vs-MAIN: all 183 open PRs merge CLEAN onto ce545ec. Dead avenue."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
   "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap.",
-  "_buffers never pruned in multibuffer.ts = ALREADY #761. I nearly refiled it."
+  "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
@@ -90,21 +91,19 @@
   "V9 (08-30) a prose rule in a prompt is ADVISORY - an LLM violated a ban 4 days after",
   "  it shipped (#343). An enforceable guard belongs in CONFIG, not instructions.",
   "V10 (08-30) fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
-  "V12 (08-30) a docstring can pin the WRONG rule. My 'docstring pins it => PR ok'",
-  "  holds only when it pins the RIGHT side: #704 docstring correct (PR it), #695",
-  "  docstring endorses the bug (hand over). ASK WHICH SIDE THE DOCSTRING IS ON.",
-  "V13 (08-31) MODELLED TESTS: a test that re-implements src logic passes whatever",
+  "V12 a docstring/TEST can pin the WRONG side: #704 pins the fix (PR ok), #695 endorses",
+  "  the bug (hand over). ASK WHICH SIDE THE ORACLE IS ON before trusting it.",
   "  src does. Confirmed: decoration.test.ts buildDecorationMap (STALE - predates the",
   "  line/column split, so #737's new file does NOT retire it); canvas.test.ts",
   "V15 (08-31b) my fixtures hid 2 of 5 mutations: EVERY gap was whitespace, which paints",
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
   "V17 6th sibling-parity case: canvas FIXED by my 09-01 PR; webgpu.ts:438 still unsplit.",
-  "NEXT T6: 25- and 16-member clusters give only 11/8 - is a DIFFERENT same-size set BETTER?",
-  "V2 PAID OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests.",
   "V23 (09-01c) a NARROWED LOCAL TYPE silently eats fields: the excess-property check fires",
   "  only on LITERALS. highlighter.ts ColumnDecoration.style={backgroundColor?} dropped 10 of",
-  "  11 DecorationStyle fields dom.ts passed in. GREP locals re-declaring a public subset."
+  "  11 DecorationStyle fields dom.ts passed in. GREP locals re-declaring a public subset.",
+  "V24 (09-01d) A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the",
+  "  OBSERVABLE (I printed the excerpt's lines). #362 passed every gate and fixed nothing."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -119,20 +118,20 @@
   "requestAnimationFrame. Viewport needs `width`; ALSO stub clientWidth/Height on",
   "HTMLElement.prototype or the canvas is 0px and every background fillRect has width 0.",
   "Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
-  "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689.",
-  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix in dom.ts vs webgpu.ts)."
+  "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
  ],
  "this_run_2026-09-01": [
-  "RUN3 (33532666153) T6+T10. Monthly=#787, REWRITTEN this run. No maintainer checkbox ticked yet.",
-  "T6: gated ALL 183 open PRs INDIVIDUALLY (merge-tree->commit-tree->checkout -f, ~11s/PR).",
-  "  tsc 0/183; LINT-alone = #373(12) #340(2) #413(2) #449(2 NEW) #376(1). REAL test fails = ONLY",
-  "  #342 #448 #449, all the SAME containment.test.ts toMultiBufferPoint assertion, 2/2 runs each;",
-  "  #369 and #362 CLEAN => of 5 excerpt-shift rivals only those 2 viable. Report = COMMENT ON #757.",
-  "T10: PR'd repo-assist/fix-intraline-decoration-styles. dom.ts routes Decorations down TWO paths",
-  "  (line vs intraline, decided dom.ts:511). _renderAsLine applies 5 style fields; intraline applied",
-  "  ONLY backgroundColor (cause = V23). borderColor honoured by NO renderer. Fixed 4 intraline +",
-  "  borderColor line-level; LEFT decoration.style.color (competes with syntax colour = product",
-  "  call). 5 of 8 new tests red on main, 3 controls. Parity: dom-line 10/11, dom-intraline 5 now,",
-  "  canvas 5, webgpu 1; webgpu.ts:443 still un-split (V17)."
+  "RUN4 (33558491765) T6+T2. Monthly=#787 REWRITTEN. No maintainer checkbox ticked yet.",
+  "REVERSAL: I had said '#362 and #369 are the clean excerpt-shift picks'. #362 IS A NO-OP",
+  "  for the bug (its edit-before-excerpt branch is guarded lineDelta===0) - green because it",
+  "  PRESERVES the drift. #369 fixes it AND already rewrites containment.test.ts:241 to 25.",
+  "  So the red on #342/#448/#449 is a STALE ORACLE, not a regression. Told #757 + #449.",
+  "T6: PUSHED lint fixes to #413 (2 noNonNullAssertion -> `if (!x) throw`, the repo idiom;",
+  "  NOT ?., which weakens the assert) and #340 (biome --fix import sort on its 2 files).",
+  "  Both now lint 1-info / tsc 0 / tests green. #373 #376 are NOT [Repo Assist]-titled =>",
+  "  push_to_pull_request_branch REFUSES them; only closing is available.",
+  "T2: commented #792. diff() normalises ''->[] but diffLines() does NOT, and an empty",
+  "  buffer's lines() is ['']: an n===0 fast path MISSES diffLines, which already emits a",
+  "  phantom delete ''. Measured 4k added file 117ms vs 0.81ms control."
  ]
 }
