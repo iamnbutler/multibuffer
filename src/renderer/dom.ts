@@ -917,6 +917,7 @@ export class DomRenderer implements Renderer {
     rowEl.content.style.fontWeight = decoration?.fontWeight ?? "";
     rowEl.content.style.fontStyle = decoration?.fontStyle ?? "";
     rowEl.content.style.textDecoration = decoration?.textDecoration ?? "";
+    rowEl.content.style.borderColor = decoration?.borderColor ?? "";
     rowEl.content.style.fontSize = "";
 
     const isDiffMode = this._measurements.gutterMode === "diff";

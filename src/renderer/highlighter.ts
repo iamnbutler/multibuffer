@@ -12,6 +12,7 @@ import type {
 } from "web-tree-sitter";
 import type { LanguageQuery } from "./queries/types.ts";
 import { colorForNodeType } from "./theme.ts";
+import type { DecorationStyle } from "./types.ts";
 
 export interface Token {
   startColumn: number;
@@ -203,7 +204,13 @@ export class Highlighter implements SyntaxHighlighter {
 interface ColumnDecoration {
   startColumn: number;
   endColumn: number;
-  style: { backgroundColor?: string };
+  /**
+   * Full decoration style. This was once narrowed to `{ backgroundColor?: string }`,
+   * which silently discarded every other field DomRenderer passes in — an intraline
+   * decoration honoured only its background while the same style on a line-level
+   * decoration honoured five fields (see `_renderAsLine` in dom.ts).
+   */
+  style: Partial<DecorationStyle>;
 }
 
 /**
@@ -274,17 +281,32 @@ function renderTextWithBackground(
     const segStart = sortedBoundaries[i] ?? start;
     const segEnd = sortedBoundaries[i + 1] ?? end;
 
-    // Find background color for this segment (last decoration wins)
+    // Find the winning style for this segment. Precedence is per field and
+    // last-decoration-wins, which is what the background-only lookup already did.
+    // `color` is deliberately not taken from the decoration: within a token run it
+    // would compete with the syntax color passed in as `color`, and which should win
+    // is a product decision rather than a bug.
     let bgColor: string | undefined;
+    let fontWeight: DecorationStyle["fontWeight"] | undefined;
+    let fontStyle: DecorationStyle["fontStyle"] | undefined;
+    let textDecoration: DecorationStyle["textDecoration"] | undefined;
+    let borderColor: string | undefined;
     for (const bg of bgRanges) {
-      if (bg.startColumn <= segStart && bg.endColumn >= segEnd && bg.style.backgroundColor) {
-        bgColor = bg.style.backgroundColor;
-      }
+      if (bg.startColumn > segStart || bg.endColumn < segEnd) continue;
+      if (bg.style.backgroundColor) bgColor = bg.style.backgroundColor;
+      if (bg.style.fontWeight) fontWeight = bg.style.fontWeight;
+      if (bg.style.fontStyle) fontStyle = bg.style.fontStyle;
+      if (bg.style.textDecoration) textDecoration = bg.style.textDecoration;
+      if (bg.style.borderColor) borderColor = bg.style.borderColor;
     }
 
     const span = document.createElement("span");
     if (color) span.style.color = color;
     if (bgColor) span.style.backgroundColor = bgColor;
+    if (fontWeight) span.style.fontWeight = fontWeight;
+    if (fontStyle) span.style.fontStyle = fontStyle;
+    if (textDecoration) span.style.textDecoration = textDecoration;
+    if (borderColor) span.style.borderColor = borderColor;
     span.textContent = text.slice(segStart, segEnd);
     container.appendChild(span);
   }

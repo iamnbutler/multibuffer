@@ -465,6 +465,105 @@ describe("DomRenderer", () => {
       expect(html).toContain("#ff0000");
     });
 
+    /**
+     * A Decoration is intraline when it stays on one row and does not run to
+     * MAX_SAFE_INTEGER; otherwise DomRenderer treats it as line-level. The two paths
+     * render through completely different code, so each style field needs both.
+     */
+    const styleViewport: Viewport = {
+      startRow: mbRow(0),
+      endRow: mbRow(2),
+      scrollTop: 0,
+      height: 600,
+      width: 800,
+    };
+    const intralineRange = {
+      start: { row: mbRow(0), column: 0 },
+      end: { row: mbRow(0), column: 5 },
+    };
+    const lineRange = {
+      start: { row: mbRow(0), column: 0 },
+      end: { row: mbRow(0), column: Number.MAX_SAFE_INTEGER },
+    };
+
+    function renderWithStyle(style: Decoration["style"], range: Decoration["range"]): string {
+      renderer.mount(container);
+      renderer.setSnapshot(makeSnapshot(["hello", "world"]));
+      const state: RenderState = {
+        viewport: styleViewport,
+        selections: [],
+        decorations: [{ range, style }],
+        excerptHeaders: [],
+        focused: false,
+      };
+      renderer.render(state, ["hello", "world"]);
+      return container.children[0]?.innerHTML ?? "";
+    }
+
+    // Existing fixtures pin every one of these fields to "" or omit them, so no
+    // assertion in the suite could distinguish "applied" from "silently dropped".
+    test("intraline decoration applies fontWeight", () => {
+      expect(renderWithStyle({ fontWeight: "bold" }, intralineRange)).toContain("bold");
+    });
+
+    test("intraline decoration applies fontStyle", () => {
+      expect(renderWithStyle({ fontStyle: "italic" }, intralineRange)).toContain("italic");
+    });
+
+    test("intraline decoration applies textDecoration", () => {
+      expect(renderWithStyle({ textDecoration: "underline" }, intralineRange)).toContain("underline");
+    });
+
+    test("intraline decoration applies borderColor", () => {
+      expect(renderWithStyle({ borderColor: "#00ff00" }, intralineRange)).toContain("#00ff00");
+    });
+
+    test("line-level decoration applies borderColor", () => {
+      expect(renderWithStyle({ borderColor: "#00ff00" }, lineRange)).toContain("#00ff00");
+    });
+
+    // Controls: these already pass on main and must keep passing.
+    test("intraline decoration still applies backgroundColor", () => {
+      expect(renderWithStyle({ backgroundColor: "#ff0000" }, intralineRange)).toContain("#ff0000");
+    });
+
+    test("line-level decoration still applies fontWeight", () => {
+      expect(renderWithStyle({ fontWeight: "bold" }, lineRange)).toContain("bold");
+    });
+
+    test("an undecorated row carries no decoration style", () => {
+      renderer.mount(container);
+      renderer.setSnapshot(makeSnapshot(["hello", "world"]));
+      const decorated: readonly Decoration[] = [
+        { range: intralineRange, style: { borderColor: "#00ff00", fontWeight: "bold" } },
+      ];
+
+      // Row elements are pooled and reused, so a field applied without a matching
+      // reset would leak onto whatever row next lands in the same element.
+      renderer.render(
+        {
+          viewport: styleViewport,
+          selections: [],
+          decorations: decorated,
+          excerptHeaders: [],
+          focused: false,
+        },
+        ["hello", "world"],
+      );
+      renderer.render(
+        {
+          viewport: styleViewport,
+          selections: [],
+          decorations: [],
+          excerptHeaders: [],
+          focused: false,
+        },
+        ["hello", "world"],
+      );
+
+      expect(container.children[0]?.innerHTML ?? "").not.toContain("#00ff00");
+    });
+
     test("render does nothing when not mounted", () => {
       const viewport: Viewport = {
         startRow: mbRow(0),
