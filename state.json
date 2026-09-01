@@ -52,7 +52,11 @@
   "sweep is garbage. `ln -sfn $REPO/node_modules $WT/` + `git clean -e node_modules`.",
   "CI also runs `bun run build:playground` FIRST. CLAUDE.md's build:demo does not exist (#671).",
   "BASELINE ce545ec: 2274 run / 2265 pass / 0 fail; tsc 0; lint 1 info (#760).",
-  "FLAKE buffer.test.ts 'line access is O(1)' ~27% (#673), covered by #611/#667; don't refile.",
+  "7 WALL-CLOCK tests fail under LOAD (6 workers/4 CPU): buffer 'line access O(1)','10k<10ms',",
+  "'snapshot fast'; mb 'excerptAt O(log n)'x2,'lines<1ms'; SlotMap 'stale O(1)'; TileMgr 'Set O(1)'.",
+  "ALWAYS gate MAIN through the SAME harness at the SAME load: 09-01c 111/183 'red' was really 3.",
+  "tsc+lint are LOAD-INDEPENDENT (6s+2s) - trust those; re-run test fails capturing NAMES, filter.",
+  "tests/fuzz/editor.fuzz.test.ts is UNSEEDED fc.assert: fires ~1/183 and blames an innocent PR.",
   "noUncheckedIndexedAccess: arr[i] is T|undefined. Branded rows: num() from tests/helpers.ts."
  ],
  "ci_is_parked_not_absent": [
@@ -63,20 +67,20 @@
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
-  "comment-stripped tier); no CI-failure work until the action_required gate clears.",
   "T9 V13 population is EXACTLY 2: simulateTokenRendering RETIRED 08-31b, buildDecorationMap",
   "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent).",
-  "  No CI-failure work until the action_required gate clears (#757).",
-  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED gated 09-01b. No CI work until #757."
+  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED gated 09-01b. No CI work until #757.",
+  "T6 merge-vs-MAIN: all 183 open PRs merge CLEAN onto ce545ec (09-01c). Dead avenue."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
-  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap."
+  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap.",
+  "_buffers never pruned in multibuffer.ts = ALREADY #761. I nearly refiled it."
  ],
  "next_veins": [
-  "AUTHORITATIVE list is #666 'Future Work' - read it there, this is just the index.",
+  "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
   "V0 doubt the probe; if the real check is affordable DO NOT MODEL IT.",
   "V2 a well-covered file is not a checked file; ask what every fixture holds CONSTANT.",
   "V3 docstring-vs-behaviour (9+). V4 a call site skipping a policy its siblings",
@@ -96,10 +100,11 @@
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
   "V17 6th sibling-parity case: canvas FIXED by my 09-01 PR; webgpu.ts:438 still unsplit.",
-  "NEXT T6: the 25- and 16-member clusters give only 11/8 - is a DIFFERENT same-size set BETTER?",
-  "V2 PAYS OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests.",
   "NEXT T6: 25- and 16-member clusters give only 11/8 - is a DIFFERENT same-size set BETTER?",
-  "V2 PAID OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests."
+  "V2 PAID OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests.",
+  "V23 (09-01c) a NARROWED LOCAL TYPE silently eats fields: the excess-property check fires",
+  "  only on LITERALS. highlighter.ts ColumnDecoration.style={backgroundColor?} dropped 10 of",
+  "  11 DecorationStyle fields dom.ts passed in. GREP locals re-declaring a public subset."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -118,22 +123,16 @@
   "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix in dom.ts vs webgpu.ts)."
  ],
  "this_run_2026-09-01": [
-  "RUN2 (33503165801) T6+T3. Monthly=#787 (Sept). No maintainer checkbox ticked yet.",
-  "T6 CLUSTER SWEEP DONE: a cluster is a CONNECTED COMPONENT, not a mutex group. Exact MIS per",
-  "cluster (25->11, 16->8, rest 1-3) => 75 free + 53 clustered = 128 cands. Gated: 108 MERGED,",
-  "0 conflicts, 2769 pass/0 fail, tsc 0, lint 0, playground OK => 121 of 182 DRAINED (was 71).",
-  "LIST IS IN THE #776 COMMENT (09-01b) - re-read there, not stored here.",
-  "V21 A MAXIMAL SET IS NOT A GOOD SET. MIS optimises COUNT; 4/4 tie-breaks kept the known-bad",
-  "member: #342(breaks containment.test.ts, PRE-EXISTING)>#369, #413>#414, #340>#374, #376>#401.",
-  "#340/#376 fail LINT ALONE. All 4 swaps FREE (same size). Re-pick reps vs evidence THEN gate.",
-  "V22 organizeImports NOT PRESERVED UNDER MERGE: 2 individually-sorted PRs adding an export to",
-  "the same index.ts merge clean into an UNSORTED file. Invisible to pairwise conflict detection",
-  "AND to individual gating. True of any WHOLE-FILE property.",
-  "NEW PAIR #430+#543 = 8 tsc in line-operations.test.ts (helper added/import removed, cf.",
-  "#518+#538). Drop #430; also kills #430's own 2 moveLine fails.",
-  "T3: PR'd branch repo-assist/fix-bracket-match-cross-buffer. findMatchingBracket never calls",
-  "excerptAt => '(' in buffer A matched ')' in buffer B. ALL 30+ fixtures single-excerpt (V2).",
-  "SPLIT rule: PR'd the cross-BUFFER half, left same-buffer non-contiguous to maintainer.",
-  "2/6 red on main, 4 deliberate controls."
+  "RUN3 (33532666153) T6+T10. Monthly=#787, REWRITTEN this run. No maintainer checkbox ticked yet.",
+  "T6: gated ALL 183 open PRs INDIVIDUALLY (merge-tree->commit-tree->checkout -f, ~11s/PR).",
+  "  tsc 0/183; LINT-alone = #373(12) #340(2) #413(2) #449(2 NEW) #376(1). REAL test fails = ONLY",
+  "  #342 #448 #449, all the SAME containment.test.ts toMultiBufferPoint assertion, 2/2 runs each;",
+  "  #369 and #362 CLEAN => of 5 excerpt-shift rivals only those 2 viable. Report = COMMENT ON #757.",
+  "T10: PR'd repo-assist/fix-intraline-decoration-styles. dom.ts routes Decorations down TWO paths",
+  "  (line vs intraline, decided dom.ts:511). _renderAsLine applies 5 style fields; intraline applied",
+  "  ONLY backgroundColor (cause = V23). borderColor honoured by NO renderer. Fixed 4 intraline +",
+  "  borderColor line-level; LEFT decoration.style.color (competes with syntax colour = product",
+  "  call). 5 of 8 new tests red on main, 3 controls. Parity: dom-line 10/11, dom-intraline 5 now,",
+  "  canvas 5, webgpu 1; webgpu.ts:443 still un-split (V17)."
  ]
 }
