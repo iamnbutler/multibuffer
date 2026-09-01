@@ -11,7 +11,12 @@
  */
 
 import type { MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot } from "../multibuffer/types.ts";
-import { sliceTokensToRange } from "./dom.ts";
+import {
+  type ColumnDecoration,
+  isColumnDecoration,
+  sliceColumnDecorations,
+  sliceTokensToRange,
+} from "./dom.ts";
 import type { SyntaxHighlighter, Token } from "./highlighter.ts";
 import {
   calculateContentHeight,
@@ -483,11 +488,30 @@ export class CanvasRenderer implements Renderer {
     ctx.fillStyle = this._resolveColor(this._theme.headerBg);
     ctx.fillRect(0, 0, gutterWidth, this._canvas.height);
 
-    // Build decoration map
+    // Build decoration map: mbRow → decoration style (last decoration wins).
+    // Line-level and column-level (intraline) decorations are kept apart, as in
+    // DomRenderer: flattening them together lets an intraline span — which
+    // carries only a backgroundColor — replace the line-level style and take
+    // the gutter sign and gutter background with it.
     const decorationMap = new Map<number, Partial<DecorationStyle>>();
+    const columnDecorationMap = new Map<number, ColumnDecoration[]>();
     for (const dec of state.decorations) {
-      for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
-        if (dec.style) {
+      if (!dec.style) continue;
+
+      if (isColumnDecoration(dec)) {
+        const row = dec.range.start.row;
+        let list = columnDecorationMap.get(row);
+        if (!list) {
+          list = [];
+          columnDecorationMap.set(row, list);
+        }
+        list.push({
+          startColumn: dec.range.start.column,
+          endColumn: dec.range.end.column,
+          style: dec.style,
+        });
+      } else {
+        for (let r = dec.range.start.row; r <= dec.range.end.row; r++) {
           decorationMap.set(r, dec.style);
         }
       }
@@ -508,6 +532,7 @@ export class CanvasRenderer implements Renderer {
       const lineText = lines[i] ?? "";
       const header = headerMap.get(mbRow);
       const decoration = decorationMap.get(mbRow);
+      const columnDecs = columnDecorationMap.get(mbRow);
 
       // Get excerpt info for syntax highlighting
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
@@ -536,11 +561,22 @@ export class CanvasRenderer implements Renderer {
           charOffset += seg.length;
           const segEnd = charOffset;
           const segTokens = lineTokens ? sliceTokensToRange(lineTokens, segStart, segEnd) : undefined;
+          const segColumnDecs = columnDecs
+            ? sliceColumnDecorations(columnDecs, segStart, segEnd)
+            : undefined;
 
           if (s === 0 && header) {
             this._renderHeader(ctx, visualY, header.path, header.label);
           } else {
-            this._renderLine(ctx, visualY, s === 0 ? gutterText : "", seg, segTokens, decoration);
+            this._renderLine(
+              ctx,
+              visualY,
+              s === 0 ? gutterText : "",
+              seg,
+              segTokens,
+              decoration,
+              segColumnDecs,
+            );
           }
           visualY += lineHeight;
         }
@@ -548,7 +584,7 @@ export class CanvasRenderer implements Renderer {
         if (header) {
           this._renderHeader(ctx, visualY, header.path, header.label);
         } else {
-          this._renderLine(ctx, visualY, gutterText, lineText, lineTokens, decoration);
+          this._renderLine(ctx, visualY, gutterText, lineText, lineTokens, decoration, columnDecs);
         }
         visualY += lineHeight;
       }
@@ -570,6 +606,7 @@ export class CanvasRenderer implements Renderer {
     text: string,
     tokens: Token[] | undefined,
     decoration: Partial<DecorationStyle> | undefined,
+    columnDecorations?: ColumnDecoration[],
   ): void {
     const lineHeight = this._measurements.lineHeight;
     const gutterWidth = this._getEffectiveGutterWidth();
@@ -578,6 +615,25 @@ export class CanvasRenderer implements Renderer {
     if (decoration?.backgroundColor) {
       ctx.fillStyle = this._resolveColor(decoration.backgroundColor);
       ctx.fillRect(gutterWidth, y, this._canvas?.width ?? 0, lineHeight);
+    }
+
+    // Draw intraline backgrounds over the line background, bounded to their
+    // own columns. Fixed-width characters make the span a plain rectangle.
+    if (columnDecorations) {
+      const charWidth = this._charWidth;
+      for (const dec of columnDecorations) {
+        if (!dec.style.backgroundColor) continue;
+        const startColumn = Math.max(0, dec.startColumn);
+        const endColumn = Math.min(text.length, dec.endColumn);
+        if (endColumn <= startColumn) continue;
+        ctx.fillStyle = this._resolveColor(dec.style.backgroundColor);
+        ctx.fillRect(
+          gutterWidth + startColumn * charWidth,
+          y,
+          (endColumn - startColumn) * charWidth,
+          lineHeight,
+        );
+      }
     }
 
     // Draw gutter background
