@@ -58,24 +58,22 @@
  "ci_is_parked_not_absent": [
   "#757: ci.yml runs ARE created on bot PRs but sit at action_required, dispatch 0 jobs and",
   "publish NO check runs => looks identical to 'CI not configured'. A run may show",
-  "conclusion=failure yet dispatch 0 JOBS - CHECK JOB COUNT, not conclusion. Cause unknown.",
-  "T6 has NO CI-failure work until the gate clears. Re-verified 08-29."
+  "conclusion=failure yet dispatch 0 JOBS - CHECK JOB COUNT, not conclusion. Re-verified 08-29."
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
-  "T6: 23 clusters/105 PRs tested individually 08-31c; dup sweeps DONE (15 exact + 2 near +",
   "comment-stripped tier); no CI-failure work until the action_required gate clears.",
   "T9 V13 population is EXACTLY 2: simulateTokenRendering RETIRED 08-31b, buildDecorationMap",
-  "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent)."
+  "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent).",
+  "  No CI-failure work until the action_required gate clears (#757).",
+  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED gated 09-01b. No CI work until #757."
  ],
  "retired_do_not_redo": [
-  "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
-  "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf;",
-  "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
-  "_deleteLine multi-row selection (fixed 08-28).",
-  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens if/else => no",
-  "overlap (docstring :187 HOLDS); _collectTokens = LEAF nodes only."
+  "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
+  "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
+  "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
+  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #666 'Future Work' - read it there, this is just the index.",
@@ -98,43 +96,44 @@
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
   "V17 6th sibling-parity case: canvas FIXED by my 09-01 PR; webgpu.ts:438 still unsplit.",
-  "NEXT: decoration.test.ts buildDecorationMap = LAST modelled test; EXTEND #737, no 3rd file."
+  "NEXT T6: the 25- and 16-member clusters give only 11/8 - is a DIFFERENT same-size set BETTER?",
+  "V2 PAYS OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests.",
+  "NEXT T6: 25- and 16-member clusters give only 11/8 - is a DIFFERENT same-size set BETTER?",
+  "V2 PAID OFF AGAIN (bracket-match): ask what the fixture HELPER holds constant, not the tests."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
   "conflict). Exact, ~30ms, no worktree. Use per-pair `git merge-base A B`, not a fixed base.",
-  "TRAP, hit 3x: build each PR's file set from **ALL CHANGED PATHS**, not src/+tests/, and",
-  "compare ALL 181 open PRs, not RA-only. Map reproduces exactly: 2426 sharing pairs, 124",
-  "conflicting, 23 clusters/105 PRs, largest 25. Suite is only 2.6s - test freely.",
+  "TRAP, hit 3x: build each PR's file set from ALL CHANGED PATHS, not src/+tests/, and compare",
+  "ALL open PRs, not RA-only. 09-01b map: 1073 sharing pairs, 127 conflicting, 23 clusters/107.",
   "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
  "canvas_harness_RECIPE": [
-  "CanvasRenderer IS mountable under happy-dom: patch win.HTMLCanvasElement.prototype.",
-  "getContext -> recording stub + define OffscreenCanvas (canvas.ts has its OWN GlyphAtlas,",
-  "NOT src/renderer/glyph-atlas.ts), getComputedStyle, requestAnimationFrame. Viewport needs",
-  "`width`; ALSO stub clientWidth/Height on HTMLElement.prototype or the canvas is 0px wide",
-  "and every background fillRect has width 0. Glyph = drawImage(atlas,..,destX=args[4]) then",
-  "fillRect tint; col=(destX-gutter)/cw. SPACES/TABS PAINT NO GLYPH. Live: my",
-  "tests/renderer/canvas-decoration.test.ts + #783 + #689. V18 a diff hash MUST include the",
-  "FILE PATH (#691 vs #692 = same fix in dom.ts vs webgpu.ts = sibling-parity, NOT a dup)."
+  "CanvasRenderer IS mountable under happy-dom: patch win.HTMLCanvasElement.prototype.getContext",
+  "-> recording stub + define OffscreenCanvas (canvas.ts has its OWN GlyphAtlas), getComputedStyle,",
+  "requestAnimationFrame. Viewport needs `width`; ALSO stub clientWidth/Height on",
+  "HTMLElement.prototype or the canvas is 0px and every background fillRect has width 0.",
+  "Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
+  "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689.",
+  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix in dom.ts vs webgpu.ts)."
  ],
  "this_run_2026-09-01": [
-  "RUN (33472015918) T6+T3. Closed #666, opened the SEPT monthly issue = new authority.",
-  "T6 NEW VEIN, DONE: gated the 76 CONFLICT-FREE PRs (nobody ever had - #776 only proved they",
-  "MERGE). 67 tested (dropped 1 of each of 9 dup pairs). ALL 67 INDIVIDUALLY GREEN (#523/#552",
-  "1-fail = #673 flake). MERGED ALL 67: 0 CONFLICTS but 12 fail + 2 tsc. 4 culprit pairs, all",
-  "conflict-free: #518+#538 (2f+2tsc, a getText helper one adds/other deletes), #518+#728,",
-  "#691+#779 (charWidth), #743+#745 (7f, DIFFERENT FILES). Drop #518,#779,#743 -> 64 green on",
-  "test+tsc; then #373 ALONE fails LINT (12 bare `as`) -> FINAL 63 GREEN ON ALL 4 GATES,",
-  "drains 71 open PRs in one merge. Posted on #776.",
-  "V19 CONFLICT-FREE != GREEN. Gate the COMBINED tree, never just the members.",
-  "V20 happy-dom SHARES HTMLCanvasElement.prototype ACROSS Window instances: a getContext",
-  "patch never restored leaks PROCESS-WIDE. CANARY = glyph-atlas.test.ts skip count (3 = clean,",
-  "0 = something leaked; it probes OffscreenCanvas + createElement at MODULE LOAD). #783 has",
-  "this bug. Save/restore EVERY property incl. shared prototypes.",
-  "T3: PR'd #736 (canvas dropped the diff gutter sign; dom.ts was the ORACLE) - 4/6 new tests",
-  "red on main, 2 are deliberate controls. V17 is now DONE for canvas; webgpu still has no",
-  "gutter-sign support at all, so that half is a FEATURE decision, left to the maintainer.",
-  "NEXT T6 VEIN: sweep the CLUSTERED 105 the same way - individually green != green together."
+  "RUN2 (33503165801) T6+T3. Monthly=#787 (Sept). No maintainer checkbox ticked yet.",
+  "T6 CLUSTER SWEEP DONE: a cluster is a CONNECTED COMPONENT, not a mutex group. Exact MIS per",
+  "cluster (25->11, 16->8, rest 1-3) => 75 free + 53 clustered = 128 cands. Gated: 108 MERGED,",
+  "0 conflicts, 2769 pass/0 fail, tsc 0, lint 0, playground OK => 121 of 182 DRAINED (was 71).",
+  "LIST IS IN THE #776 COMMENT (09-01b) - re-read there, not stored here.",
+  "V21 A MAXIMAL SET IS NOT A GOOD SET. MIS optimises COUNT; 4/4 tie-breaks kept the known-bad",
+  "member: #342(breaks containment.test.ts, PRE-EXISTING)>#369, #413>#414, #340>#374, #376>#401.",
+  "#340/#376 fail LINT ALONE. All 4 swaps FREE (same size). Re-pick reps vs evidence THEN gate.",
+  "V22 organizeImports NOT PRESERVED UNDER MERGE: 2 individually-sorted PRs adding an export to",
+  "the same index.ts merge clean into an UNSORTED file. Invisible to pairwise conflict detection",
+  "AND to individual gating. True of any WHOLE-FILE property.",
+  "NEW PAIR #430+#543 = 8 tsc in line-operations.test.ts (helper added/import removed, cf.",
+  "#518+#538). Drop #430; also kills #430's own 2 moveLine fails.",
+  "T3: PR'd branch repo-assist/fix-bracket-match-cross-buffer. findMatchingBracket never calls",
+  "excerptAt => '(' in buffer A matched ')' in buffer B. ALL 30+ fixtures single-excerpt (V2).",
+  "SPLIT rule: PR'd the cross-BUFFER half, left same-buffer non-contiguous to maintainer.",
+  "2/6 red on main, 4 deliberate controls."
  ]
 }
