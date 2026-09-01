@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import { createFileNavigator } from "../../src/multibuffer/file-navigator.ts";
+import { createMultiBuffer } from "../../src/multibuffer/multibuffer.ts";
 import { keysEqual } from "../../src/multibuffer/slot_map.ts";
 import { mbRow } from "../helpers.ts";
 
