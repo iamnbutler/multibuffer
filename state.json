@@ -1,6 +1,7 @@
 {
  "READ_FIRST": [
-  "AUTHORITATIVE STATE = the OPEN Monthly issue (Aug=#666). Read ALL of it every run.",
+  "AUTHORITATIVE STATE = the OPEN Monthly issue (Sept, opened 09-01; #666 Aug is CLOSED).",
+  "NEW MONTH => close the old one AND create the new one (update_issue cap is 1/run).",
   "08-30b: I DESTROYED #666's body. issue_read TRUNCATES a big body to the string",
   "'[Content too large, saved to file: X.json]' and THAT FILE DOES NOT EXIST on the runner.",
   "Retyping what you read then writes the placeholder. NEVER write a body starting '[Content'.",
@@ -46,7 +47,9 @@
   "react-dom NOT installed. Edit replace_all matches INDENTATION; re-probe after edits."
  ],
  "gates": [
-  "ALWAYS run test + typecheck + lint (bun test does NOT typecheck).",
+  "ALWAYS run test + typecheck + lint (a test+tsc-only sweep MISSED #373's 12 bare `as`).",
+  "WORKTREE SWEEPS: `git worktree add` has NO node_modules => EVERY test fails and the whole",
+  "sweep is garbage. `ln -sfn $REPO/node_modules $WT/` + `git clean -e node_modules`.",
   "CI also runs `bun run build:playground` FIRST. CLAUDE.md's build:demo does not exist (#671).",
   "BASELINE ce545ec: 2274 run / 2265 pass / 0 fail; tsc 0; lint 1 info (#760).",
   "FLAKE buffer.test.ts 'line access is O(1)' ~27% (#673), covered by #611/#667; don't refile.",
@@ -61,25 +64,23 @@
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
   "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
-  "T6 CLUSTER PROGRAMME COMPLETE 08-31c: all 23 clusters / 105 PRs tested, none broken.",
-  "No T6 CI-failure work until the action_required gate clears.",
-  "T9 V13 population is EXACTLY 2 (structural sweep: fn in tests/ w/ loop >=12 lines):",
-  "simulateTokenRendering RETIRED 08-31b; buildDecorationMap is the last. react hooks",
-  "untestable (react-dom absent). Both dup sweeps + all clusters DONE - T6 needs a NEW vein."
+  "T6: 23 clusters/105 PRs tested individually 08-31c; dup sweeps DONE (15 exact + 2 near +",
+  "comment-stripped tier); no CI-failure work until the action_required gate clears.",
+  "T9 V13 population is EXACTLY 2: simulateTokenRendering RETIRED 08-31b, buildDecorationMap",
+  "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent)."
  ],
  "retired_do_not_redo": [
   "Full list in #666. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf;",
   "uncalled-helper sweep; Math.min sweep; multi-cursor copy order; tile-map (#758);",
   "_deleteLine multi-row selection (fixed 08-28).",
-  "08-31 negatives: glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens if/else => no overlap (docstring :187 HOLDS); _collectTokens = LEAF nodes only; dom.ts isColumnDecoration precedence odd but CLASSIFIES CORRECTLY."
+  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens if/else => no",
+  "overlap (docstring :187 HOLDS); _collectTokens = LEAF nodes only."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #666 'Future Work' - read it there, this is just the index.",
-  "V0 doubt the probe; if the real check is affordable DO NOT MODEL IT. And an exact",
-  "  test behind a WRONG COMPARISON SET is still wrong - ask what the filter excludes.",
-  "V2 a well-covered file is not a checked file (9 hits); ask what every fixture holds",
-  "  CONSTANT, and what NO test in the repo does at all.",
+  "V0 doubt the probe; if the real check is affordable DO NOT MODEL IT.",
+  "V2 a well-covered file is not a checked file; ask what every fixture holds CONSTANT.",
   "V3 docstring-vs-behaviour (9+). V4 a call site skipping a policy its siblings",
   "  implement - RICHEST, 5 hits; the sibling that is already right is the ORACLE.",
   "V8 two PRs textually independent + semantically incompatible: ask what a PR takes",
@@ -96,8 +97,7 @@
   "V15 (08-31b) my fixtures hid 2 of 5 mutations: EVERY gap was whitespace, which paints",
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
-  "V17 canvas.ts:487 + webgpu.ts:438 decorationMap has NO line/column split, dom.ts:507 does",
-  "  => column-bounded dec paints a WHOLE ROW. ISSUE not PR. 6th sibling-parity case.",
+  "V17 6th sibling-parity case: canvas FIXED by my 09-01 PR; webgpu.ts:438 still unsplit.",
   "NEXT: decoration.test.ts buildDecorationMap = LAST modelled test; EXTEND #737, no 3rd file."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
@@ -108,31 +108,33 @@
   "conflicting, 23 clusters/105 PRs, largest 25. Suite is only 2.6s - test freely.",
   "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
- "this_run_2026-08-30": [
-  "DIGEST: an all-green cluster = COMPETING DESIGNS, not breakage - deliverable flips from",
-  "'which is red' to 'which one'; ORACLE = WHAT MAIN ALREADY SHIPS, 2nd = maintainer's own",
-  "stale review. Post on the 0-comment PR. Full detail in #666 Run History."
- ],
- "this_run_2026-08-31": [
-  "RUN a (33360602138) T9+T3 -> #782 parity PR; #364 vs #537 head-to-head. Detail in #666.",
-  "RUN c (33447792188) T6+T2. T6: c9-c23 (34 PRs) each merged onto main = ALL GREEN, 0 tsc.",
-  "23/23 clusters now done. NEW DUP TIER: hash the diff with COMMENT and blank lines",
-  "STRIPPED -> #387==#707, #371==#459 (differ ONLY in comment wording). Also close #340",
-  "(superseded by owner's #374) and #314 (by #439). Closable-unread now 21.",
-  "V18 A DIFF HASH MUST INCLUDE THE FILE PATH: path-blind hashing called #691==#692 a dup,",
-  "but it is the SAME one-line fix in dom.ts vs webgpu.ts - opposite of a dup, it is the",
-  "sibling-parity pattern. Re-ran path-aware. OLDBASE 4-group #326/#335/#339/#341 shares 297",
-  "lines because they share a REVERT of intervening work, not a change (memory caution held).",
-  "T2: #781 tree leak has a TWIN - InjectionHighlighter.parseBuffer drops primary tree + ALL",
-  "injection subtrees (1+N per parse) and that class has NO deleteBuffer at all; deleteBuffer",
-  "is also absent from the SyntaxHighlighter interface. 2nd reparse site = highlight-worker.ts:94.",
-  "RUN b (33398246060) T6+T9: retired canvas.test.ts simulateTokenRendering -> new",
-  "canvas-token-rendering.test.ts on branch repo-assist/test-canvas-token-rendering.",
+ "canvas_harness_RECIPE": [
   "CanvasRenderer IS mountable under happy-dom: patch win.HTMLCanvasElement.prototype.",
   "getContext -> recording stub + define OffscreenCanvas (canvas.ts has its OWN GlyphAtlas,",
   "NOT src/renderer/glyph-atlas.ts), getComputedStyle, requestAnimationFrame. Viewport needs",
-  "`width`. Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
-  "SPACES/TABS PAINT NO GLYPH (pen advances). #689 has an equal harness - REUSE, don't refile.",
-  "T6: ALL-PATHS dup sweep DONE: 15 EXACT + 2 near (413~414, 425~502), all in #666."
+  "`width`; ALSO stub clientWidth/Height on HTMLElement.prototype or the canvas is 0px wide",
+  "and every background fillRect has width 0. Glyph = drawImage(atlas,..,destX=args[4]) then",
+  "fillRect tint; col=(destX-gutter)/cw. SPACES/TABS PAINT NO GLYPH. Live: my",
+  "tests/renderer/canvas-decoration.test.ts + #783 + #689. V18 a diff hash MUST include the",
+  "FILE PATH (#691 vs #692 = same fix in dom.ts vs webgpu.ts = sibling-parity, NOT a dup)."
+ ],
+ "this_run_2026-09-01": [
+  "RUN (33472015918) T6+T3. Closed #666, opened the SEPT monthly issue = new authority.",
+  "T6 NEW VEIN, DONE: gated the 76 CONFLICT-FREE PRs (nobody ever had - #776 only proved they",
+  "MERGE). 67 tested (dropped 1 of each of 9 dup pairs). ALL 67 INDIVIDUALLY GREEN (#523/#552",
+  "1-fail = #673 flake). MERGED ALL 67: 0 CONFLICTS but 12 fail + 2 tsc. 4 culprit pairs, all",
+  "conflict-free: #518+#538 (2f+2tsc, a getText helper one adds/other deletes), #518+#728,",
+  "#691+#779 (charWidth), #743+#745 (7f, DIFFERENT FILES). Drop #518,#779,#743 -> 64 green on",
+  "test+tsc; then #373 ALONE fails LINT (12 bare `as`) -> FINAL 63 GREEN ON ALL 4 GATES,",
+  "drains 71 open PRs in one merge. Posted on #776.",
+  "V19 CONFLICT-FREE != GREEN. Gate the COMBINED tree, never just the members.",
+  "V20 happy-dom SHARES HTMLCanvasElement.prototype ACROSS Window instances: a getContext",
+  "patch never restored leaks PROCESS-WIDE. CANARY = glyph-atlas.test.ts skip count (3 = clean,",
+  "0 = something leaked; it probes OffscreenCanvas + createElement at MODULE LOAD). #783 has",
+  "this bug. Save/restore EVERY property incl. shared prototypes.",
+  "T3: PR'd #736 (canvas dropped the diff gutter sign; dom.ts was the ORACLE) - 4/6 new tests",
+  "red on main, 2 are deliberate controls. V17 is now DONE for canvas; webgpu still has no",
+  "gutter-sign support at all, so that half is a FEATURE decision, left to the maintainer.",
+  "NEXT T6 VEIN: sweep the CLUSTERED 105 the same way - individually green != green together."
  ]
 }
