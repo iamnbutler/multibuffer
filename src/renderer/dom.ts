@@ -54,15 +54,37 @@ export function sliceTokensToRange(tokens: Token[], segStart: number, segEnd: nu
   return result;
 }
 
+/** A decoration confined to a column span within a single row (intraline). */
+export interface ColumnDecoration {
+  startColumn: number;
+  endColumn: number;
+  style: Partial<DecorationStyle>;
+}
+
+/**
+ * Classify a decoration as column-level (intraline) rather than line-level.
+ *
+ * A line-level decoration covers whole rows: it starts at column 0 and runs to
+ * `Number.MAX_SAFE_INTEGER`. Anything else that begins and ends on the same row
+ * bounds a column span inside that row.
+ */
+export function isColumnDecoration(decoration: Decoration): boolean {
+  const { start, end } = decoration.range;
+  return start.row === end.row && (start.column !== 0 || end.column !== Number.MAX_SAFE_INTEGER);
+}
+
 /**
  * Slice column decorations to a segment range, adjusting offsets to be segment-relative.
+ *
+ * Exported so `CanvasRenderer` can apply the identical slicing to soft-wrapped
+ * segments; both renderers must agree on which columns a decoration covers.
  */
-function sliceColumnDecorations(
-  decorations: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>,
+export function sliceColumnDecorations(
+  decorations: ColumnDecoration[],
   segStart: number,
   segEnd: number,
-): Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> | undefined {
-  const result: Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }> = [];
+): ColumnDecoration[] | undefined {
+  const result: ColumnDecoration[] = [];
   for (const dec of decorations) {
     if (dec.endColumn <= segStart || dec.startColumn >= segEnd) continue;
     result.push({
@@ -505,15 +527,11 @@ export class DomRenderer implements Renderer {
     // Build decoration lookup: mbRow → decoration style (last decoration wins)
     // Separate line-level decorations from column-level (intraline) decorations
     const decorationMap = new Map<number, Partial<DecorationStyle>>();
-    const columnDecorationMap = new Map<number, Array<{ startColumn: number; endColumn: number; style: Partial<DecorationStyle> }>>();
+    const columnDecorationMap = new Map<number, ColumnDecoration[]>();
     for (const dec of decorations) {
       if (!dec.style) continue;
-      const isColumnDecoration =
-        dec.range.start.row === dec.range.end.row &&
-        dec.range.start.column !== 0 ||
-        dec.range.end.column !== Number.MAX_SAFE_INTEGER;
 
-      if (isColumnDecoration && dec.range.start.row === dec.range.end.row) {
+      if (isColumnDecoration(dec)) {
         // Column-level (intraline) decoration
         const row = dec.range.start.row;
         if (row >= viewport.startRow && row < viewport.endRow) {
