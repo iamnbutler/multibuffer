@@ -78,7 +78,9 @@
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
   "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap.",
-  "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix."
+  "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
+  "09-02: V17 webgpu.ts:438 CLOSED - it feeds decoration?.color ONLY (no bg/gutter painted),",
+  "  untestable (no GPU, no test file); in #787 Future Work. Modelled-test vein now EMPTY."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
@@ -93,12 +95,9 @@
   "V10 (08-30) fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
   "V12 a docstring/TEST can pin the WRONG side: #704 pins the fix (PR ok), #695 endorses",
   "  the bug (hand over). ASK WHICH SIDE THE ORACLE IS ON before trusting it.",
-  "  src does. Confirmed: decoration.test.ts buildDecorationMap (STALE - predates the",
-  "  line/column split, so #737's new file does NOT retire it); canvas.test.ts",
   "V15 (08-31b) my fixtures hid 2 of 5 mutations: EVERY gap was whitespace, which paints",
   "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
-  "V17 6th sibling-parity case: canvas FIXED by my 09-01 PR; webgpu.ts:438 still unsplit.",
   "V23 (09-01c) a NARROWED LOCAL TYPE silently eats fields: the excess-property check fires",
   "  only on LITERALS. highlighter.ts ColumnDecoration.style={backgroundColor?} dropped 10 of",
   "  11 DecorationStyle fields dom.ts passed in. GREP locals re-declaring a public subset.",
@@ -120,18 +119,20 @@
   "Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
   "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
  ],
- "this_run_2026-09-01": [
-  "RUN4 (33558491765) T6+T2. Monthly=#787 REWRITTEN. No maintainer checkbox ticked yet.",
-  "REVERSAL: I had said '#362 and #369 are the clean excerpt-shift picks'. #362 IS A NO-OP",
-  "  for the bug (its edit-before-excerpt branch is guarded lineDelta===0) - green because it",
-  "  PRESERVES the drift. #369 fixes it AND already rewrites containment.test.ts:241 to 25.",
-  "  So the red on #342/#448/#449 is a STALE ORACLE, not a regression. Told #757 + #449.",
-  "T6: PUSHED lint fixes to #413 (2 noNonNullAssertion -> `if (!x) throw`, the repo idiom;",
-  "  NOT ?., which weakens the assert) and #340 (biome --fix import sort on its 2 files).",
-  "  Both now lint 1-info / tsc 0 / tests green. #373 #376 are NOT [Repo Assist]-titled =>",
-  "  push_to_pull_request_branch REFUSES them; only closing is available.",
-  "T2: commented #792. diff() normalises ''->[] but diffLines() does NOT, and an empty",
-  "  buffer's lines() is ['']: an n===0 fast path MISSES diffLines, which already emits a",
-  "  phantom delete ''. Measured 4k added file 117ms vs 0.81ms control."
+ "this_run_2026-09-02": [
+  "RUN5 (33590783929) T6+T3. #787 rewritten (11.2 KB). Maintainer has ticked NOTHING yet.",
+  "T6 SWEEP tsc+lint on ALL 162 RA PRs: 159 GREEN / 3 RED. Squares with 09-01's '5 lint':",
+  "  #373 #376 #413 #340 #449; I fixed 413/340, 373/376 aren't RA-titled => only #449 left",
+  "  (2 noNonNullAssertion, multibuffer.test.ts:1612-13). NOT pushed - #449 is on the CLOSE",
+  "  list. #311 #314 tsc=8 but merge-base 51f94a3 fails IDENTICALLY (src/react Theme) =>",
+  "  stale base, NOT regression; both added to the close line in #787.",
+  "T6 PUSHED 2nd commit to #737: retired decoration.test.ts's modelled buildDecorationMap.",
+  "  Its OWN 1st fixture (same row, col 0->10) is INTRALINE for real dom.ts => no row bg,",
+  "  while the copy claimed 'painted row'. Moved its 4 unique cases (viewport exclude, clip",
+  "  at edge, last-wins, no-style skipped) to the real renderer + col-0 case. -7/+5 tests.",
+  "  2280 run 0 fail, tsc 0, lint 1 info. All 5 mutation-verified.",
+  "T3 = NO PR, and that IS the result. #536 -> #537 AND #364; #512 -> #513; both threads",
+  "  ALREADY carry my linking comments (do NOT re-comment). #674/#761 defer a contract",
+  "  choice; #695's docstring pins the bug. Only gap is PR-side: no `Closes #`."
  ]
 }
