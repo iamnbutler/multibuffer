@@ -116,6 +116,12 @@ function moveVisualRow(
     const target = resolveTargetVisualRow(snapshot, wrapMap, currentVisualRow + 1, visualColInSegment, lineCount);
     // Skip trailing newline rows (excerpt headers) just like moveCharacter does
     const skippedRow = skipTrailingNewlineRow(snapshot, target.row, "down", lineCount);
+    if (skippedRow < target.row) {
+      // A separator row on the last excerpt has no row after it, so the skip
+      // steps backwards. There is nothing below the cursor — stay put rather
+      // than jumping back to the first segment of the row we came from.
+      return current;
+    }
     if (skippedRow !== target.row) {
       // Re-resolve on the skipped-to row so visualColInSegment is applied correctly
       const skippedFirstVisualRow = wrapMap.bufferRowToFirstVisualRow(skippedRow);
@@ -473,9 +479,13 @@ function skipTrailingNewlineRow(
     // Skip forward to the first row of the next excerpt.
     // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
     const next = excerpt.endRow as MultiBufferRow;
-    return next < lineCount ? next : row;
+    if (next < lineCount) return next;
+    // This is the last excerpt, so there is no next row to skip forward to.
+    // Fall through to the backward fallback rather than leaving the cursor
+    // parked on the separator row.
   }
-  // direction === "up": skip back to the last content row of the current excerpt.
+  // direction === "up", or "down" with no row after the separator:
+  // skip back to the last content row of the current excerpt.
   // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic
   return row > 0 ? ((row - 1) as MultiBufferRow) : row;
 }
