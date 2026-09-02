@@ -1608,8 +1608,9 @@ describe("MultiBuffer - _refreshExcerptsForBuffer row shift", () => {
     const snap = mb.snapshot();
     const excerptB = snap.excerpts[1];
     expect(excerptB).toBeDefined();
+    if (!excerptB) return;
     // Primary range should have been shifted by +1 row
-    expect(num(excerptB!.range.primary.start.row)).toBe(5);
-    expect(num(excerptB!.range.primary.end.row)).toBe(6);
+    expect(num(excerptB.range.primary.start.row)).toBe(5);
+    expect(num(excerptB.range.primary.end.row)).toBe(6);
   });
 });
