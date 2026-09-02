@@ -277,6 +277,61 @@ describe("Cursor - Vertical Movement Across Excerpt Headers", () => {
   });
 });
 
+describe("Cursor - Trailing-Newline Row on the Final Excerpt", () => {
+  // When the *last* excerpt has a trailing newline, the separator row is the last
+  // row of the whole multibuffer, so there is no following row to skip forward to.
+  // The cursor must not be left parked on it.
+  //
+  // Excerpt: "aaa\nbbb\nccc" → rows 0, 1, 2 (content) + row 3 (trailing newline/header)
+  function setupTerminalHeader(text = "aaa\nbbb\nccc") {
+    const buf = createBuffer(createBufferId(), text);
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, text.split("\n").length), { hasTrailingNewline: true });
+    return mb;
+  }
+
+  test("move down from the last content row stays put instead of landing on the header", () => {
+    const snap = setupTerminalHeader().snapshot();
+    // Row 2 is the last content row; row 3 is the header and the final row.
+    expectPoint(moveCursor(snap, mbPoint(2, 0), "down", "character"), 2, 0);
+  });
+
+  test("move down from the last content row preserves the column", () => {
+    const snap = setupTerminalHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(2, 2), "down", "character"), 2, 2);
+  });
+
+  test("move down within the excerpt still advances normally", () => {
+    const snap = setupTerminalHeader().snapshot();
+    expectPoint(moveCursor(snap, mbPoint(0, 1), "down", "character"), 1, 1);
+  });
+
+  test("a header that is not the final row still skips forward to the next excerpt", () => {
+    // Guard: the fallback must only apply when there is genuinely no row after
+    // the separator. Excerpt 1 rows 0–2, header row 3, excerpt 2 rows 4–6.
+    const buf1 = createBuffer(createBufferId(), "aaa\nbbb\nccc");
+    const buf2 = createBuffer(createBufferId(), "xxx\nyyy\nzzz");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf1, excerptRange(0, 3), { hasTrailingNewline: true });
+    mb.addExcerpt(buf2, excerptRange(0, 3));
+    expectPoint(moveCursor(mb.snapshot(), mbPoint(2, 1), "down", "character"), 4, 1);
+  });
+
+  test("moveCursorVisual down from the last wrapped segment stays put", () => {
+    // Row 2 is 60 chars wide and wraps into 3 segments at width 20. Moving down
+    // from the final segment must not jump back to the start of the same row.
+    const snap = setupTerminalHeader(`short\nshort\n${"X".repeat(60)}`).snapshot();
+    const wrapMap = new WrapMap(snap, 20);
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 55), "down", "character", wrapMap), 2, 55);
+  });
+
+  test("moveCursorVisual down between segments of the last row still advances", () => {
+    const snap = setupTerminalHeader(`short\nshort\n${"X".repeat(60)}`).snapshot();
+    const wrapMap = new WrapMap(snap, 20);
+    expectPoint(moveCursorVisual(snap, mbPoint(2, 25), "down", "character", wrapMap), 2, 45);
+  });
+});
+
 describe("Cursor - Buffer Granularity", () => {
   test("move to buffer start", () => {
     const snap = setup("AAA\nBBB\nCCC").snapshot();
