@@ -164,11 +164,16 @@ describe("DomRenderer line-level decorations", () => {
    * third element. Indexed traversal is used rather than a selector because
    * happy-dom does not reliably support attribute selectors here.
    */
-  function renderRows(lines: string[], decorations: Decoration[]): HTMLElement[] {
+  function renderRows(
+    lines: string[],
+    decorations: Decoration[],
+    view: { scrollTop?: number; height?: number } = {},
+  ): HTMLElement[] {
+    const { scrollTop = 0, height = 600 } = view;
     renderer.mount(container);
     renderer.setSnapshot(makeSnapshot(lines));
 
-    const viewport = createViewport(0, 600, 800, DEFAULT_MEASUREMENTS, lines.length);
+    const viewport = createViewport(scrollTop, height, 800, DEFAULT_MEASUREMENTS, lines.length);
     const state: RenderState = {
       viewport,
       selections: [],
@@ -273,5 +278,79 @@ describe("DomRenderer line-level decorations", () => {
     );
 
     expect(rows[1]?.style.background).not.toBe("rgba(255, 0, 0, 0.25)");
+  });
+
+  test("a same-row decoration starting at column 0 but stopping short is still intraline", () => {
+    // The classification turns on the *end* column, not the start: a range that
+    // begins at column 0 but ends before the line-end sentinel is intraline, so
+    // it must not paint the row background. This is the case a row-mapping
+    // model gets wrong, because column 0 reads as "whole line" to the eye.
+    const rows = renderRows(
+      ["alpha", "bravo", "charlie"],
+      [columnDecoration(1, 0, 10, { backgroundColor: "rgba(255, 0, 0, 0.25)" })],
+    );
+
+    expect(rows[1]?.style.background).not.toBe("rgba(255, 0, 0, 0.25)");
+  });
+
+  test("a decoration outside the viewport paints no rendered row", () => {
+    const lines = Array.from({ length: 100 }, (_, i) => `line ${i}`);
+    const rows = renderRows(lines, [lineDecoration(90, 90, { backgroundColor: "rgb(9, 9, 9)" })]);
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.style.background).not.toBe("rgb(9, 9, 9)");
+    }
+  });
+
+  test("a decoration straddling the viewport start paints only its rendered rows", () => {
+    const lines = Array.from({ length: 100 }, (_, i) => `line ${i}`);
+    const scrollTop = 800;
+    const height = 200;
+    // Derived rather than hard-coded: the renderer also draws overdraw rows.
+    const viewport = createViewport(scrollTop, height, 800, DEFAULT_MEASUREMENTS, lines.length);
+    const firstRendered = viewport.startRow;
+
+    // Starts three rows above the first rendered row and ends two rows into it.
+    const rows = renderRows(
+      lines,
+      [lineDecoration(firstRendered - 3, firstRendered + 2, { backgroundColor: "rgb(4, 5, 6)" })],
+      { scrollTop, height },
+    );
+
+    expect(rows[0]?.style.background).toBe("rgb(4, 5, 6)");
+    expect(rows[2]?.style.background).toBe("rgb(4, 5, 6)");
+    expect(rows[3]?.style.background).not.toBe("rgb(4, 5, 6)");
+  });
+
+  test("when two line-level decorations cover a row, the last one wins", () => {
+    const rows = renderRows(
+      ["alpha", "bravo", "charlie"],
+      [
+        lineDecoration(1, 1, { backgroundColor: "rgb(1, 1, 1)" }),
+        lineDecoration(1, 1, { backgroundColor: "rgb(2, 2, 2)" }),
+      ],
+    );
+
+    expect(rows[1]?.style.background).toBe("rgb(2, 2, 2)");
+  });
+
+  test("a decoration carrying no style leaves the row untouched", () => {
+    // Compared against a sibling row in the same render: mount() is called once
+    // per renderRows(), so a second render would not be a valid control.
+    const rows = renderRows(
+      ["alpha", "bravo", "charlie"],
+      [
+        // biome-ignore lint/plugin/no-type-assertion: expect: decoration literal for a test fixture
+        {
+          range: {
+            start: { row: mbRow(1), column: 0 },
+            end: { row: mbRow(1), column: Number.MAX_SAFE_INTEGER },
+          },
+        } as unknown as Decoration,
+      ],
+    );
+
+    expect(rows[1]?.style.background).toBe(rows[0]?.style.background);
   });
 });
