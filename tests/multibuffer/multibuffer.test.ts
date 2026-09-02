@@ -1542,3 +1542,75 @@ describe("moveExcerpt", () => {
     expect(mb.lineCount).toBe(totalBefore);
   });
 });
+
+describe("MultiBuffer - _refreshExcerptsForBuffer row shift", () => {
+  test("inserting lines in first excerpt shifts rows of later excerpt from same buffer", () => {
+    // Buffer: line0, line1, line2, line3, line4
+    // Excerpt A: rows 0-2 (line0, line1)
+    // Excerpt B: rows 3-5 (line3, line4)
+    // Edit: insert a new line after line1 inside excerpt A
+    // Expected: excerpt B should still show line3 and line4 (shifted down by 1)
+    const buf = createBuffer(createBufferId(), "line0\nline1\nline2\nline3\nline4");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    mb.addExcerpt(buf, excerptRange(3, 5));
+
+    expect(mb.lineCount).toBe(4);
+
+    // Insert "\nnew" at end of line1 (row 1, col 5), adding a new line inside excerpt A
+    mb.edit(mbPoint(1, 5), mbPoint(1, 5), "\nnew");
+
+    const snap = mb.snapshot();
+    // Excerpt A now has 3 lines (line0, line1, new), excerpt B still has 2 (line3, line4)
+    expect(snap.lineCount).toBe(5);
+    // Excerpt B should start at multibuffer row 3 after the shift
+    const lines = snap.lines(mbRow(3), mbRow(5));
+    expect(lines[0]).toBe("line3");
+    expect(lines[1]).toBe("line4");
+  });
+
+  test("deleting lines in first excerpt shifts rows of later excerpt from same buffer", () => {
+    // Buffer: a, b, c, d, e, f
+    // Excerpt A: rows 0-3 (a, b, c)
+    // Excerpt B: rows 4-6 (e, f)
+    // Edit: delete line at row 1 (b) inside excerpt A
+    // Expected: excerpt B should still show e and f
+    const buf = createBuffer(createBufferId(), "a\nb\nc\nd\ne\nf");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 3));
+    mb.addExcerpt(buf, excerptRange(4, 6));
+
+    // Delete "b\n" (row 1, col 0 → row 2, col 0)
+    mb.edit(mbPoint(1, 0), mbPoint(2, 0), "");
+
+    const snap = mb.snapshot();
+    // Excerpt A now has 2 lines (a, c); excerpt B still 2 (e, f)
+    expect(snap.lineCount).toBe(4);
+    const lines = snap.lines(mbRow(2), mbRow(4));
+    expect(lines[0]).toBe("e");
+    expect(lines[1]).toBe("f");
+  });
+
+  test("inserting lines before excerpt shifts primary range rows of later excerpt", () => {
+    // Buffer: line0, line1, line2, line3, line4
+    // Excerpt A: context rows 0-2, primary rows 0-2
+    // Excerpt B: context rows 3-5, primary rows 4-5  (primary is a subset of context)
+    // Edit: insert a new line after line1 inside excerpt A (row 1)
+    // Expected: excerpt B primary range should shift from rows 4-5 to rows 5-6
+    const buf = createBuffer(createBufferId(), "line0\nline1\nline2\nline3\nline4");
+    const mb = createMultiBuffer();
+    mb.addExcerpt(buf, excerptRange(0, 2));
+    mb.addExcerpt(buf, excerptRange(3, 5, 4, 5));
+
+    // Insert "\nnew" at end of line1 (row 1, col 5)
+    mb.edit(mbPoint(1, 5), mbPoint(1, 5), "\nnew");
+
+    const snap = mb.snapshot();
+    const excerptB = snap.excerpts[1];
+    expect(excerptB).toBeDefined();
+    if (!excerptB) return;
+    // Primary range should have been shifted by +1 row
+    expect(num(excerptB.range.primary.start.row)).toBe(5);
+    expect(num(excerptB.range.primary.end.row)).toBe(6);
+  });
+});
