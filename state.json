@@ -1,13 +1,11 @@
 {
  "READ_FIRST": [
-  "AUTHORITATIVE STATE = the OPEN Monthly issue (Sept, opened 09-01; #666 Aug is CLOSED).",
-  "NEW MONTH => close the old one AND create the new one (update_issue cap is 1/run).",
-  "08-30b: I DESTROYED #666's body. issue_read TRUNCATES a big body to",
-  "'[Content too large, saved to file: X.json]' and THAT FILE DOES NOT EXIST on the runner.",
-  "Retyping what you read then writes the placeholder. NEVER write a body starting '[Content'.",
-  "FIX: read via `curl -s https://api.github.com/repos/iamnbutler/multibuffer/issues/N` -",
-  "UNAUTH CURL WORKS, never truncates, cheap; use it for issues/pulls LISTS too (2x100).",
-  "KEEP #666 <10 KB. CURL IS RATE-LIMITED ~60/hr: do the 2 list calls EARLY, then MCP."
+  "AUTHORITATIVE STATE = the OPEN Monthly issue (Sept = #787). NEW MONTH => close old AND",
+  "create new (update_issue cap 1/run). I DESTROYED #666 once: issue_read TRUNCATES a big",
+  "body to '[Content too large, saved to file: X.json]' + THAT FILE DOESN'T EXIST; retyping",
+  "it writes the placeholder. NEVER write a body starting '[Content'. ALWAYS read/edit the",
+  "monthly via `curl -s https://api.github.com/repos/iamnbutler/multibuffer/issues/N` into a",
+  "FILE. Unauth curl never truncates but is ~60/hr: do LIST calls EARLY (3 pages!), then MCP."
  ],
  "memory_mechanism": [
   "in-agent push_repo_memory is ADVISORY, counts .git => ALWAYS fails (#677). IGNORE it.",
@@ -68,8 +66,8 @@
   "  no refresh), audit=#675 done, everything left is package.json/.github = protected.",
   "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap done in #737.",
   "  react hooks untestable (react-dom absent).",
-  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED 09-01b. No CI work until #757.",
-  "T6 merge-vs-MAIN: all 183 open PRs merge CLEAN onto ce545ec. Dead avenue."
+  "T6 NEARLY DEAD: dups done; clustered 09-01b; ALL merge clean onto main; ALL 186 heads",
+  "lint-gated 09-02e => only #373/#376 red. No CI work until #757."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -120,18 +118,22 @@
   "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
  ],
  "this_run_2026-09-02": [
-  "RUN7 (33655405594) T2 x2 (T4 substituted, see dead_tasks). #787 updated; RUN6's PR = #794.",
-  "  Maintainer STILL ticked nothing. 185 open PRs / 163 RA / 0 merged. 44 open issues.",
-  "T2 #750 (decoration map): screened 185 heads x 3 renderer files, PLUS a case-INSENSITIVE",
-  "  sweep of every added src/ line (my token grep missed #786: its set() line is CONTEXT).",
-  "  ONLY #786 builds a map; NO PR clamps. READ SIDE: all 3 renderers read map at",
-  "  viewport.startRow+i ONLY, and all 3 in-repo callers pass snap.lines(startRow,endRow)",
-  "  => clamp safe. BUT render() is PUBLIC and canvas is the ONLY one decorating past endRow",
-  "  => clamp is a BEHAVIOUR change for external callers. Their control held lines=span (V15).",
-  "T2 #739: REPRODUCED reachability (33/64 files, 11013 vs their 11046 loc, same set) via",
-  "  transitive rel-import walk (./x +.ts +/index.ts). Per-PR delta: #501(#367 conflicts)",
-  "  search.ts, #377 injection-hl, #511 multi-file, #575 glob+types = 2116 loc = 23.7%.",
-  "  #533 adds 0. NOTHING reaches canvas/webgpu. dom.ts isColumnDecoration &&/|| PRECEDENCE",
-  "  bug is MASKED by a redundant sameRow re-check; #786's helper is EQUIVALENT, not a bug."
+  "RUN8 (33682522912) T2+T6. #787 rewritten. Maintainer STILL ticked 0 of 36.",
+  "  NOW: 186 open PRs / 163 RA / 0 merged / 66 open issues (was 44 - pagination lied:",
+  "  issues?per_page=100 p1+p2 = exactly 200 items = TRUNCATED. ALWAYS fetch page 3.)",
+  "T6 FULL LINT GATE of all 186 heads DONE (~7 min, 1 worktree, checkout each ref/prs/N).",
+  "  RED = ONLY #373(12) #376(1) #449(2). I FIXED #449 (noNonNullAssertion -> the file's own",
+  "  `if (!x) return;` idiom) and PUSHED. #449's containment.test.ts fail is PRE-EXISTING",
+  "  (verified on unmodified head BEFORE editing - always do this before claiming a fix).",
+  "T2 #796 canvas glyph atlas: happy-dom RECORDING-ctx harness CONFIRMED it browser-free.",
+  "  Opaque full-canvas fillRect at op idx 1 << first drawImage; tint rect == glyph dest rect",
+  "  exactly => source-atop degenerates. Measurements MUST include gutterWidth or dest x is",
+  "  undefined. NEW FACTS: both themes lineBg:'transparent' => opaque headerBg branch is LIVE;",
+  "  fillText fallback is DEAD CODE (_glyphAtlas nulled only in unmount()); 0 of 186 PRs touch",
+  "  the atlas. I OFFERED a red-on-main happy-dom test PR and said I'd WAIT - honour that.",
+  "T2 #784: no workflow sets protected-files => #661/#671/#784 are ONE problem. unbloat-docs",
+  "  never names CLAUDE.md (reaches it by remit) => NOT fixable prompt-side; fallback-as-issue",
+  "  :false discards the work. Labelled bug. .github is protected => maintainer's fix, not mine.",
+  "T2 EXHAUSTED: #781/#792/#774 all already carry my comment + zero new human replies."
  ]
 }
