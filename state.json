@@ -2,7 +2,7 @@
  "READ_FIRST": [
   "AUTHORITATIVE STATE = the OPEN Monthly issue (Sept, opened 09-01; #666 Aug is CLOSED).",
   "NEW MONTH => close the old one AND create the new one (update_issue cap is 1/run).",
-  "08-30b: I DESTROYED #666's body. issue_read TRUNCATES a big body to the string",
+  "08-30b: I DESTROYED #666's body. issue_read TRUNCATES a big body to",
   "'[Content too large, saved to file: X.json]' and THAT FILE DOES NOT EXIST on the runner.",
   "Retyping what you read then writes the placeholder. NEVER write a body starting '[Content'.",
   "FIX: read via `curl -s https://api.github.com/repos/iamnbutler/multibuffer/issues/N` -",
@@ -19,13 +19,11 @@
   "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
   "PROVEN recipe: curl 2x100 /pulls -> numbers -> ONE batched fetch of every head:",
   "  refs=$(awk '{printf \"refs/pull/%s/head:refs/prs/%s \", $1,$1}' openprs.txt)",
-  "  git fetch -q --no-tags origin $refs   # 180 heads, <60s",
-  "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL.",
-  "CAUTION: #310-#345 have an ancient base => WHOLE-FILE diffs match every symbol; filter to",
-  "+/- lines and read the PR's real function body before believing.",
-  "My back catalogue is the likeliest dup: 158 open RA PRs, 0 merged. 08-31 it blocked TWO.",
-  "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names",
-  "(bot branches carry a -<hash> suffix => false 'vanished').",
+  "  git fetch -q --no-tags origin $refs   # 184 heads, <60s",
+  "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL, filtering to",
+  "+/- lines (#310-#345 have an ancient base => whole-file diffs match every symbol).",
+  "My back catalogue is the likeliest dup: 163 open RA PRs, 0 merged. Blocked one AGAIN 09-02.",
+  "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names.",
   "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, different file)."
  ],
  "rules": [
@@ -62,15 +60,14 @@
  ],
  "ci_is_parked_not_absent": [
   "#757: ci.yml runs ARE created on bot PRs but sit at action_required, dispatch 0 jobs and",
-  "publish NO check runs => looks identical to 'CI not configured'. A run may show",
-  "conclusion=failure yet dispatch 0 JOBS - CHECK JOB COUNT, not conclusion. Re-verified 08-29."
+  "publish NO check runs => looks like 'CI not configured'. CHECK JOB COUNT, not conclusion."
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T4 EXHAUSTED (re-confirmed 08-30d): audit=#675, wide refresh settled, rest protected.",
-  "T9 V13 population is EXACTLY 2: simulateTokenRendering RETIRED 08-31b, buildDecorationMap",
-  "is the LAST (extend #737, no 3rd file). react hooks untestable (react-dom absent).",
-  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED gated 09-01b. No CI work until #757.",
+  "T4 EXHAUSTED (08-30d): audit=#675, wide refresh settled, rest protected.",
+  "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap done in #737.",
+  "  react hooks untestable (react-dom absent).",
+  "T6: dups DONE; conflict-free gated 09-01a; CLUSTERED 09-01b. No CI work until #757.",
   "T6 merge-vs-MAIN: all 183 open PRs merge CLEAN onto ce545ec. Dead avenue."
  ],
  "retired_do_not_redo": [
@@ -80,29 +77,31 @@
   "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap.",
   "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
   "09-02: V17 webgpu.ts:438 CLOSED - it feeds decoration?.color ONLY (no bg/gutter painted),",
-  "  untestable (no GPU, no test file); in #787 Future Work. Modelled-test vein now EMPTY."
+  "  untestable (no GPU, no test file); in #787 Future Work. Modelled-test vein now EMPTY.",
+  "09-02: cursor.ts V4 sibling-policy sweep COMPLETE (see V25 in this_run). movePage fix was",
+  "  ALREADY #425/#502 byte-for-byte - screening saved a dup PR. Do not re-derive that map."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
   "V0 doubt the probe; if the real check is affordable DO NOT MODEL IT.",
   "V2 a well-covered file is not a checked file; ask what every fixture holds CONSTANT.",
-  "V3 docstring-vs-behaviour (9+). V4 a call site skipping a policy its siblings",
-  "  implement - RICHEST, 5 hits; the sibling that is already right is the ORACLE.",
-  "V8 two PRs textually independent + semantically incompatible: ask what a PR takes",
-  "  ownership of that ISN'T a line of its own file (a global, an invariant, a fixture).",
-  "V9 (08-30) a prose rule in a prompt is ADVISORY - an LLM violated a ban 4 days after",
-  "  it shipped (#343). An enforceable guard belongs in CONFIG, not instructions.",
-  "V10 (08-30) fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
+  "V3 docstring-vs-behaviour (9+).",
+  "V4 a call site skipping a policy its siblings implement - RICHEST; the sibling that is",
+  "  already right is the ORACLE. cursor.ts swept 09-02 (V25); try renderer/ + diff/ next.",
+  "V8 two PRs textually independent + semantically incompatible: ask what a PR owns that",
+  "  ISN'T a line of its own file (a global, an invariant, a fixture).",
+  "V9 a prose rule in a prompt is ADVISORY (#343). Enforceable guards belong in CONFIG.",
+  "V10 fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
   "V12 a docstring/TEST can pin the WRONG side: #704 pins the fix (PR ok), #695 endorses",
   "  the bug (hand over). ASK WHICH SIDE THE ORACLE IS ON before trusting it.",
-  "V15 (08-31b) my fixtures hid 2 of 5 mutations: EVERY gap was whitespace, which paints",
-  "  nothing, so gap COLOUR was unobservable. ASK WHAT YOUR FIXTURES HOLD CONSTANT.",
+  "V15 ASK WHAT YOUR FIXTURES HOLD CONSTANT (whitespace gaps paint nothing => 2/5 mutants hid).",
   "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
-  "V23 (09-01c) a NARROWED LOCAL TYPE silently eats fields: the excess-property check fires",
-  "  only on LITERALS. highlighter.ts ColumnDecoration.style={backgroundColor?} dropped 10 of",
-  "  11 DecorationStyle fields dom.ts passed in. GREP locals re-declaring a public subset.",
-  "V24 (09-01d) A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the",
-  "  OBSERVABLE (I printed the excerpt's lines). #362 passed every gate and fixed nothing."
+  "V23 a NARROWED LOCAL TYPE silently eats fields (excess-property check fires only on",
+  "  LITERALS). GREP locals re-declaring a public subset.",
+  "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the OBSERVABLE.",
+  "V26 (09-02) a GUARD HELPER's DEAD-END branch returns its INPUT UNCHANGED, re-admitting the",
+  "  state it exists to exclude. The OTHER direction's fallback is the ORACLE; fixing it can",
+  "  regress a CALLER that assumed the skip only moves one way."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -120,19 +119,18 @@
   "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
  ],
  "this_run_2026-09-02": [
-  "RUN5 (33590783929) T6+T3. #787 rewritten (11.2 KB). Maintainer has ticked NOTHING yet.",
-  "T6 SWEEP tsc+lint on ALL 162 RA PRs: 159 GREEN / 3 RED. Squares with 09-01's '5 lint':",
-  "  #373 #376 #413 #340 #449; I fixed 413/340, 373/376 aren't RA-titled => only #449 left",
-  "  (2 noNonNullAssertion, multibuffer.test.ts:1612-13). NOT pushed - #449 is on the CLOSE",
-  "  list. #311 #314 tsc=8 but merge-base 51f94a3 fails IDENTICALLY (src/react Theme) =>",
-  "  stale base, NOT regression; both added to the close line in #787.",
-  "T6 PUSHED 2nd commit to #737: retired decoration.test.ts's modelled buildDecorationMap.",
-  "  Its OWN 1st fixture (same row, col 0->10) is INTRALINE for real dom.ts => no row bg,",
-  "  while the copy claimed 'painted row'. Moved its 4 unique cases (viewport exclude, clip",
-  "  at edge, last-wins, no-style skipped) to the real renderer + col-0 case. -7/+5 tests.",
-  "  2280 run 0 fail, tsc 0, lint 1 info. All 5 mutation-verified.",
-  "T3 = NO PR, and that IS the result. #536 -> #537 AND #364; #512 -> #513; both threads",
-  "  ALREADY carry my linking comments (do NOT re-comment). #674/#761 defer a contract",
-  "  choice; #695's docstring pins the bug. Only gap is PR-side: no `Closes #`."
+  "RUN6 (33623408975) T3+T2. Maintainer still ticked NOTHING in #787.",
+  "T3 PR: branch repo-assist/fix-terminal-separator-row-cursor. skipTrailingNewlineRow 'down'",
+  "  DEAD-ENDS on the LAST excerpt (next==lineCount => returns the separator). Fell through to",
+  "  the 'up' fallback + moveVisualRow STAYS PUT on a backward skip (naive version jumped to",
+  "  segment 0 of the same row). 3/6 tests red on main; 2280 run/0 fail, tsc 0, lint 1 info.",
+  "V25 SEPARATOR ROUTE MAP (DONE): guard covers 1 of 6 routes. page=#425/#502, char L/R wrap=",
+  "  #418/#419, word=#426, buffer end=#428/#429, char up/down=guarded, terminal=MY PR. Ran each",
+  "  head: each fixes ONLY its route => the 3 'identical pairs' are COMPLEMENTARY ACROSS pairs.",
+  "T2 commented #785. All 184 heads screened for rope.ts: #546 #565 #687 #766 #333 touch it,",
+  "  NONE adds a merge step => fragmentation unfixed. LIVE BUG on main (open PR #687 fixes it):",
+  "  offsetToLineCol/lineColToOffset wrong for lines > one chunk; 4/6 offsets fail round-trip.",
+  "Rope.from(text) NOT new Rope(); chunks=[...r.textChunks()].length. A scratch .ts in the",
+  "  REPO ROOT breaks `bun run typecheck` - probe in /tmp, rm before gating."
  ]
 }
