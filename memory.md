@@ -10,8 +10,8 @@ bun test 2265p/3skip/6todo/0fail (2274 in 76 files, ~2.6s); typecheck clean; lin
 lint: biome + no-type-assertion.grit -> use row()/mbRow() from tests/helpers.ts, never `n as BufferRow`.
 FLAKE still on main: "Buffer Performance > line access is O(1)". ALWAYS repeat runs before blaming a mutation. #611 fixes.
 
-## State 09-02 (cmds revalidated: 2265/3/6/0, tc+lint clean)
-main ce545ec (unmoved 164d). Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690), 0 human comments (#690's 5=bot). #611+#745 open. #373=maintainer's, lint-blocked.
+## State 09-03 (cmds revalidated: 2265/3/6/0, tc+lint clean)
+main ce545ec (unmoved 165d). Same 9 TI PRs open (#312 #335 #357 #368 #538 #541 #543 #548 #690), 0 human comments. #611 #745 open; #741+#748 = input-handler, I VERIFIED both.
 POSTURE: NO NEW PRs; findings -> monthly-issue COMMENTS, or the PR itself when ABOUT that PR (09-01 #357). NEVER a body.
 🚨 RULE (item 33): before ANY write-up, search open PRs AND ISSUES for file+symptom (narrow query, jq the saved file) — 08-18 3 of my 4 "SRC BUGs" were ALREADY PRs. PAID OFF 7x (latest 09-02: #467/#472 were NEAR-MISSES, same file+feature, different defect) — report the RESIDUE.
 🚨 #667 BODY: 08-25 update EXCEEDED 65536 -> GH NUKED whole body. Keep ~10KB, detail in COMMENTS.
@@ -26,7 +26,9 @@ MUTATION RECIPE: cp src to /tmp, python3 script patches it, run arms, restore, A
 API: snap.excerpts=ARRAY PROP not fn; ExcerptInfo{startRow,endRow}; BufferSnapshot has NO .length (use .text().length); insert(offset(NaN)) silently corrupts.
 
 ## Findings (detail in #667)
-09-02 SRC BUG #13 PRIMARY-SEL (editor.ts:1821), unclaimed, ->#789 cmt. _mergeSelections SORTS => breaks documented "primary=last=NEWEST" (169/176-8/1819); caret IS primary (editor-view:263) => addCursor-above + ONE arrow TELEPORTS caret; up/down asymmetric. ORDER-ONLY mutant `merged.reverse()` (same SET) = 2263/2 => only 2/2274 order-sensitive. fix=track identity+rotate last = 2264/1, that 1 red = multi-cursor.test.ts:71 whose OWN COMMENT encodes the bug. PARTIAL: _insertText:642 discards `index` at :649 => typing still breaks. #467/#472=DROP cursors, DIFFERENT.
+🔑09-03 REAL-BROWSER ORACLE: `bunx playwright install chromium` WORKS in CI (~111MB/60s) -> page.keyboard.press, capture e.key, feed the REAL src fn. Extends 08-26 "real producer" to ANY DOM/event contract.
+09-03 input-handler AUDITED (drop from NEXT); BOTH bugs were ALREADY PRs (rule-33 8th save). #741 = Mod+Shift+K/Z DEAD (browser sends "K" not "k"; deleteLine reachable by NO key; defaultPrevented stays FALSE). VERIFIED: 64-combo sweep main vs #741 = EXACTLY 2 change, 0 regress, 2277/0; +#748 merges CLEAN = 2284/0. CapsLock half UNPROVEN (playwright can't latch it). 🔑 ALL its tests use HAND-MADE events (:366/:395 = key"k"+shift = IMPOSSIBLE) = HOW IT HID.
+09-02 SRC BUG #13 PRIMARY-SEL (editor.ts:1821), unclaimed, in #789. _mergeSelections SORTS => breaks "primary=last=NEWEST" (169/176-8/1819); caret IS primary (editor-view:263). ORDER-ONLY mutant `merged.reverse()` = 2263/2 (only 2/2274 order-sensitive). PARTIAL: _insertText:642 discards `index` at :649. #467/#472 DIFFERENT.
 09-01 SRC BUG #12 moveWord RIGHT (cursor.ts:296-303), unclaimed, ->#357+#789. Skips 1st WORD of every line entered (5/7 shapes; left 0; indented escape). WILD mutant 2265/0 = UNVERIFIED. 🚨MY PR #357 PINS IT: all fixtures 1-word next line. movePage CLEAN+COVERED, don't re-audit.
 08-31 diff-client CLEAN; its 1 bug = PR #745, VERIFIED+urged merge. hl-client 4.63%, 0 worker cov, #743+#745 both decline = OPEN GAP, best next PR. 🔑 BUN HAS Worker; run REAL *-worker.ts via `new URL(...,import.meta.url)` from REPO-ROOT probe. LESSON: a test file stating WHY it skips something — CHECK it, 4/4 false.
 08-30 excerpt.ts LOGIC CLEAN (632/632 oracle) but summary SLOW PATH UNTESTED: 5 mutants survive (incl ALL ZEROS); only named test takes FAST PATH (excerpt.ts:51) so asserts BUFFER summary. #684/#510/#766 rewrite it. mergeExcerptRanges CLEAN, 0 src call sites.
@@ -43,8 +45,6 @@ API: snap.excerpts=ARRAY PROP not fn; ExcerptInfo{startRow,endRow}; BufferSnapsh
 CANDIDATE-GEN METHOD THAT WORKED: rank src modules by test-line/src-line ratio (loop over src, grep tests for importers), audit lowest-ratio one with REAL logic. glob.ts was 0.71.
 08-17 3 CLEAN don't re-audit: rope insert/delete/replace chunk rebuild; WrapMap lazy+_segCharStart; tile-map (ZERO src call sites, don't invest). Item-27 marker in WrapMap yet no bug => marker predicts a GAP, not always a BUG.
 08-13 SRC BUG #1 (unclaimed): search.ts:423 sorts w/ compareAnchors = orders by excerptId.index (SLOT idx) under "Sort by position"; SlotMap recycles idx, doc order = _order[]. 3 paths -> rows [1,0]. FIX (a) drop sort or (b) sort by resolved pos like :301. Both verified.
-08-12 SLOTMAP set(): 0 test call sites, gen guard (slot_map.ts:100) deletable w/ 2274 green. Prod: multibuffer.ts:697/733/829/891. FIX=4-line twin of :131; VERIFIED.
-#696 charset: fc.string()=printable ASCII, no \n -> rope/buffer fuzz line props run single-line. Fix verified.
 multibuffer.fuzz Prop1 oracle self-referential (1-line fix verified). Prop4 vacuous: 0/6 mutants, proposed oracle 6/6; M5 (`>=`->`>` at multibuffer.ts:545) SURVIVES ALL TESTS = real off-by-one; test query (5,15)->(5,20) closes it.
 Timing flakes: 3 causes solved (#667 items 12/15). outlier-driven -> min/median right; stable-gap (~6x) -> widening right. Never blanket-policy.
 
