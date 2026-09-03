@@ -56,13 +56,12 @@
   "noUncheckedIndexedAccess: arr[i] is T|undefined. Branded rows: num() from tests/helpers.ts."
  ],
  "dead_tasks": [
-  "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
+  "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored. T2: see this_run (saturated).",
   "T4 DONE 09-03 (#797, 7 pkgs). REUSABLE: bun.lock is NOT protected. `bun outdated` shows",
   "  WITHIN-RANGE drift; bun update <pkgs> then `git checkout package.json` + `bun install`",
   "  => lockfile-ONLY diff that still passes --frozen-lockfile. LEFT: biome (see biome_25).",
   "  0 Dependabot PRs; typescript@latest still 7.0.2 (#678 ok); audit=#675.",
   "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
-  "  react hooks untestable (react-dom absent).",
   "T6 DEAD until CI (#757) or NEW PRs: dups done, all merge clean, all 186 heads lint-gated",
   "  (only #373/#376 red) + all RA heads tsc-gated (only #311/#314 red). 09-03: #797 fine."
  ],
@@ -72,10 +71,9 @@
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
   "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens ok.",
   "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
-  "V17 webgpu.ts:438 CLOSED (re-confirmed 09-02d): decoration?.color ONLY, no bg/gutter, no",
-  "  GPU/test file => untestable. Modelled-test vein EMPTY.",
-  "SEPARATOR VEIN EXHAUSTED (V25 route map lives in #787): 6 routes, all guarded or covered;",
-  "  the 3 'dup' pairs are COMPLEMENTARY. cursor.ts V4 DONE. Only #674 contract Q remains."
+  "V17 webgpu.ts:438 CLOSED 09-02d (color only, no GPU/test file => untestable); modelled-test",
+  "  vein EMPTY. SEPARATOR VEIN EXHAUSTED (V25 route map in #787): 6 routes all guarded or",
+  "  covered, the 3 'dup' pairs are COMPLEMENTARY. cursor.ts V4 DONE. Only #674 contract Q."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
@@ -91,13 +89,10 @@
   "  the bug (hand over). ASK WHICH SIDE THE ORACLE IS ON before trusting it.",
   "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the OBSERVABLE.",
   "V26 (09-02) a GUARD HELPER's DEAD-END branch returns its INPUT UNCHANGED, re-admitting the",
-  "  state it exists to exclude. The OTHER direction's fallback is the ORACLE; fixing it can",
-  "  regress a CALLER that assumed the skip only moves one way.",
-  "V30 UNTOUCHED-FILE MAP = FERTILE GROUND: 26 src files have ZERO open-PR touches (build via",
-  "  `git diff --name-only <mb> refs/prs/$n` over all heads). Unread: diff/helpers.ts,",
-  "  renderer/theme.ts, renderer/queries/*. NEGATIVES (detail in #787): unified.ts, offset.ts",
-  "  (=#695), adapter.ts symlink, DiffEditorView._render primary-only selection (INERT),",
-  "  highlight-worker getTokens missing try/catch (speculative, may never throw)."
+  "  state it exists to exclude. The OTHER direction's fallback is the ORACLE.",
+  "V30 UNTOUCHED-FILE MAP = FERTILE: 26 src files have ZERO open-PR touches (`git diff",
+  "  --name-only <mb> refs/prs/$n` over all heads). Unread: diff/helpers.ts, renderer/theme.ts,",
+  "  renderer/queries/*. NEGATIVES detailed in #787 (unified.ts, offset.ts=#695, adapter.ts)."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -120,18 +115,20 @@
   "patterns; a broken .grit EXITS 1. Do NOT guess. $schema pins 2.4.6 => bump needs migrate."
  ],
  "this_run_2026-09-03": [
-  "RUN10 (33748066392) T6+T3. 187 PRs/164 RA/0 merged/66 issues. #797 open+mergeable, 0",
-  "  check-runs (=> 'unstable'/'pending' is just NO CI, not a failure). T6 dead as predicted.",
-  "T3 FOUND 3 REAL LIVE BUGS, ALL 3 ALREADY QUEUED. SCREEN BEFORE CODING:",
-  "  parsePatch ends a hunk at a deleted '-- ' line (SQL/Lua comment): 4-line hunk parses as 1,",
-  "    DATA LOSS = #740 (verified + commented, its 1st comment, all gates green).",
-  "  shared _goalColumn = #513. replaceAll undo (#536) = #537 AND #364. #673 flake = #611.",
-  "V28 ISSUE-NUMBER CROSS-REF IS UNRELIABLE BOTH WAYS: #512 had NO PR mentioning '#512' yet",
-  "  #513 fixes it; I nearly rebuilt it. ONLY the SYMBOL screen is sound. Cost ~1/3 of the run.",
-  "V29 PROBE DESIGN CAN FAKE A NEGATIVE: 2 cursors on ONE row legitimately MERGE, which looked",
-  "  like '#513 misses extendSelection'. Re-probed NON-OVERLAPPING => fully fixed. Space the",
-  "  probe's subjects APART before calling a fix partial.",
-  "MAIN at idle RECONFIRMED 2274/0. Heads 2280(#513)/2279(#740), each 1 fail = #673 flake only",
-  "  (passes 3/3 in isolation). Suites SERIALLY. Worktree+node_modules symlink recipe works."
+  "RUN11 (33778197166) T2+T6 BOTH SATURATED. 187 PRs/164 RA/0 merged/65 issues. main ce545ec.",
+  "T2 HAS NO NEW THREAD LEFT: all 65 open issues already carry an RA comment, and there are",
+  "  ZERO non-bot comments repo-wide since 08-25 (one call: /issues/comments?sort=created).",
+  "  => T2 now means DEEPEN an existing finding. T6: no new PRs since #797, so nothing to fix.",
+  "#761 SOLVED + commented: remedy 3 = rebuild _buffers as a FRESH Map in setExcerpts (do NOT",
+  "  delete from the shared one). 203 registered -> 3; 2274/0, tsc 0, lint 1 info. Awaiting a",
+  "  yes; clearExcerpts half NOT measured; still no public observable so it stays an ISSUE.",
+  "V31 A PRUNE THAT FAILS SOFT IS THE TRAP: multibuffer.ts:236 falls back to the excerpt's",
+  "  FROZEN snapshot on a _buffers miss, so a prune is INVISIBLE for a never-edited buffer",
+  "  (separators) and SILENTLY STALE for one edited after leaving the excerpt set (anchor",
+  "  6->7 on main and remedy 3; stuck at 6 under the prune). REPLACE an object you handed out,",
+  "  never mutate it. V29 AGAIN: 1st probe used rows 0-11 = all CONTENT rows, so the stranded",
+  "  buffer was never consulted and '0 changed' was VACUOUS. Assert the probe TOUCHES it.",
+  "MONTHLY: strip the trailing '> Generated by' block before update_issue replace - it had",
+  "  already duplicated. Body 19.8 KB, 3 run entries."
  ]
 }
