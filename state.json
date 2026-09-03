@@ -22,7 +22,7 @@
   "+/- lines (#310-#345 have an ancient base => whole-file diffs match every symbol).",
   "My back catalogue is the likeliest dup: 163 open RA PRs, 0 merged. Blocked one AGAIN 09-02.",
   "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names.",
-  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, different file)."
+  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, diff file)."
  ],
  "rules": [
   "main FROZEN at ce545ec. PR only if live-on-main + red-on-main + gates green + screened.",
@@ -41,7 +41,7 @@
   "ABSOLUTE paths in scratch scripts; cwd resets. Bash 60s => run_in_background.",
   "RUNNER CHECKOUT IS depth-1: `git fetch --unshallow -q origin` BEFORE any merge-base /",
   "rev-list / two-dot-diff / 'orphan' claim (produced false finding #705).",
-  "react-dom NOT installed. Edit replace_all matches INDENTATION; re-probe after edits."
+  "Edit replace_all matches INDENTATION. `npx playwright install chromium` WORKS (no --deps)."
  ],
  "gates": [
   "ALWAYS run test + typecheck + lint (a test+tsc-only sweep MISSED #373's 12 bare `as`).",
@@ -49,21 +49,19 @@
   "sweep is garbage. `ln -sfn $REPO/node_modules $WT/` + `git clean -e node_modules`.",
   "CI also runs `bun run build:playground` FIRST. CLAUDE.md's build:demo does not exist (#671).",
   "BASELINE ce545ec: 2274 run / 2265 pass / 0 fail; tsc 0; lint 1 info (#760).",
-  "7 WALL-CLOCK tests fail under LOAD (6 workers/4 CPU): buffer 'line access O(1)','10k<10ms',",
-  "'snapshot fast'; mb 'excerptAt O(log n)'x2,'lines<1ms'; SlotMap 'stale O(1)'; TileMgr 'Set O(1)'.",
+  "7 WALL-CLOCK perf tests (buffer/mb/SlotMap/TileMgr O(1)+O(log n)) fail under LOAD; at idle",
+  "  load the suite is EXACTLY the baseline, so run gates serially and no filtering is needed.",
   "ALWAYS gate MAIN through the SAME harness at the SAME load: 09-01c 111/183 'red' was really 3.",
   "tsc+lint are LOAD-INDEPENDENT (6s+2s) - trust those; re-run test fails capturing NAMES, filter.",
-  "tests/fuzz/editor.fuzz.test.ts is UNSEEDED fc.assert: fires ~1/183 and blames an innocent PR.",
   "noUncheckedIndexedAccess: arr[i] is T|undefined. Branded rows: num() from tests/helpers.ts."
- ],
- "ci_is_parked_not_absent": [
-  "#757: ci.yml runs ARE created on bot PRs but sit at action_required, dispatch 0 jobs and",
-  "publish NO check runs => looks like 'CI not configured'. CHECK JOB COUNT, not conclusion."
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored.",
-  "T4 DEAD, PROVEN 09-02d: 0 Dependabot PRs, typescript@latest STILL 7.0.2 (=> #678 needs",
-  "  no refresh), audit=#675 done, everything left is package.json/.github = protected.",
+  "T4 WAS WRONGLY CALLED DEAD. bun.lock is NOT protected and was 6 MONTHS STALE (09-03).",
+  "  `bun outdated` shows WITHIN-RANGE drift even when package.json is untouchable: bun",
+  "  update <pkgs> then `git checkout package.json` + `bun install` => lockfile-ONLY diff",
+  "  that still passes --frozen-lockfile. DONE 09-03 (7 pkgs). LEFT: biome (see biome_25).",
+  "  0 Dependabot PRs; typescript@latest still 7.0.2 (#678 needs no refresh); audit=#675.",
   "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap done in #737.",
   "  react hooks untestable (react-dom absent).",
   "T6 NEARLY DEAD: dups done; clustered 09-01b; ALL merge clean onto main; ALL 186 heads",
@@ -73,13 +71,12 @@
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
-  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens => no overlap.",
+  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens ok.",
   "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
   "V17 webgpu.ts:438 CLOSED (re-confirmed 09-02d): decoration?.color ONLY, no bg/gutter, no",
   "  GPU/test file => untestable. Modelled-test vein EMPTY.",
-  "09-02 V25 SEPARATOR ROUTE MAP DONE, do not re-derive: guard covers 1 of 6 routes; page=",
-  "  #425/#502, char wrap=#418/#419, word=#426, buf end=#428/#429, up/down=guarded, last=#794.",
-  "  Each head fixes ONLY its route => those pairs are COMPLEMENTARY. cursor.ts V4 DONE."
+  "SEPARATOR VEIN EXHAUSTED (V25 route map lives in #787): 6 routes, all guarded or covered;",
+  "  the 3 'dup' pairs are COMPLEMENTARY. cursor.ts V4 DONE. Only #674 contract Q remains."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
@@ -88,15 +85,11 @@
   "V4 a call site skipping a policy its siblings implement - RICHEST; the sibling that is",
   "  already right is the ORACLE. cursor.ts swept 09-02 (V25); try renderer/ + diff/ next.",
   "V8 two PRs textually independent + semantically incompatible: ask what a PR owns that",
-  "  ISN'T a line of its own file (a global, an invariant, a fixture).",
+  "  ISN'T a line of its own file (a global, an invariant, a fixture, a VENDORED ARTEFACT).",
   "V9 a prose rule in a prompt is ADVISORY (#343). Enforceable guards belong in CONFIG.",
-  "V10 fixing a filter in ONE sweep does not fix its TWIN - grep for the twin.",
+  "V27 (09-03) a TOOL UPGRADE can break the repo's OWN lint plugin, not just its code.",
   "V12 a docstring/TEST can pin the WRONG side: #704 pins the fix (PR ok), #695 endorses",
   "  the bug (hand over). ASK WHICH SIDE THE ORACLE IS ON before trusting it.",
-  "V15 ASK WHAT YOUR FIXTURES HOLD CONSTANT (whitespace gaps paint nothing => 2/5 mutants hid).",
-  "V16 an EQUIVALENT MUTANT is a finding, not a failure - NAME it in the PR body.",
-  "V23 a NARROWED LOCAL TYPE silently eats fields (excess-property check fires only on",
-  "  LITERALS). GREP locals re-declaring a public subset.",
   "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the OBSERVABLE.",
   "V26 (09-02) a GUARD HELPER's DEAD-END branch returns its INPUT UNCHANGED, re-admitting the",
   "  state it exists to exclude. The OTHER direction's fallback is the ORACLE; fixing it can",
@@ -106,7 +99,7 @@
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
   "conflict). Exact, ~30ms, no worktree. Use per-pair `git merge-base A B`, not a fixed base.",
   "TRAP, hit 3x: build each PR's file set from ALL CHANGED PATHS, not src/+tests/, and compare",
-  "ALL open PRs, not RA-only. 09-01b map: 1073 sharing pairs, 127 conflicting, 23 clusters/107.",
+  "ALL open PRs, not RA-only (09-01b map: 127 conflicting pairs, 23 clusters).",
   "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
  "canvas_harness_RECIPE": [
@@ -117,23 +110,29 @@
   "Glyph = drawImage(atlas,..,destX=args[4]) then fillRect tint; col=(destX-gutter)/cw.",
   "SPACES/TABS PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
  ],
- "this_run_2026-09-02": [
-  "RUN8 (33682522912) T2+T6. #787 rewritten. Maintainer STILL ticked 0 of 36.",
-  "  NOW: 186 open PRs / 163 RA / 0 merged / 66 open issues (was 44 - pagination lied:",
-  "  issues?per_page=100 p1+p2 = exactly 200 items = TRUNCATED. ALWAYS fetch page 3.)",
-  "T6 FULL LINT GATE of all 186 heads DONE (~7 min, 1 worktree, checkout each ref/prs/N).",
-  "  RED = ONLY #373(12) #376(1) #449(2). I FIXED #449 (noNonNullAssertion -> the file's own",
-  "  `if (!x) return;` idiom) and PUSHED. #449's containment.test.ts fail is PRE-EXISTING",
-  "  (verified on unmodified head BEFORE editing - always do this before claiming a fix).",
-  "T2 #796 canvas glyph atlas: happy-dom RECORDING-ctx harness CONFIRMED it browser-free.",
-  "  Opaque full-canvas fillRect at op idx 1 << first drawImage; tint rect == glyph dest rect",
-  "  exactly => source-atop degenerates. Measurements MUST include gutterWidth or dest x is",
-  "  undefined. NEW FACTS: both themes lineBg:'transparent' => opaque headerBg branch is LIVE;",
-  "  fillText fallback is DEAD CODE (_glyphAtlas nulled only in unmount()); 0 of 186 PRs touch",
-  "  the atlas. I OFFERED a red-on-main happy-dom test PR and said I'd WAIT - honour that.",
-  "T2 #784: no workflow sets protected-files => #661/#671/#784 are ONE problem. unbloat-docs",
-  "  never names CLAUDE.md (reaches it by remit) => NOT fixable prompt-side; fallback-as-issue",
-  "  :false discards the work. Labelled bug. .github is protected => maintainer's fix, not mine.",
-  "T2 EXHAUSTED: #781/#792/#774 all already carry my comment + zero new human replies."
+ "biome_25_BLOCKER": [
+  "biome 2.4.4->2.5.11 (IN RANGE) breaks lint: rules/no-type-assertion.grit `$expr as $type`",
+  "matches IMPORT ALIASES on 2.5.x => 3 false errors (highlighter.ts:9, injection-*:9,",
+  "demo.ts:15). `as const` still exempt. 5 useOptionalChain + 2 suppressions/unused warn too.",
+  "TRIED+FAILED to compile: `! $expr <: within import_statement()` AND `as_expression($e,$t)`.",
+  "A broken .grit EXITS 1 (not silent). Filed 09-03. Do NOT guess. $schema pins 2.4.6 =>",
+  "  any bump also needs `biome migrate`."
+ ],
+ "this_run_2026-09-03": [
+  "RUN9 (33714549029) T4+T6. #787 updated (41 items). Maintainer STILL ticked 0, 0 comments.",
+  "  State unchanged from 09-02: 186 PRs / 163 RA / 0 merged / 66 issues. No new items.",
+  "T6 TYPECHECK GATE of all 163 RA heads DONE: 161 clean, RED = ONLY #311(8) #314(8), both",
+  "  already-known stale-base. #449 push landed. T6 now gated on lint+tsc+merge+dups = DEAD",
+  "  until CI (#757) or new PRs. NOTE: push_to_pull_request_branch REQUIRES a '[Repo Assist]'",
+  "  title => #373/#376 are NOT pushable by me; stop planning to fix them.",
+  "T4 PR: branch repo-assist/eng-refresh-lockfile-2026-09-03, 7 pkgs, bun.lock + the WASM.",
+  "  build:playground COPIES node_modules/web-tree-sitter wasm over TRACKED playground/wasm/",
+  "  tree-sitter.wasm => must commit it or every build dirties the tree (verified idempotent).",
+  "  CONFLICTS with #675 (it inserts buffer-image-size next to the @webgpu/types line I edit);",
+  "  EXCLUDED happy-dom+ws on purpose so it is complementary, not a dup. Screened all 186:",
+  "  #675 is the ONLY other PR touching bun.lock/package.json/playground/wasm.",
+  "E2E IS RUNNABLE HERE: `npx playwright install chromium` WORKS (--with-deps needs root and",
+  "  FAILS). 7 tests, ~6s. rm -rf test-results/ after or the tree is dirty.",
+  "nohup: ABSOLUTE paths - `cd X && A & B &` runs B in the OLD cwd. 3 workers/4 CPU = 22s/PR."
  ]
 }
