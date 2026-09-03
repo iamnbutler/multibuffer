@@ -114,6 +114,15 @@ describe("computeIntralineDiff", () => {
     expect(result.deleteRanges[0]).toEqual({ startColumn: 1, endColumn: 2 });
     expect(result.deleteRanges[1]).toEqual({ startColumn: 3, endColumn: 4 });
   });
+
+  test("performance cap: timeBudgetMs of 0 declines the character-level search", () => {
+    // A zero budget leaves no room for the character-level pass, so the whole differing
+    // middle is reported as one range per side instead of the two that "aXcXe"/"aYcYe"
+    // produces above. This is the documented escape hatch for expensive diffs.
+    const result = computeIntralineDiff("aXcXe", "aYcYe", { timeBudgetMs: 0 });
+    expect(result.deleteRanges).toEqual([{ startColumn: 1, endColumn: 4 }]);
+    expect(result.insertRanges).toEqual([{ startColumn: 1, endColumn: 4 }]);
+  });
 });
 
 describe("pairDeleteInsertLines", () => {
