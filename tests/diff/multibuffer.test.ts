@@ -247,6 +247,60 @@ describe("createUnifiedDiffMultiBuffer - excerpt grouping", () => {
     );
     expect(intralineDecorations.length).toBe(0);
   });
+
+  test("intraline decorations carry the character-level columns, not the whole differing middle", () => {
+    // Two separate edits on one line, with unchanged text between them. Character-level
+    // diffing reports them as two narrow ranges per side; the coarse whole-middle fallback
+    // (long lines, or intraline diffing declined) would collapse them into one 8..20 range.
+    // The columns are the only thing that distinguishes those outcomes, so assert them.
+    const { oldBuf, newBuf } = makeBuffers("let a = 1; let b = 2;", "let a = 9; let b = 8;");
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf);
+
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    const columns = intralineDecorations.map((d) => [
+      num(d.range.start.row),
+      d.range.start.column,
+      d.range.end.column,
+    ]);
+
+    // Row 0 is the delete line, row 1 the insert line; both change "1"->"9" and "2"->"8".
+    expect(columns).toEqual([
+      [0, 8, 9],
+      [0, 19, 20],
+      [1, 8, 9],
+      [1, 19, 20],
+    ]);
+  });
+
+  test("intralineOptions are forwarded to the intraline diff", () => {
+    // maxLineLength: 0 makes every line exceed the guardrail, so each side falls back to a
+    // single whole-line range. Same fixture as above, so the contrast with the character-level
+    // columns is exact rather than incidental.
+    const { oldBuf, newBuf } = makeBuffers("let a = 1; let b = 2;", "let a = 9; let b = 8;");
+    const { decorations } = createUnifiedDiffMultiBuffer(oldBuf, newBuf, {
+      intralineOptions: { maxLineLength: 0 },
+    });
+
+    const intralineDecorations = decorations.filter(
+      (d) =>
+        d.range.start.column !== 0 ||
+        d.range.end.column !== Number.MAX_SAFE_INTEGER,
+    );
+    const columns = intralineDecorations.map((d) => [
+      num(d.range.start.row),
+      d.range.start.column,
+      d.range.end.column,
+    ]);
+
+    expect(columns).toEqual([
+      [0, 0, 21],
+      [1, 0, 21],
+    ]);
+  });
 });
 
 describe("createUnifiedDiffMultiBuffer - read-only mode", () => {
