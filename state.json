@@ -59,13 +59,13 @@
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored. T2: see this_run (saturated).",
   "T4 09-04: deps+TS both settled (see this_run); only NON-protected T4 surface left is",
   "  scripts/ + playground/ + tsconfig.json. Flaky-test T4 route is DEAD (#611/#690).",
-  "T4 DONE 09-03 (#797, 7 pkgs). REUSABLE: bun.lock is NOT protected. `bun outdated` shows",
-  "  WITHIN-RANGE drift; bun update <pkgs> then `git checkout package.json` + `bun install`",
-  "  => lockfile-ONLY diff that still passes --frozen-lockfile. LEFT: biome (see biome_25).",
-  "  0 Dependabot PRs; typescript@latest still 7.0.2 (#678 ok); audit=#675.",
+  "T4 DONE 09-03 (#797). REUSABLE: bun.lock NOT protected; bun update <pkgs> + `git checkout",
+  "  package.json` + bun install => lockfile-ONLY diff, still --frozen-lockfile clean.",
+  "  0 Dependabot PRs; audit=#675; biome blocked (biome_25).",
   "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
   "  merge clean, 186 heads lint-gated (#373/#376 red), RA heads tsc-gated (#311/#314 red).",
-  "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated."
+  "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated.",
+  "T2 dead for HUMAN issues; only new peer-bot issues are commentable (#806 done 09-04b)."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -92,9 +92,8 @@
   "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the OBSERVABLE.",
   "V26 (09-02) a GUARD HELPER's DEAD-END branch returns its INPUT UNCHANGED, re-admitting the",
   "  state it exists to exclude. The OTHER direction's fallback is the ORACLE.",
-  "V30 UNTOUCHED-FILE MAP = FERTILE: 25 src files have ZERO open-PR touches (git diff",
-  "  --name-only <mb> refs/prs/$n over all heads). helpers.ts MINED 09-04. LEFT unread:",
-  "  renderer/theme.ts, renderer/queries/* (3 sibling langs=V4), worker/*. NEGs in #787."
+  "V30 UNTOUCHED-FILE MAP = FERTILE: 25 src files, ZERO open-PR touches. MINED: helpers.ts,",
+  "  project/tree.ts. LEFT: renderer/theme.ts, renderer/queries/* (3 langs=V4), worker/*."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -114,27 +113,24 @@
   "ALIASES on 2.5.x (3 false errors). 2 constrained patterns FAILED; a broken .grit EXITS 1.",
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
- "this_run_2026-09-04": [
-  "RUN15 (33894331596) T2+T4. 190 PRs/167 RA/0 merged/67 issues. main ce545ec. RECONCILED:",
-  "  #803 + #804 both live as filed. Monthly #787 rewritten 26.1->23.6KB, 3 entries.",
-  "  TRIM 2 OLDEST AGAIN NEXT RUN (drop the 04:40 + 11:24 entries).",
-  "T4 TYPESCRIPT SETTLED - DO NOT REMEASURE. Stable 6.0.3 EXISTS (postdates #678) so 'stage",
-  "  through 6 first' looks right and is WRONG: 6.0.3 = 0.98x (NO speedup) + ZERO deprecation",
-  "  output, because the removal it warns of is the compiler API at 7's '.' (ts6 main=lib/",
-  "  typescript.js PRESENT, ts7 exports['.']=version.cjs GONE) and repo has 0 ts imports.",
-  "  7.0.2 = 8.67x here vs 6.14x in #678 => QUOTE THE RATIO (this runner TS5=5.7s not 4.4s).",
-  "  All 3: 0 errors, same 173-file program, BYTE-IDENTICAL canary. Commented #678. No PR:",
-  "  package.json protected. Recipe: bun add typescript@X in a SCRATCH dir, run its .bin/tsc",
-  "  from the repo cwd => tree never dirtied.",
-  "FLAKY WALL-CLOCK VEIN EXHAUSTED - DO NOT PR. 13 timing assertions total; the tight",
-  "  `*3 + 0.001` bound appears 3x: buffer.test.ts:444 (#611 fixes) + multibuffer.test.ts",
-  "  :220 and :1038 (#690 fixes, via minMs). Both merge clean, pass TOGETHER 162/162 / 385",
-  "  expects = main. I nearly wrote a dup of #611 - the screen caught it.",
-  "V38 MY OWN OLD ADVICE CAN BE THE REFUTED ONE. I told #673 median/best-of-N was 'more",
-  "  durable'; Test Improver MEASURED it: BACKFIRES (warm, mean==median==best-of-N, all",
-  "  exceed *3 - the gap is REAL). READ THE REPLIES to my own comments before building on",
-  "  them. #611's tolerance alignment is correct.",
-  "T2 SATURATED: #111/#157/#260/#282 (only human issues) all have RA comments + 0 new human",
-  "  activity. 0-comment issues LEFT: #659 #661 #671 #751 #778."
+ "this_run_2026-09-04b": [
+  "RUN16 (33917614160) T2+T6->T2 only. 190 PRs/167 RA/0 merged/68 issues. main ce545ec.",
+  "  Monthly #787 -> 23.3KB, 2 entries. TRIM THE 16:20 ENTRY NEXT RUN.",
+  "T6 CONFIRMED DEAD: all CI runs = action_required (#757), main frozen, no new PRs.",
+  "SRC/PROJECT MINED OUT for get()/has(): BOTH bugs I re-derived are already PRs - #336",
+  "  (get() uses shouldInclude on DIRS; enumerateChildren uses shouldTraverseDirectory) and",
+  "  #718 (docstring children('/') THROWS for every root but '/'; also maxDepth).",
+  "  Commented #806 instead: get()'s discarded readdir RETHROWS non-ENOTDIR while",
+  "  enumerateChildren (tree.ts:221-225) SWALLOWS all => entries() yields a chmod-000 dir that",
+  "  has() throws EACCES on. #335 vs #336 is TEXTUAL only (no include filter => no oracle).",
+  "V39 OLD-BASE PRs WERE NEVER MERGE-CHECKED. #776 excluded 18 (#310-#345) AND claimed 73",
+  "  'collide with nothing' - untested against each other. RECIPE for old bases (merge-tree",
+  "  needs a shared base): patch = `git diff $(git merge-base ce545ec refs/prs/N) refs/prs/N`,",
+  "  apply partner to ce545ec in a WORKTREE, commit, then `git apply -3` = real 3-way.",
+  "  70 overlapping pairs, 25 CONFLICT, 0 base-fails. NOT free: 718<-336 742<-330 483<-331",
+  "  439<-314 717<-326 746<-326. Dups not orders: 314==439, 340==maintainer's 374,",
+  "  324/378/379 all 3 mutually conflict (all iamnbutler's). Full list in #776 comment.",
+  "T2 SATURATED: #111/#157/#260/#282 all have RA comments + 0 new human activity. 0-comment",
+  "  issues LEFT are ALL MINE (#659 #661 #671 #751 #778 #798 #804) => self-reply = spam."
  ]
 }
