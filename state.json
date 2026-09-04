@@ -20,9 +20,9 @@
   "  git fetch -q --no-tags origin $refs   # 184 heads, <60s",
   "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL, filtering to",
   "+/- lines (#310-#345 have an ancient base => whole-file diffs match every symbol).",
-  "My back catalogue is the likeliest dup: 163 open RA PRs, 0 merged. Blocked one AGAIN 09-02.",
-  "Other bots: [Perf Improver], [Test Improver]. Never ls-remote branch names. 164 RA PRs.",
-  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, diff file)."
+  "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, diff file).",
+  "166 open RA PRs, 0 merged => my back catalogue is the likeliest dup. Other bots:",
+  "  [Perf Improver], [Test Improver]. Never ls-remote branch names."
  ],
  "rules": [
   "main FROZEN at ce545ec. PR only if live-on-main + red-on-main + gates green + screened.",
@@ -62,8 +62,8 @@
   "  => lockfile-ONLY diff that still passes --frozen-lockfile. LEFT: biome (see biome_25).",
   "  0 Dependabot PRs; typescript@latest still 7.0.2 (#678 ok); audit=#675.",
   "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
-  "T6 DEAD until CI (#757) or NEW *RA* PRs (#799 is a docs bot, not mine): dups done, all",
-  "  merge clean, 186 heads lint-gated (#373/#376 red), RA heads tsc-gated (#311/#314 red)."
+  "  merge clean, 186 heads lint-gated (#373/#376 red), RA heads tsc-gated (#311/#314 red).",
+  "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -90,9 +90,9 @@
   "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR and diff the OBSERVABLE.",
   "V26 (09-02) a GUARD HELPER's DEAD-END branch returns its INPUT UNCHANGED, re-admitting the",
   "  state it exists to exclude. The OTHER direction's fallback is the ORACLE.",
-  "V30 UNTOUCHED-FILE MAP = FERTILE: 26 src files have ZERO open-PR touches (`git diff",
-  "  --name-only <mb> refs/prs/$n` over all heads). Unread: diff/helpers.ts, renderer/theme.ts,",
-  "  renderer/queries/*. NEGATIVES detailed in #787 (unified.ts, offset.ts=#695, adapter.ts)."
+  "V30 UNTOUCHED-FILE MAP = FERTILE: 25 src files have ZERO open-PR touches (git diff",
+  "  --name-only <mb> refs/prs/$n over all heads). helpers.ts MINED 09-04. LEFT unread:",
+  "  renderer/theme.ts, renderer/queries/* (3 sibling langs=V4), worker/*. NEGs in #787."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -102,34 +102,37 @@
   "AN INDEPENDENT SET IS BIASED TOWARD DUPS (identical patches never conflict): subtract dups."
  ],
  "canvas_harness_RECIPE": [
-  "CanvasRenderer IS mountable under happy-dom: patch win.HTMLCanvasElement.prototype.getContext",
-  "-> recording stub; define OffscreenCanvas (canvas.ts has its OWN GlyphAtlas), getComputedStyle,",
-  "requestAnimationFrame. Viewport needs `width`; ALSO stub clientWidth/Height on",
-  "HTMLElement.prototype or the canvas is 0px and every background fillRect has width 0.",
-  "Glyph = drawImage(atlas,..,destX=args[4]) + fillRect tint; col=(destX-gutter)/cw. SPACES/TABS",
-  "PAINT NO GLYPH. Live: tests/renderer/canvas-decoration.test.ts + #783 + #689."
+  "CanvasRenderer IS mountable under happy-dom. FULL RECIPE = the committed file",
+  "tests/renderer/canvas-decoration.test.ts (+ #783, #689). Two traps it won't show you:",
+  "stub clientWidth/Height on HTMLElement.prototype or the canvas is 0px and every background",
+  "fillRect has width 0; and SPACES/TABS PAINT NO GLYPH (col=(drawImage destX-gutter)/cw)."
  ],
  "biome_25_BLOCKER": [
-  "FILED 09-03 = #798. biome 2.4.4->2.5.11 (in range) breaks lint: no-type-assertion.grit",
-  "matches IMPORT ALIASES on 2.5.x => 3 false errors. 2 constrained patterns FAILED; a broken",
-  ".grit EXITS 1. Do NOT guess. $schema pins 2.4.6 => bump needs migrate."
+  "#798 (09-03): biome 2.4.4->2.5.11 breaks lint - no-type-assertion.grit matches IMPORT",
+  "ALIASES on 2.5.x (3 false errors). 2 constrained patterns FAILED; a broken .grit EXITS 1.",
+  "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
  "this_run_2026-09-04": [
-  "RUN13 (33836727231) T8+T6. 188 PRs/165 RA/0 merged/66 issues. main ce545ec. 2274/0",
-  "  RECONFIRMED. T6 DEAD AGAIN: #801 = only new RA PR, merges clean, ZERO check runs.",
-  "T8 DONE: PR branch repo-assist/perf-selection-rects-bulk-lines (~#802, RECONCILE NEXT RUN",
-  "  as I did #801). computeSelectionRects called snapshot.lines(r,r+1) PER ROW and",
-  "  renderSelection passes the selection UNCLAMPED => bulk call + index by r-firstRow.",
-  "  Bench 1K select-all .589->.264ms, 100-line .060->.026, single-line UNCHANGED; per-row",
-  "  lines() was 2.75 of 3.43ms at 8k rows; 100 excerpts 3.58->1.00.",
-  "V33 ORACLE-BY-IMPORT, NEVER BY COPY: hand-copying visualWidth/wrapLine gave 2598 FALSE",
-  "  mismatches (they live in wrap-map.ts). `git show HEAD:src/x.ts > /tmp/x_orig.ts` + sed",
-  "  '../'and'./' -> ABS => both copies share one dep instance. 6261 cases, 0 mismatches.",
-  "V34 MUTATE NEW CODE + COUNT DEAD TESTS. 1st draft caught 2 of 4: every case started at",
-  "  row 0 so the r-firstRow offset was INVISIBLE. Needed a start.row>0 AND a negative-row case.",
-  "T8 LEADS: dom.ts:791 _lineAt 1-row lines() (check callers); bracket-match.ts materialises",
-  "  1001 lines per cursor move (bracketMatching DEFAULT OFF). #751 owns clamp+pool: DON'T refile.",
-  "MONTHLY #787 replaced (0 comments). 25.7 KB, 5 entries - TRIM 2 OLDEST NEXT RUN. Dropped",
-  "  #754/#764/#768 (closed not_planned). Full-body retype is the only way, ~14k tokens."
+  "RUN14 (33866842299) T3+T6. 189 PRs/166 RA/0 merged/66 issues. main ce545ec. 2274/0 base.",
+  "T6 DEAD 3rd time: #801+#802 mergeable, ZERO check runs (#757). main FROZEN => a NEW",
+  "  conflict vs main is IMPOSSIBLE; re-screen only when main moves or a new RA PR lands.",
+  "T3 DONE: branch repo-assist/fix-hunk-header-empty-range (~#803 RECONCILE NEXT RUN) +",
+  "  companion issue (~#804). helpers.ts hunkToHeader() added +1 to BOTH starts always, but",
+  "  the unified format anchors an EMPTY range to the line BEFORE it: new file must be",
+  "  '@@ -0,0 +1,2 @@' (main -1,0), deleted file '+0,0' (main +1,0) - BOTH live at DEFAULT",
+  "  ctx3. Fix `count===0?start:start+1`. 2280/0 tsc0 lint1. NOT fixed (=the issue):",
+  "  diff.ts:278 '===MAX_SAFE_INTEGER?0' sentinel kills the opposite-side anchor => mid-file",
+  "  zero-count (ctx:0 only) gives -0,0 vs git -5,0. Contract call + 4 PRs touch diff.ts.",
+  "V35 GIT IS A FREE ORACLE: `git init` a scratch repo in /tmp and RUN the real tool; never",
+  "  reason about a file format from memory. Found+confirmed this bug in 2 commands.",
+  "V36 ASK WHETHER *I* CREATED THE CONFLICT. Appending to a hot test file newly clashed with",
+  "  #355/#505/#507/#337 - all 4 merge CLEAN with plain main, so it was mine. A NEW test file",
+  "  = 0 conflicts. merge-tree BOTH ways: vs my branch AND vs main.",
+  "TRAP /issues?per_page=100 INCLUDES PRs: page1 gave 43 of 66 issues so I wrongly called",
+  "V37 RUN THE RIVAL PR'S OWN TESTS on my patch (git show refs/prs/N:path > path) = SEMANTIC",
+  "  compat proof, not just textual. #355 27/0, #373 17/0.",
+  "  #512/#536 closed. FETCH 3 PAGES + filter the 'pull_request' key.",
+  "MONTHLY #787 (0 comments) 25.5KB, trimmed to 4 entries; #802 resolved; 108 refs checked,",
+  "  only #666 closed (deliberate). TRIM 2 OLDEST AGAIN NEXT RUN."
  ]
 }
