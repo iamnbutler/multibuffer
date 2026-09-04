@@ -131,17 +131,26 @@ export function computeSelectionRects(
 
   const rects: SelectionRect[] = [];
 
+  // Fetch every row the selection spans in one bulk call. Doing this per row
+  // repeats the excerpt binary search and allocates two arrays for each row,
+  // which dominates the cost of a large selection.
+  const firstRow = Math.max(0, start.row);
+  const rowsEnd = Math.min(end.row + 1, snapshot.lineCount);
+  const selectedLines: readonly string[] =
+    firstRow < rowsEnd
+      // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
+      ? snapshot.lines(firstRow as MultiBufferRow, rowsEnd as MultiBufferRow)
+      : [];
+
   for (let r = start.row; r <= end.row; r++) {
     const visualRowBase = wrapMap
       // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
       ? wrapMap.bufferRowToFirstVisualRow(r as MultiBufferRow)
       : r;
 
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    const nextRow = Math.min(r + 1, snapshot.lineCount) as MultiBufferRow;
-    // biome-ignore lint/plugin/no-type-assertion: expect: branded type construction
-    const lineTextArr = snapshot.lines(r as MultiBufferRow, nextRow);
-    const lineTextStr = lineTextArr[0] ?? "";
+    // Rows outside [firstRow, rowsEnd) index past the array and yield "",
+    // matching the empty result the per-row lines() call returned for them.
+    const lineTextStr = selectedLines[r - firstRow] ?? "";
     const lineLen = lineTextStr.length;
 
     const startCharCol = r === start.row ? start.column : 0;
