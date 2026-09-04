@@ -21,8 +21,8 @@
   "then loop `git diff <merge-base> refs/prs/$n -- <file>` and grep the SYMBOL, filtering to",
   "+/- lines (#310-#345 have an ancient base => whole-file diffs match every symbol).",
   "V18 a diff hash MUST include the FILE PATH (#691 vs #692 = same fix, diff file).",
-  "166 open RA PRs, 0 merged => my back catalogue is the likeliest dup. Other bots:",
-  "  [Perf Improver], [Test Improver]. Never ls-remote branch names."
+  "167 RA PRs, 0 merged => my back catalogue is the likeliest dup. Other bots: [Perf",
+  "  Improver], [Test Improver]. Never ls-remote branch names."
  ],
  "rules": [
   "main FROZEN at ce545ec. PR only if live-on-main + red-on-main + gates green + screened.",
@@ -57,6 +57,8 @@
  ],
  "dead_tasks": [
   "T1: 0 unlabelled. T7: all non-RA PRs are bot/owner authored. T2: see this_run (saturated).",
+  "T4 09-04: deps+TS both settled (see this_run); only NON-protected T4 surface left is",
+  "  scripts/ + playground/ + tsconfig.json. Flaky-test T4 route is DEAD (#611/#690).",
   "T4 DONE 09-03 (#797, 7 pkgs). REUSABLE: bun.lock is NOT protected. `bun outdated` shows",
   "  WITHIN-RANGE drift; bun update <pkgs> then `git checkout package.json` + `bun install`",
   "  => lockfile-ONLY diff that still passes --frozen-lockfile. LEFT: biome (see biome_25).",
@@ -113,26 +115,26 @@
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
  "this_run_2026-09-04": [
-  "RUN14 (33866842299) T3+T6. 189 PRs/166 RA/0 merged/66 issues. main ce545ec. 2274/0 base.",
-  "T6 DEAD 3rd time: #801+#802 mergeable, ZERO check runs (#757). main FROZEN => a NEW",
-  "  conflict vs main is IMPOSSIBLE; re-screen only when main moves or a new RA PR lands.",
-  "T3 DONE: branch repo-assist/fix-hunk-header-empty-range (~#803 RECONCILE NEXT RUN) +",
-  "  companion issue (~#804). helpers.ts hunkToHeader() added +1 to BOTH starts always, but",
-  "  the unified format anchors an EMPTY range to the line BEFORE it: new file must be",
-  "  '@@ -0,0 +1,2 @@' (main -1,0), deleted file '+0,0' (main +1,0) - BOTH live at DEFAULT",
-  "  ctx3. Fix `count===0?start:start+1`. 2280/0 tsc0 lint1. NOT fixed (=the issue):",
-  "  diff.ts:278 '===MAX_SAFE_INTEGER?0' sentinel kills the opposite-side anchor => mid-file",
-  "  zero-count (ctx:0 only) gives -0,0 vs git -5,0. Contract call + 4 PRs touch diff.ts.",
-  "V35 GIT IS A FREE ORACLE: `git init` a scratch repo in /tmp and RUN the real tool; never",
-  "  reason about a file format from memory. Found+confirmed this bug in 2 commands.",
-  "V36 ASK WHETHER *I* CREATED THE CONFLICT. Appending to a hot test file newly clashed with",
-  "  #355/#505/#507/#337 - all 4 merge CLEAN with plain main, so it was mine. A NEW test file",
-  "  = 0 conflicts. merge-tree BOTH ways: vs my branch AND vs main.",
-  "TRAP /issues?per_page=100 INCLUDES PRs: page1 gave 43 of 66 issues so I wrongly called",
-  "V37 RUN THE RIVAL PR'S OWN TESTS on my patch (git show refs/prs/N:path > path) = SEMANTIC",
-  "  compat proof, not just textual. #355 27/0, #373 17/0.",
-  "  #512/#536 closed. FETCH 3 PAGES + filter the 'pull_request' key.",
-  "MONTHLY #787 (0 comments) 25.5KB, trimmed to 4 entries; #802 resolved; 108 refs checked,",
-  "  only #666 closed (deliberate). TRIM 2 OLDEST AGAIN NEXT RUN."
+  "RUN15 (33894331596) T2+T4. 190 PRs/167 RA/0 merged/67 issues. main ce545ec. RECONCILED:",
+  "  #803 + #804 both live as filed. Monthly #787 rewritten 26.1->23.6KB, 3 entries.",
+  "  TRIM 2 OLDEST AGAIN NEXT RUN (drop the 04:40 + 11:24 entries).",
+  "T4 TYPESCRIPT SETTLED - DO NOT REMEASURE. Stable 6.0.3 EXISTS (postdates #678) so 'stage",
+  "  through 6 first' looks right and is WRONG: 6.0.3 = 0.98x (NO speedup) + ZERO deprecation",
+  "  output, because the removal it warns of is the compiler API at 7's '.' (ts6 main=lib/",
+  "  typescript.js PRESENT, ts7 exports['.']=version.cjs GONE) and repo has 0 ts imports.",
+  "  7.0.2 = 8.67x here vs 6.14x in #678 => QUOTE THE RATIO (this runner TS5=5.7s not 4.4s).",
+  "  All 3: 0 errors, same 173-file program, BYTE-IDENTICAL canary. Commented #678. No PR:",
+  "  package.json protected. Recipe: bun add typescript@X in a SCRATCH dir, run its .bin/tsc",
+  "  from the repo cwd => tree never dirtied.",
+  "FLAKY WALL-CLOCK VEIN EXHAUSTED - DO NOT PR. 13 timing assertions total; the tight",
+  "  `*3 + 0.001` bound appears 3x: buffer.test.ts:444 (#611 fixes) + multibuffer.test.ts",
+  "  :220 and :1038 (#690 fixes, via minMs). Both merge clean, pass TOGETHER 162/162 / 385",
+  "  expects = main. I nearly wrote a dup of #611 - the screen caught it.",
+  "V38 MY OWN OLD ADVICE CAN BE THE REFUTED ONE. I told #673 median/best-of-N was 'more",
+  "  durable'; Test Improver MEASURED it: BACKFIRES (warm, mean==median==best-of-N, all",
+  "  exceed *3 - the gap is REAL). READ THE REPLIES to my own comments before building on",
+  "  them. #611's tolerance alignment is correct.",
+  "T2 SATURATED: #111/#157/#260/#282 (only human issues) all have RA comments + 0 new human",
+  "  activity. 0-comment issues LEFT: #659 #661 #671 #751 #778."
  ]
 }
