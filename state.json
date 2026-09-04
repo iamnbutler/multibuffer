@@ -111,26 +111,25 @@
  ],
  "biome_25_BLOCKER": [
   "FILED 09-03 = #798. biome 2.4.4->2.5.11 (in range) breaks lint: no-type-assertion.grit",
-  "matches IMPORT ALIASES on 2.5.x => 3 false errors. TRIED+FAILED to compile 2 constrained",
-  "patterns; a broken .grit EXITS 1. Do NOT guess. $schema pins 2.4.6 => bump needs migrate."
+  "matches IMPORT ALIASES on 2.5.x => 3 false errors. 2 constrained patterns FAILED; a broken",
+  ".grit EXITS 1. Do NOT guess. $schema pins 2.4.6 => bump needs migrate."
  ],
- "this_run_2026-09-03": [
-  "RUN12 (33805347400) T2+T6. 188 PRs/165 RA/0 merged/66 issues. main ce545ec. T6 EMPTY again",
-  "(only new PR = #799 docs bot) => slot went to a TEST-ONLY PR, branch",
-  "repo-assist/test-intraline-column-coverage. 2277/0 (baseline 2274 +3 mine), tsc 0, lint 1",
-  "info, build:playground OK. Baseline ce545ec RECONFIRMED.",
-  "V32 A TEST CAN BE UNDISCRIMINATING BY FIXTURE, not just by weak assertion. #800's prototype",
-  "  went green partly because multibuffer.test.ts:222 asserts count>0, but ALSO because its",
-  "  fixture ('const x=\"foo\"'->'bar') is a FULL middle replacement where char-diff and the",
-  "  coarse fallback BOTH return [11,14). PROBE THAT THE FIXTURE SEPARATES THE TWO PATHS.",
-  "  Discriminating: 'let a = 1; let b = 2;'->9/8 = 2 vs 1 range. timeBudgetMs had ZERO refs",
-  "  in tests/+benchmarks/; my PR is its first.",
-  "#800 3 claims CONFIRMED: diff.ts:389 gates STARTING myersCharDiff; docstring 'aborts' false;",
-  "  pair loop in EXACTLY 2 places (controller:226, mb:204). IntralineDiffOptions is PUBLIC =>",
-  "  deleting timeBudgetMs = API change. Qs are POLICY => commented, no fix PR. Of 188 heads",
-  "  only #310/#337/#345/#505/#507 touch src/diff/*, NONE near intraline; #345 makes the SAME",
-  "  ~8-line edit TWICE = evidence for 'merge the loops first'; #799 ADDS a specs row calling",
-  "  timeBudget a 'Guardrail' (main silent) => #787 fix-before-merge item.",
-  "MONTHLY #787 replaced (0 maintainer comments => no check-offs). 22.7 KB, 4 run entries."
+ "this_run_2026-09-04": [
+  "RUN13 (33836727231) T8+T6. 188 PRs/165 RA/0 merged/66 issues. main ce545ec. 2274/0",
+  "  RECONFIRMED. T6 DEAD AGAIN: #801 = only new RA PR, merges clean, ZERO check runs.",
+  "T8 DONE: PR branch repo-assist/perf-selection-rects-bulk-lines (~#802, RECONCILE NEXT RUN",
+  "  as I did #801). computeSelectionRects called snapshot.lines(r,r+1) PER ROW and",
+  "  renderSelection passes the selection UNCLAMPED => bulk call + index by r-firstRow.",
+  "  Bench 1K select-all .589->.264ms, 100-line .060->.026, single-line UNCHANGED; per-row",
+  "  lines() was 2.75 of 3.43ms at 8k rows; 100 excerpts 3.58->1.00.",
+  "V33 ORACLE-BY-IMPORT, NEVER BY COPY: hand-copying visualWidth/wrapLine gave 2598 FALSE",
+  "  mismatches (they live in wrap-map.ts). `git show HEAD:src/x.ts > /tmp/x_orig.ts` + sed",
+  "  '../'and'./' -> ABS => both copies share one dep instance. 6261 cases, 0 mismatches.",
+  "V34 MUTATE NEW CODE + COUNT DEAD TESTS. 1st draft caught 2 of 4: every case started at",
+  "  row 0 so the r-firstRow offset was INVISIBLE. Needed a start.row>0 AND a negative-row case.",
+  "T8 LEADS: dom.ts:791 _lineAt 1-row lines() (check callers); bracket-match.ts materialises",
+  "  1001 lines per cursor move (bracketMatching DEFAULT OFF). #751 owns clamp+pool: DON'T refile.",
+  "MONTHLY #787 replaced (0 comments). 25.7 KB, 5 entries - TRIM 2 OLDEST NEXT RUN. Dropped",
+  "  #754/#764/#768 (closed not_planned). Full-body retype is the only way, ~14k tokens."
  ]
 }
