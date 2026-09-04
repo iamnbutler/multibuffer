@@ -10,12 +10,18 @@ import type { DiffHunk, HunkHeader } from "./types.ts";
 /**
  * Create a HunkHeader from a DiffHunk.
  * Converts 0-based internal indices to 1-based display values.
+ *
+ * An empty range is the exception: the unified diff format anchors it to the
+ * line *before* it rather than to a line of its own, so a zero count keeps the
+ * 0-based start. That is what makes `git diff` print `@@ -0,0 +1,2 @@` for a
+ * new file and `@@ -1,2 +0,0 @@` for a deleted one.
  */
 export function hunkToHeader(hunk: DiffHunk): HunkHeader {
   return {
-    oldStart: hunk.oldStart + 1, // Convert to 1-based
+    // Convert to 1-based, except for an empty range (see above).
+    oldStart: hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart + 1,
     oldCount: hunk.oldCount,
-    newStart: hunk.newStart + 1, // Convert to 1-based
+    newStart: hunk.newCount === 0 ? hunk.newStart : hunk.newStart + 1,
     newCount: hunk.newCount,
   };
 }
