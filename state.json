@@ -62,9 +62,9 @@
   "T4 DONE 09-03 (#797). REUSABLE: bun.lock NOT protected; bun update <pkgs> + `git checkout",
   "  package.json` + bun install => lockfile-ONLY diff, still --frozen-lockfile clean.",
   "  0 Dependabot PRs; audit=#675; biome blocked (biome_25).",
-  "T9 V13 population EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
-  "  merge clean, 186 heads lint-gated (#373/#376 red), RA heads tsc-gated (#311/#314 red).",
-  "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated.",
+  "T9 V13 pop. EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
+  "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated",
+  "  (#373/#376 red), RA heads tsc-gated (#311/#314 red).",
   "T2 dead for HUMAN issues; only new peer-bot issues are commentable (#806 done 09-04b)."
  ],
  "retired_do_not_redo": [
@@ -113,24 +113,25 @@
   "ALIASES on 2.5.x (3 false errors). 2 constrained patterns FAILED; a broken .grit EXITS 1.",
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
- "this_run_2026-09-04b": [
-  "RUN16 (33917614160) T2+T6->T2 only. 190 PRs/167 RA/0 merged/68 issues. main ce545ec.",
-  "  Monthly #787 -> 23.3KB, 2 entries. TRIM THE 16:20 ENTRY NEXT RUN.",
-  "T6 CONFIRMED DEAD: all CI runs = action_required (#757), main frozen, no new PRs.",
-  "SRC/PROJECT MINED OUT for get()/has(): BOTH bugs I re-derived are already PRs - #336",
-  "  (get() uses shouldInclude on DIRS; enumerateChildren uses shouldTraverseDirectory) and",
-  "  #718 (docstring children('/') THROWS for every root but '/'; also maxDepth).",
-  "  Commented #806 instead: get()'s discarded readdir RETHROWS non-ENOTDIR while",
-  "  enumerateChildren (tree.ts:221-225) SWALLOWS all => entries() yields a chmod-000 dir that",
-  "  has() throws EACCES on. #335 vs #336 is TEXTUAL only (no include filter => no oracle).",
-  "V39 OLD-BASE PRs WERE NEVER MERGE-CHECKED. #776 excluded 18 (#310-#345) AND claimed 73",
-  "  'collide with nothing' - untested against each other. RECIPE for old bases (merge-tree",
-  "  needs a shared base): patch = `git diff $(git merge-base ce545ec refs/prs/N) refs/prs/N`,",
-  "  apply partner to ce545ec in a WORKTREE, commit, then `git apply -3` = real 3-way.",
-  "  70 overlapping pairs, 25 CONFLICT, 0 base-fails. NOT free: 718<-336 742<-330 483<-331",
-  "  439<-314 717<-326 746<-326. Dups not orders: 314==439, 340==maintainer's 374,",
-  "  324/378/379 all 3 mutually conflict (all iamnbutler's). Full list in #776 comment.",
-  "T2 SATURATED: #111/#157/#260/#282 all have RA comments + 0 new human activity. 0-comment",
-  "  issues LEFT are ALL MINE (#659 #661 #671 #751 #778 #798 #804) => self-reply = spam."
+ "this_run_2026-09-05": [
+  "RUN17 (33944300872) T9+T2 -> T9 only. 190 PRs/167 RA/0 merged/68 issues BEFORE my 2 adds.",
+  "  Monthly #787 -> 25.1KB, 2 entries. TRIM THE 09-04 20:56 ENTRY NEXT RUN.",
+  "RECONCILE NEXT RUN: PR 'test(renderer): cover column decorations' + issue 'wrapLineCount",
+  "  dead code' - #787 cites both as '(opened this run)'; swap in the real numbers.",
+  "V40 EXPORTED-SYMBOL SWEEP (cheap, reusable): regex `^export (async )?function (\\w+)` +",
+  "  `^export const (\\w+)\\s*=\\s*(\\(|async)` over src/, then grep the name across ALL of",
+  "  tests/. 16 of 108 never named. MINED: buildColumnDecoratedContent (this run's PR).",
+  "  ALREADY OWNED: diffLines+hunkToHeader=#356. DEAD: wrapLineCount, createWebGpuRenderer.",
+  "  LEFT: resolveEditorState (types.ts:184 substitutes {row:0,col:0} when resolveAnchor",
+  "  FAILS = V26 shape); createMemoryFsAdapter (ORACLE for all tree.test.ts, untested; stat()",
+  "  uses the RAW key but readdir() NORMALIZES => trailing-slash dir key diverges);",
+  "  excerptLineCount, createEditorView, makeExcerptRange/Decoration/ColumnDecoration.",
+  "V41 A SYMBOL ABSENT FROM tests/ CAN STILL BE A LIVE FEATURE: ColumnDecoration had 0 test",
+  "  refs but carries intraline diff highlighting. Grep the TYPE name, not just the fn.",
+  "wrapLineCount DONE (issue): 1 occurrence repo-wide, orphaned by 0a4d89f (#253); not in",
+  "  renderer/index.ts + exports has no wildcard => not public API; 400k differential clean.",
+  "T2 STILL SATURATED: all 100 newest repo comments are github-actions; 0 human activity.",
+  "  0-comment issues LEFT are ALL MINE => self-reply = spam. Substitute a task, don't force.",
+  "09-04b still valid: src/project mined out (#336/#718/#806); V39 old-base pairs in #776."
  ]
 }
