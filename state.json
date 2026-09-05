@@ -64,7 +64,9 @@
   "  0 Dependabot PRs; audit=#675; biome blocked (biome_25).",
   "T9 V13 pop. EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
   "T6 DEAD until CI (#757) or main moves: dups done, all merge clean, 186 heads lint-gated",
-  "  (#373/#376 red), RA heads tsc-gated (#311/#314 red).",
+  "  (#373/#376 red = NOT RA PRs => out of T6 scope). #311/#314 'tsc-red' was FALSE (09-05):",
+  "  the 8 errors are BYTE-IDENTICAL at their 03-18 merge-base, in src/react = files neither",
+  "  touches. V43 GATE THE MERGE RESULT (main+PR), NEVER the bare head, on any old-base PR.",
   "T2 dead for HUMAN issues; only new peer-bot issues are commentable (#806 done 09-04b)."
  ],
  "retired_do_not_redo": [
@@ -73,9 +75,8 @@
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
   "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens ok.",
   "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
-  "V17 webgpu.ts:438 CLOSED 09-02d (color only, no GPU/test file => untestable); modelled-test",
-  "  vein EMPTY. SEPARATOR VEIN EXHAUSTED (V25 route map in #787): 6 routes all guarded or",
-  "  covered, the 3 'dup' pairs are COMPLEMENTARY. cursor.ts V4 DONE. Only #674 contract Q."
+  "V17 webgpu.ts:438 CLOSED (untestable); modelled-test vein EMPTY. SEPARATOR VEIN EXHAUSTED",
+  "  (route map in #787): 6 routes guarded/covered, 3 'dup' pairs COMPLEMENTARY. Only #674."
  ],
  "next_veins": [
   "AUTHORITATIVE list is #787 'Future Work' - this is just the index.",
@@ -114,24 +115,23 @@
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
  "this_run_2026-09-05": [
-  "RUN17 (33944300872) T9+T2 -> T9 only. 190 PRs/167 RA/0 merged/68 issues BEFORE my 2 adds.",
-  "  Monthly #787 -> 25.1KB, 2 entries. TRIM THE 09-04 20:56 ENTRY NEXT RUN.",
-  "RECONCILE NEXT RUN: PR 'test(renderer): cover column decorations' + issue 'wrapLineCount",
-  "  dead code' - #787 cites both as '(opened this run)'; swap in the real numbers.",
-  "V40 EXPORTED-SYMBOL SWEEP (cheap, reusable): regex `^export (async )?function (\\w+)` +",
-  "  `^export const (\\w+)\\s*=\\s*(\\(|async)` over src/, then grep the name across ALL of",
-  "  tests/. 16 of 108 never named. MINED: buildColumnDecoratedContent (this run's PR).",
-  "  ALREADY OWNED: diffLines+hunkToHeader=#356. DEAD: wrapLineCount, createWebGpuRenderer.",
-  "  LEFT: resolveEditorState (types.ts:184 substitutes {row:0,col:0} when resolveAnchor",
-  "  FAILS = V26 shape); createMemoryFsAdapter (ORACLE for all tree.test.ts, untested; stat()",
-  "  uses the RAW key but readdir() NORMALIZES => trailing-slash dir key diverges);",
-  "  excerptLineCount, createEditorView, makeExcerptRange/Decoration/ColumnDecoration.",
-  "V41 A SYMBOL ABSENT FROM tests/ CAN STILL BE A LIVE FEATURE: ColumnDecoration had 0 test",
-  "  refs but carries intraline diff highlighting. Grep the TYPE name, not just the fn.",
-  "wrapLineCount DONE (issue): 1 occurrence repo-wide, orphaned by 0a4d89f (#253); not in",
-  "  renderer/index.ts + exports has no wildcard => not public API; 400k differential clean.",
-  "T2 STILL SATURATED: all 100 newest repo comments are github-actions; 0 human activity.",
-  "  0-comment issues LEFT are ALL MINE => self-reply = spam. Substitute a task, don't force.",
-  "09-04b still valid: src/project mined out (#336/#718/#806); V39 old-base pairs in #776."
+  "RUN18 (33960832972) T6+T3. 191 PRs/168 RA/0 merged. main STILL ce545ec. #787 -> 27KB,",
+  "  2 entries: TRIM THE 09-05 04:33 ENTRY NEXT RUN (it is already condensed).",
+  "RECONCILE NEXT RUN: PR 'fix(project): normalize path keys in createMemoryFsAdapter' -",
+  "  #787 cites it as '(opened this run)'. RUN17's two are now #807 (PR) + #808 (issue).",
+  "T6 RESULT: zero pushes and that is CORRECT - CI still parks bot PRs at action_required",
+  "  (#757) so there are no failures to fix, and main has not moved so nothing conflicts.",
+  "T3: bug backlog SATURATED - every bug/help-wanted issue already carries a PR (#704=#779).",
+  "  Took T3's 'found during investigation' route instead; that clause is the live one.",
+  "V40 SWEEP: createMemoryFsAdapter MINED = this run's PR. stat() + readdir's ENOENT/ENOTDIR",
+  "  guards looked up RAW keys while ONLY readdir's enumeration normalized them => a",
+  "  '/root/src/' key is listed by readdir then ENOENT from stat. LEFT: resolveEditorState",
+  "  (types.ts:184 substitutes {row:0,col:0} when resolveAnchor FAILS = V26), excerptLineCount,",
+  "  createEditorView, makeExcerptRange/Decoration/ColumnDecoration.",
+  "V42 A NEAR-MISS DUP CAN TEST THE OTHER SIDE OF THE SAME WORD: #548 and #775 both have",
+  "  'trailing slash' tests - but on the QUERY path, which already worked. READ THE BODY.",
+  "  tests/project/adapter.test.ts is CLAIMED by #775 => pick another filename.",
+  "T2 STILL SATURATED (recent comments all bots; 0-comment issues all mine = self-reply spam).",
+  "src/project mined for get()/has() (#336/#718/#806); V39 old-base pairs in #776."
  ]
 }
