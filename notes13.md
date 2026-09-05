@@ -1,4 +1,4 @@
-SIZE-WATCH: **THIS FILE (notes13.md) IS THE APPEND TARGET.** memory.md + notes.md + notes2-12 are all at/near the 10240 PER-FILE cap. `wc -c` BEFORE appending; keep appends <1KB or start notes14.md.
+SIZE-WATCH: **FULL at 8216 — notes14.md IS NOW THE APPEND TARGET.** memory.md + notes.md + notes2-12 are also at/near the 10240 PER-FILE cap. `wc -c` BEFORE appending.
 
 0903:T1+T2+T3+T4+T7 run:33798536844. main STILL ce545ec. 0 closed PRs since 08-25, `commenter:iamnbutler updated:>2026-08-01`=0 => still 0 human comments EVER, ALL SA carried. bun1.4.0 test 2265/0 2.76s NO flake (cum 12/75=16.0%) typecheck0 lint1info bench118/118. **#796 = the 0902 glyph-atlas issue, NOW LINKED.** New intraline issue number UNKNOWN - **LINK IT NEXT RUN** (its SA item is the top one, bare search link).
 **0903-FINDING (a guardrail that cannot fire): `computeIntralineDiff` docs say "aborts if computation exceeds timeBudgetMs" (diff.ts:305-307) but the check at :389 runs BEFORE myersCharDiff at :391 and myersCharDiff has NO time check inside.** Only work between startTime(:344) and the check = prefix/suffix scan. Intraline default ON in BOTH controller.ts:78 and multibuffer.ts:92.
