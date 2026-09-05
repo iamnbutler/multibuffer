@@ -1200,7 +1200,7 @@ export class CanvasRenderer implements Renderer {
         ? selEnd
         : selStart;
 
-    ctx.fillStyle = this._theme.selection;
+    ctx.fillStyle = this._resolveColor(this._theme.selection);
 
     for (let row = start.row; row <= end.row; row++) {
       if (row < viewport.startRow || row >= viewport.endRow) continue;
@@ -1240,7 +1240,7 @@ export class CanvasRenderer implements Renderer {
     const cursorX =
       gutterWidth + charColToVisualCol(lineText.slice(0, cursor.column), cursor.column) * this._charWidth;
 
-    ctx.fillStyle = this._theme.cursor;
+    ctx.fillStyle = this._resolveColor(this._theme.cursor);
     ctx.fillRect(cursorX, screenY, 2, lineHeight);
   }
 
