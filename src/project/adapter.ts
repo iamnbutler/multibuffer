@@ -56,12 +56,21 @@ export function createFsAdapter(): FsAdapter {
 export function createMemoryFsAdapter(
   files: Record<string, MemoryFsEntry>,
 ): FsAdapter {
+  // Index by normalized path. Lookups always normalize the path they are given,
+  // so the keys must be normalized too — otherwise an entry written as
+  // "/root/src/" is enumerated as a child by readdir (which normalizes each key
+  // before comparing) but invisible to every direct lookup.
+  const entriesByPath = new Map<string, MemoryFsEntry>();
+  for (const [filePath, entry] of Object.entries(files)) {
+    entriesByPath.set(normalizePath(filePath), entry);
+  }
+
   return {
     async readdir(path: string): Promise<readonly FsDirEntry[]> {
       const normalizedPath = normalizePath(path);
 
       // Check if the path exists and is a directory
-      const pathEntry = files[normalizedPath];
+      const pathEntry = entriesByPath.get(normalizedPath);
       if (pathEntry && pathEntry.type === "file") {
         throw new Error(`ENOTDIR: not a directory: ${path}`);
       }
@@ -69,23 +78,21 @@ export function createMemoryFsAdapter(
       const entries: FsDirEntry[] = [];
       const seen = new Set<string>();
 
-      for (const filePath of Object.keys(files)) {
-        const normalizedFilePath = normalizePath(filePath);
+      for (const [filePath, entry] of entriesByPath) {
         // Check if this file is a direct child of the requested directory
-        if (isDirectChild(normalizedPath, normalizedFilePath)) {
-          const name = getBasename(normalizedFilePath);
+        if (isDirectChild(normalizedPath, filePath)) {
+          const name = getBasename(filePath);
           if (!seen.has(name)) {
             seen.add(name);
-            const entry = files[filePath];
             entries.push({
               name,
-              isDirectory: entry?.type === "directory",
+              isDirectory: entry.type === "directory",
             });
           }
         }
       }
 
-      if (entries.length === 0 && !files[normalizedPath]) {
+      if (entries.length === 0 && !entriesByPath.has(normalizedPath)) {
         throw new Error(`ENOENT: no such file or directory: ${path}`);
       }
 
@@ -93,8 +100,7 @@ export function createMemoryFsAdapter(
     },
 
     async stat(path: string): Promise<FsStat> {
-      const normalizedPath = normalizePath(path);
-      const entry = files[normalizedPath];
+      const entry = entriesByPath.get(normalizePath(path));
 
       if (!entry) {
         throw new Error(`ENOENT: no such file or directory: ${path}`);
