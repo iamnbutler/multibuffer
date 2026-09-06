@@ -67,8 +67,8 @@
   "  touches). V43 GATE THE MERGE RESULT (main+PR), NEVER the bare head.",
   "T2 DEAD 09-06: every peer-bot issue has an RA comment; only an issue NEWER than #812",
   "  reopens it (issues?sort=created&direction=desc). #776 NOT a target (4 rebuilds).",
-  "BOTH DRAWN TASKS DEAD => pivot to T3/T5 via the V30 map. That produced run21's PR.",
-  "  NEVER end a run on 'no action' while V30 still has entries."
+  "BOTH DRAWN TASKS DEAD => pivot to T3/T5. V30 spent; hunt DUPLICATED BLOCKS (V52).",
+  "  NEVER end a run on 'no action'."
  ],
  "retired_do_not_redo": [
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
@@ -94,10 +94,10 @@
   "V24 A GREEN SUITE IS NOT EVIDENCE OF A FIX. Run the BEHAVIOUR, diff the OBSERVABLE.",
   "V26 a GUARD's DEAD-END branch re-admits the state it excludes; the other direction's",
   "  fallback is the ORACLE. Run21's bug = V26+V4: a CLAIMED row with no fallback.",
-  "V30 UNTOUCHED-FILE MAP = FERTILE. MINED: helpers.ts, project/tree.ts, adapter.ts,",
-  "  queries/* + consumer injection-highlighter.ts, worker/* (run22). LEFT:",
-  "  diff/diff-editor-view.ts, project/types.ts,",
-  "  resolveEditorState (editor/types.ts:184, V26-shaped 0,0 fallback)."
+  "V30 UNTOUCHED-FILE MAP IS NOW EXHAUSTED (run23 read the last two). NEGATIVE: controller",
+  "  reDiff() and createUnifiedDiffMultiBuffer are SEMANTICALLY IDENTICAL - vein empty.",
+  "  project/types.ts = types only. STILL OPEN: resolveEditorState (editor/types.ts:184,",
+  "  V26-shaped 0,0 fallback, 0 in-repo callers). NEXT SURFACE = duplicated BLOCKS (V52)."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
   "TOOL: `git merge-tree --write-tree --merge-base=<mb> refs/prs/A refs/prs/B` (exit!=0 =>",
@@ -118,24 +118,22 @@
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
  "this_run_2026-09-06": [
-  "RUN22 (34028552212) T2+T6 DEAD AGAIN (verified: #812 still newest; #813 = 0 check runs)",
-  "  => pivoted to T3 via V30. PR opened, number PENDING => reconcile in #787.",
-  "RUN21's PR = #813; reconciled in #787 this run. 0 maintainer checkboxes ticked so far.",
-  "FIX: highlight-client getTokensAsync gated caching on parseInFlight ONLY, so a tokens",
-  "  response landing AFTER invalidateCache()/deleteBuffer() REPOPULATED the cache just",
-  "  cleared; a cache hit never re-contacts the worker => stale forever. Added _cacheEpochs",
-  "  (bump on invalidate, compare at resolve). 2278 run/0 fail, tsc 0, lint 1 info, build ok.",
-  "V50 BUN HAS Worker (typeof Worker == 'function'). highlight-client.test.ts CLAIMED",
-  "  otherwise and so tested only the no-op stub => the REAL 300-line client had ZERO",
-  "  coverage. A TEST FILE'S STATED EXCUSE IS A PROBE - RE-RUN IT (V0). Harness =",
-  "  Object.defineProperty(globalThis,'Worker',{value:Fake}) - no cast, lint-clean.",
-  "V51 SCREEN THE TEST PATH TOO, not just src/: #743 ADDS the exact filename I picked",
-  "  (highlight-client-cache.test.ts) => add/add. Renamed mine to -invalidation. Always",
-  "  merge-tree + RUN THE MERGED TREE: clean, 32 worker tests pass.",
-  "worker/* NOW MINED. NOT filed (dead consequence, no reconnect path): diff-client onerror",
-  "  leaves the worker alive; highlight-client onerror forgets _inflightParses where dispose",
-  "  clears it. #743 = token-less rows never cached (perf, open, complementary to mine).",
-  "V49 SCREENING SETS SCOPE, not just go/no-go: screen PER-DEFECT (#763 owned my 2nd half).",
-  "DO NOT RE-FILE: _collectTokensWithInjectionSkip's injectionRanges param unread (#377/#363)."
- ]
+  "RUN23 (34042232239) T2+T6 DEAD AGAIN (verified: #812 still newest AND already has an RA",
+  "  comment; 5 newest RA PRs = 0 check runs, mergeable). Pivoted to T3. RUN22's PR = #814.",
+  "  RUN23's PR number PENDING => reconcile in #787 next run.",
+  "V52 SCREENING CAN REDIRECT THE WORK, NOT JUST BLOCK IT. My find (excerpt header replaces",
+  "  the row it occupies) was ALREADY #735 from 08-22. Did NOT dup: I VERIFIED it instead -",
+  "  applied its 3-file patch and re-rendered => output BYTE-IDENTICAL to main. It fixes 3 of",
+  "  the FIVE copies of the header block, missing diff-editor-view.ts + react/use-diff-view.ts,",
+  "  and DiffEditorView._render() renders LAST, so the caller's predicate wins. COUNT THE",
+  "  COPIES: a fix in k of n is PARTIAL and the remainder is a clean non-dup PR. Told #735.",
+  "FIX: .filter(b => b.prev?.hasTrailingNewline === true). Diff excerpts are adjacent slices",
+  "  of ONE file => no trailing row => 8 of 14 rows rendered as `diff-old-1 L2-2` chrome,",
+  "  incl. both changed lines. Oracle agreed: dom.test.ts:818 puts its header on an EMPTY row.",
+  "V53 DIFF VIEW HARNESS (recipe = tests/diff/excerpt-header-rows.test.ts): happy-dom + stub",
+  "  clientHeight/Width on HTMLElement.prototype + SYNCHRONOUS rAF; getViewport() is 0 rows",
+  "  until _handleScroll, so renderer.remeasure() then setDecorations to drive the CALLER.",
+  "  diff-editor-view.test.ts SAYS DOM paths are not exercised - another V0 probe.",
+  "Gates on my head: 2277/0, tsc 0, lint 1 info, build ok. Merged with #735: 2282/0, tsc 0."
+]
 }
