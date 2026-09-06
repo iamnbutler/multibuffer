@@ -100,6 +100,11 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
   // can invalidate the cache and clear in-flight tracking on arrival.
   const _parseRequestBuffers = new Map<number, string>();
 
+  // Cache generation per buffer, bumped on every invalidation. A tokens
+  // response is only allowed to populate the cache if the generation it was
+  // requested under is still current.
+  const _cacheEpochs = new Map<string, number>();
+
   // Try to create the worker
   if (typeof Worker !== "undefined") {
     try {
@@ -279,6 +284,11 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     // Capture whether a parse is in-flight at request time
     const parseInFlight = _inflightParses.has(bufferId);
 
+    // Capture the cache generation at request time. If the buffer is
+    // invalidated or deleted before the response lands, these tokens describe
+    // text the client has already discarded.
+    const epochAtRequest = _cacheEpochs.get(bufferId) ?? 0;
+
     return new Promise((resolve, reject) => {
       _pending.set(requestId, {
         kind: "tokens",
@@ -290,9 +300,13 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
             return;
           }
 
-          // Only populate cache if no parse was in-flight when the request was made.
-          // Otherwise the tokens may reflect an intermediate parse state.
-          const shouldCache = !parseInFlight && !_inflightParses.has(bufferId);
+          // Only populate cache if no parse was in-flight when the request was
+          // made (otherwise the tokens may reflect an intermediate parse state)
+          // and the buffer has not been invalidated or deleted since.
+          const shouldCache =
+            !parseInFlight &&
+            !_inflightParses.has(bufferId) &&
+            (_cacheEpochs.get(bufferId) ?? 0) === epochAtRequest;
 
           let bufferCache: Map<number, Token[]> | undefined;
           if (shouldCache) {
@@ -320,6 +334,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
 
   function invalidateCache(bufferId: string): void {
     _tokenCache.delete(bufferId);
+    _cacheEpochs.set(bufferId, (_cacheEpochs.get(bufferId) ?? 0) + 1);
   }
 
   async function deleteBuffer(bufferId: string): Promise<void> {
@@ -353,6 +368,7 @@ export function createHighlightClient(workerUrl: URL | string): HighlightClient 
     _latestTokenRequests.clear();
     _inflightParses.clear();
     _parseRequestBuffers.clear();
+    _cacheEpochs.clear();
 
     for (const pending of _pending.values()) {
       pending.reject(new Error("Client disposed"));
