@@ -312,8 +312,12 @@ class DiffEditorViewImpl implements DiffEditorView {
 
     // Build excerpt headers: each excerpt after the first uses the
     // trailing-newline row of the previous excerpt as its header row.
+    // Only an excerpt with a trailing newline has such a row. A diff's
+    // delete/insert/context excerpts are adjacent slices of the same file
+    // and have none, so `row - 1` there is real text that a header would
+    // replace rather than sit above.
     const excerptHeaders = boundaries
-      .filter((b) => b.prev !== undefined)
+      .filter((b) => b.prev?.hasTrailingNewline === true)
       .map((b) => ({
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for header row offset
         row: (b.row - 1) as MultiBufferRow,
