@@ -10,8 +10,8 @@
  "memory_mechanism": [
   "in-agent push_repo_memory is ADVISORY, counts .git => ALWAYS fails (#677). IGNORE it.",
   "REAL gate = push job: MAX_FILE_SIZE 10240 AND MAX_PATCH_SIZE 10240 (eff. 12288). BOTH bind.",
-  "Patch = removed + added lines => EDIT FEW LINES, never rewrite the file (tried 08-31b:",
-  "Keep file <9800 B. Ceiling raise = #698. Use `with open(...)`: unflushed dump CORRUPTS."
+  "Patch = removed + added lines => EDIT FEW LINES, never rewrite the file. CHECK wc -c AND",
+  "`git diff|wc -c` BEFORE finishing; keep file <10100 B. Ceiling raise = #698."
  ],
  "screening_MUST_DO_BOTH": [
   "search_issues is scoped is:issue and NEVER returns PRs. That caused dup PR #765.",
@@ -62,12 +62,11 @@
   "  bun update <pkgs> + `git checkout package.json` + bun install => lockfile-ONLY diff.",
   "  0 Dependabot; biome blocked by #798.",
   "T9 V13 pop. EXACTLY 2: simulateTokenRendering RETIRED, buildDecorationMap in #737.",
-  "T6 dead while main frozen + #757 stalls CI: 0 conflicts, 0 jobs. Re-verified 09-06.",
+  "T6 dead while main frozen + #757 stalls CI: 0 conflicts, 0 jobs. Re-verified 09-06 run22.",
   "  #311/#314 'tsc-red' FALSE (8 errs at their 03-18 base, in src/react = files neither",
   "  touches). V43 GATE THE MERGE RESULT (main+PR), NEVER the bare head.",
-  "T2 DEAD 09-06: EVERY peer-bot issue now has an RA comment and #812 is still newest.",
-  "  Only a NEWER one reopens it: issues?sort=created&direction=desc vs #812. #776 NOT a",
-  "  target (4 rebuilds already).",
+  "T2 DEAD 09-06: every peer-bot issue has an RA comment; only an issue NEWER than #812",
+  "  reopens it (issues?sort=created&direction=desc). #776 NOT a target (4 rebuilds).",
   "BOTH DRAWN TASKS DEAD => pivot to T3/T5 via the V30 map. That produced run21's PR.",
   "  NEVER end a run on 'no action' while V30 still has entries."
  ],
@@ -75,7 +74,7 @@
   "Full list in #666/#787. Negatives: resolveAnchor==resolveAnchors; createRenderer and",
   "worker/index.ts docstrings match; wrap-map quadratic = #483+#331; reDiff perf; Math.min and",
   "uncalled-helper sweeps; multi-cursor copy order; tile-map (#758); _deleteLine multi-row.",
-  "glob.ts shouldTraverseDirectory = perf only (#540); injection getLineTokens NOT ok - run21 fixed the no-parser row (V47).",
+  "glob.ts shouldTraverseDirectory = perf only (#540); injection no-parser row fixed = #813.",
   "excerpt-shift 5-way SETTLED: merge #369, close #342/#448/#449/#362-as-fix.",
   "V17 webgpu.ts:438 CLOSED (untestable); modelled-test vein EMPTY. SEPARATOR VEIN EXHAUSTED",
   "  (route map in #787): 6 routes guarded/covered, 3 'dup' pairs COMPLEMENTARY. Only #674."
@@ -96,8 +95,8 @@
   "V26 a GUARD's DEAD-END branch re-admits the state it excludes; the other direction's",
   "  fallback is the ORACLE. Run21's bug = V26+V4: a CLAIMED row with no fallback.",
   "V30 UNTOUCHED-FILE MAP = FERTILE. MINED: helpers.ts, project/tree.ts, adapter.ts,",
-  "  queries/* + consumer injection-highlighter.ts. LEFT: worker/* (6 files, UNREAD;",
-  "  highlight-client.ts 12KB), diff/diff-editor-view.ts, project/types.ts,",
+  "  queries/* + consumer injection-highlighter.ts, worker/* (run22). LEFT:",
+  "  diff/diff-editor-view.ts, project/types.ts,",
   "  resolveEditorState (editor/types.ts:184, V26-shaped 0,0 fallback)."
  ],
  "merge_sweep_TOOL_AND_TRAP": [
@@ -119,23 +118,24 @@
   "$schema pins 2.4.6 => a bump needs `biome migrate`. Do NOT guess; leave biome out of dep bumps."
  ],
  "this_run_2026-09-06": [
-  "RUN21 (34011737040) T6+T2 both dead => pivoted to T3. PR opened, number PENDING =>",
-  "  RECONCILE it in #787 'Decisions with evidence' (entry says 'number pending').",
-  "FIX: injection-highlighter parseBuffer built rowIndex from EVERY range incl. ones whose",
-  "  language has NO parser; getLineTokens has no fallback for a claimed row => a ```rust",
-  "  body returns [] (bare text). Reorder: parse injections FIRST, index only ranges that",
-  "  produced a tree. 2277 pass/0 fail, tsc 0, lint 1 info (#760), build:playground ok.",
-  "V47 BIG ONE: A WEAKENED ASSERTION IS A BUG REPORT. injection-highlighter.test.ts:171 was",
-  "  expect(tokens).toBeDefined() under 'may be empty or code-fence styled' - the author saw",
-  "  it and widened the oracle. GREP THE SUITE: toBeDefined/not.toThrow/.length>=0 + comments",
-  "  saying may/either/or.",
-  "V48 READING A MODULE != READING ITS CALL SITES. Run20 read queries/* -> 'nothing filable';",
-  "  the bug was in its CONSUMER. A 'mined' file's consumers stay open. Fixed that in #787.",
-  "V49 SCREENING SETS SCOPE, not just go/no-go: I had 2 defects; #763 ALREADY fixes the 2nd",
-  "  (closing ``` blank; nodeLastRow + closingDelimiter, incl. indented). Screen PER-DEFECT.",
-  "DO NOT RE-FILE: _collectTokensWithInjectionSkip's injectionRanges param is never read;",
-  "  #377 and #363 both already delete it.",
-  "#799 CLOSED 09-05 => item removed from #787. 0 maintainer checkboxes ticked so far.",
-  "V46 (run20, unshipped): setExcerptsForBuffer:906 compression HELD; see my #812 comment."
+  "RUN22 (34028552212) T2+T6 DEAD AGAIN (verified: #812 still newest; #813 = 0 check runs)",
+  "  => pivoted to T3 via V30. PR opened, number PENDING => reconcile in #787.",
+  "RUN21's PR = #813; reconciled in #787 this run. 0 maintainer checkboxes ticked so far.",
+  "FIX: highlight-client getTokensAsync gated caching on parseInFlight ONLY, so a tokens",
+  "  response landing AFTER invalidateCache()/deleteBuffer() REPOPULATED the cache just",
+  "  cleared; a cache hit never re-contacts the worker => stale forever. Added _cacheEpochs",
+  "  (bump on invalidate, compare at resolve). 2278 run/0 fail, tsc 0, lint 1 info, build ok.",
+  "V50 BUN HAS Worker (typeof Worker == 'function'). highlight-client.test.ts CLAIMED",
+  "  otherwise and so tested only the no-op stub => the REAL 300-line client had ZERO",
+  "  coverage. A TEST FILE'S STATED EXCUSE IS A PROBE - RE-RUN IT (V0). Harness =",
+  "  Object.defineProperty(globalThis,'Worker',{value:Fake}) - no cast, lint-clean.",
+  "V51 SCREEN THE TEST PATH TOO, not just src/: #743 ADDS the exact filename I picked",
+  "  (highlight-client-cache.test.ts) => add/add. Renamed mine to -invalidation. Always",
+  "  merge-tree + RUN THE MERGED TREE: clean, 32 worker tests pass.",
+  "worker/* NOW MINED. NOT filed (dead consequence, no reconnect path): diff-client onerror",
+  "  leaves the worker alive; highlight-client onerror forgets _inflightParses where dispose",
+  "  clears it. #743 = token-less rows never cached (perf, open, complementary to mine).",
+  "V49 SCREENING SETS SCOPE, not just go/no-go: screen PER-DEFECT (#763 owned my 2nd half).",
+  "DO NOT RE-FILE: _collectTokensWithInjectionSkip's injectionRanges param unread (#377/#363)."
  ]
 }
