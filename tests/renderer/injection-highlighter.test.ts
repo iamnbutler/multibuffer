@@ -169,10 +169,11 @@ Plain text paragraph.
     });
 
     it("should return correct tokens for rows in the second injection range", () => {
-      // Row 7: "const x = 1;" — inside TypeScript code block injection
-      // (typescript may not be loaded, so tokens may be empty or code-fence styled)
+      // Row 7: "const x = 1;" — inside a ```typescript fence. No TypeScript
+      // parser is registered on this highlighter, so the row falls back to the
+      // primary language and is styled as a code block rather than left bare.
       const tokens = highlighter.getLineTokens("test-multi", 7);
-      expect(tokens).toBeDefined();
+      expect(tokens.length).toBeGreaterThan(0);
     });
 
     it("should return consistent results with repeated calls (index is stable)", () => {
@@ -186,6 +187,64 @@ Plain text paragraph.
       // Row 10: "Plain text paragraph." — after both injections, primary markdown
       const tokens = highlighter.getLineTokens("test-multi", 10);
       expect(tokens).toBeDefined();
+    });
+  });
+
+  describe("fences tagged with an unparseable language", () => {
+    // Only markdown and yaml are registered on this highlighter, so nothing
+    // can parse a ```rust body. Those rows must still be styled as a code
+    // block — the same treatment the plain Highlighter and an untagged fence
+    // give them — rather than rendering as unhighlighted text.
+    const UNSUPPORTED = `# Title
+
+\`\`\`rust
+let x = 42;
+let y = x + 1;
+\`\`\`
+`;
+
+    // Byte-for-byte the same document with the info string removed, so no
+    // injection range is produced at all. This is the reference rendering.
+    const UNTAGGED = `# Title
+
+\`\`\`
+let x = 42;
+let y = x + 1;
+\`\`\`
+`;
+
+    beforeAll(() => {
+      highlighter.parseBuffer("test-unsupported", UNSUPPORTED);
+      highlighter.parseBuffer("test-untagged", UNTAGGED);
+    });
+
+    it("should style body rows of a fence whose language has no parser", () => {
+      // Rows 3 and 4 are the fence body.
+      expect(highlighter.getLineTokens("test-unsupported", 3).length).toBeGreaterThan(0);
+      expect(highlighter.getLineTokens("test-unsupported", 4).length).toBeGreaterThan(0);
+    });
+
+    it("should style those rows identically to an untagged fence", () => {
+      for (const row of [3, 4]) {
+        expect(highlighter.getLineTokens("test-unsupported", row)).toEqual(
+          highlighter.getLineTokens("test-untagged", row),
+        );
+      }
+    });
+
+    it("should still delegate to the injected language when one is registered", () => {
+      // yaml IS registered, so a ```yaml body must keep its YAML tokens and
+      // must not regress to the flat code-block colour.
+      const YAML_FENCE = `# Title
+
+\`\`\`yaml
+count: 42
+\`\`\`
+`;
+      highlighter.parseBuffer("test-yaml-fence", YAML_FENCE);
+      const tokens = highlighter.getLineTokens("test-yaml-fence", 3);
+      expect(tokens.length).toBeGreaterThan(1);
+      expect(tokens.some((t) => t.color.includes("number"))).toBe(true);
     });
   });
 });

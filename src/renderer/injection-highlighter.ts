@@ -156,15 +156,6 @@ export class InjectionHighlighter implements SyntaxHighlighter {
     // Find injection ranges
     const injectionRanges = this._findInjectionRanges(tree.rootNode, text);
 
-    // Build row → injection range index for O(1) lookup in getLineTokens().
-    // Cost: O(total injected rows), paid once per parse.
-    const rowIndex = new Map<number, InjectionRange>();
-    for (const range of injectionRanges) {
-      for (let row = range.startRow; row <= range.endRow; row++) {
-        rowIndex.set(row, range);
-      }
-    }
-
     // Parse injected content
     const injections = new Map<string, Tree>();
     for (const range of injectionRanges) {
@@ -176,6 +167,24 @@ export class InjectionHighlighter implements SyntaxHighlighter {
           const key = `${range.language}:${range.startRow}`;
           injections.set(key, injTree);
         }
+      }
+    }
+
+    // Build row → injection range index for O(1) lookup in getLineTokens().
+    // Cost: O(total injected rows), paid once per parse.
+    //
+    // Only ranges that actually produced a tree are indexed. A fence tagged
+    // with a language we have no parser for (or whose parse failed) has nothing
+    // to contribute, and getLineTokens has no fallback once a row is claimed —
+    // it would return zero tokens and the body would render as bare text. Left
+    // unindexed, those rows fall through to the primary language, which paints
+    // the block via the language query's skipChildren set, exactly as the
+    // non-injecting Highlighter and an untagged ``` fence already do.
+    const rowIndex = new Map<number, InjectionRange>();
+    for (const range of injectionRanges) {
+      if (!injections.has(`${range.language}:${range.startRow}`)) continue;
+      for (let row = range.startRow; row <= range.endRow; row++) {
+        rowIndex.set(row, range);
       }
     }
 
