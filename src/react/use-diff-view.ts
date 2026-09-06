@@ -144,9 +144,12 @@ export function useDiffView(options: UseDiffViewOptions): UseDiffViewResult {
     const lines = snap.lines(startRow, endRow);
     const boundaries = snap.excerptBoundaries(startRow, endRow);
 
-    // Build excerpt headers
+    // Build excerpt headers. The header takes over the previous excerpt's
+    // trailing-newline row, so it may only be emitted when that excerpt has
+    // one — a diff's excerpts are adjacent slices of the same file and do
+    // not, leaving `row - 1` holding a content line.
     const excerptHeaders = boundaries
-      .filter((b) => b.prev !== undefined)
+      .filter((b) => b.prev?.hasTrailingNewline === true)
       .map((b) => ({
         // biome-ignore lint/plugin/no-type-assertion: expect: branded arithmetic for header row offset
         row: (b.row - 1) as MultiBufferRow,
