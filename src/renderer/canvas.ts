@@ -808,7 +808,10 @@ export class CanvasRenderer implements Renderer {
   }
 
   private _renderCursor(ctx: CanvasRenderingContext2D, state: RenderState): void {
-    const sel = state.selections[0];
+    // The primary selection is the LAST element of `selections` (the most
+    // recently added one) — see Editor#selections. Reading index 0 would park
+    // the caret on the oldest cursor instead of the one the user is driving.
+    const sel = state.selections[state.selections.length - 1];
     if (!sel || !this._snapshot) return;
 
     const lineHeight = this._measurements.lineHeight;
