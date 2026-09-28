@@ -216,6 +216,24 @@ describe("Text summary for range", () => {
     expect(snap.textSummary.lastLineLength).toBe(8);
   });
 
+  test("summary bytes is correct when surrogate pair straddles a chunk boundary", () => {
+    // The rope target chunk size is 1024 UTF-16 code units. With 1023 ASCII chars
+    // followed by a non-BMP code point (emoji = surrogate pair, 2 code units), the
+    // first chunk boundary at offset 1024 lands between the high surrogate (offset
+    // 1023) and low surrogate (offset 1024). textToChunks must extend the boundary
+    // by one to keep the pair intact, otherwise byteLength counts the lone high
+    // surrogate as 4 bytes and the lone low surrogate as 3 bytes (= 7 bytes for
+    // what should be one 4-byte UTF-8 codepoint).
+    const text = `${"a".repeat(1023)}😀`;
+    const buffer = createBuffer(createBufferId(), text);
+    const snap = buffer.snapshot();
+
+    const expectedBytes = new TextEncoder().encode(text).length;
+    expect(snap.textSummary.bytes).toBe(expectedBytes);
+    // round-trip the text content as a sanity check
+    expect(snap.text()).toBe(text);
+  });
+
   test("summary updates correctly after edits", () => {
     const buffer = createBuffer(createBufferId(), "ab\ncd");
     buffer.insert(offset(5), "\nef");
